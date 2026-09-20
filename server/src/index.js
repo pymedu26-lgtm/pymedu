@@ -1,151 +1,169 @@
+import { readFileSync, existsSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
 import express from 'express';
 import cors from 'cors';
-import { readFileSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import path from 'path';
-import authRouter, { requireAuth } from './auth.js';
-import pagosRouter from './webpay.js';
+import bcrypt from 'bcrypt';
 import db from './db.js';
+import authRouter, { requireAuth, sanitizarPerfil } from './auth.js';
+import webpayRouter from './webpay.js';
 
-// Carga el .env de la raiz del proyecto (sin sobrescribir variables ya definidas)
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 try {
-  const envPath = path.join(__dirname, '..', '..', '.env');
+  const envPath = path.resolve(__dirname, '../..', '.env');
   const contenido = readFileSync(envPath, 'utf8');
   for (const linea of contenido.split('\n')) {
-    const match = linea.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-    if (!match || match[1].startsWith('VITE_')) continue;
-    let valor = match[2].replace(/^["']|["']$/g, '');
-    if (!(match[1] in process.env)) process.env[match[1]] = valor;
+    const limpia = linea.trim();
+    if (!limpia || limpia.startsWith('#') || limpia.startsWith('VITE_')) continue;
+    const igual = limpia.indexOf('=');
+    if (igual === -1) continue;
+    const clave = limpia.slice(0, igual).trim();
+    const valor = limpia.slice(igual + 1).trim().replace(/^['"]|['"]$/g, '');
+    if (!process.env[clave]) process.env[clave] = valor;
   }
-} catch {
-  // .env opcional
+} catch (error) {
+  console.warn('[index] No se pudo cargar .env raiz:', error.message);
 }
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '4000');
-
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false }));
 
 app.use('/api/auth', authRouter);
-app.use('/api/pagos', pagosRouter);
+app.use('/api/pagos', webpayRouter);
 
-app.get('/api/instituciones', requireAuth, (_req, res) => {
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, servicio: 'PymEdu API', entorno: process.env.RAILWAY_ENV || 'local', ts: Date.now() });
+});
+
+app.get('/api/instituciones', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT id, nombre FROM instituciones ORDER BY nombre').all();
-    res.json({ data: rows });
+    const filas = await db.prepare('SELECT id, nombre, activa FROM instituciones ORDER BY nombre').all();
+    res.json({ data: filas });
   } catch (error) {
-    console.error('Error en /instituciones:', error);
+    console.error('[index] Error listando instituciones:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
-app.get('/api/perfiles/institucion/:institucionId', requireAuth, (req, res) => {
+app.get('/api/perfiles/stats', requireAuth, async (req, res) => {
   try {
-    const { institucionId } = req.params;
-    const filterRol = req.query.rol;
-    const busqueda = req.query.busqueda;
-
-    let sql = `SELECT id, email, nombre_completo, rol, activo, membresia_nivel, created_at
-               FROM perfiles WHERE institucion_id = ? AND rol != 'superadmin'`;
-    const params = [institucionId];
-
-    if (filterRol && filterRol !== 'todos') {
-      params.push(filterRol);
-      sql += ` AND rol = ?`;
-    }
-    if (busqueda) {
-      params.push(`%${busqueda}%`);
-      sql += ` AND (nombre_completo LIKE ? OR email LIKE ?)`;
-      params.push(`%${busqueda}%`);
-    }
-
-    sql += ' ORDER BY nombre_completo';
-    const rows = db.prepare(sql).all(...params);
-    res.json({ data: rows });
-  } catch (error) {
-    console.error('Error en /perfiles/institucion:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-
-app.get('/api/perfiles/stats/institucion/:institucionId', requireAuth, (req, res) => {
-  try {
-    const { institucionId } = req.params;
-    const rows = db.prepare(
-      `SELECT rol FROM perfiles WHERE institucion_id = ? AND rol != 'superadmin'`
-    ).all(institucionId);
-
-    const stats = { total: rows.length, coordinadores: 0, mentores: 0, emprendedores: 0 };
-    rows.forEach(r => {
-      if (r.rol === 'coordinador') stats.coordinadores++;
-      if (r.rol === 'mentor') stats.mentores++;
-      if (r.rol === 'emprendedor' || r.rol === 'dueño') stats.emprendedores++;
+    const total = await db.prepare('SELECT COUNT(*)::int AS n FROM perfiles WHERE activo = 1').get();
+    const coordinadores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol = 'coordinador' AND activo = 1").get();
+    const mentores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol = 'mentor' AND activo = 1").get();
+    const emprendedores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol IN ('emprendedor','dueno') AND activo = 1").get();
+    res.json({
+      total: total.n,
+      coordinadores: coordinadores.n,
+      mentores: mentores.n,
+      emprendedores: emprendedores.n,
     });
-    res.json(stats);
   } catch (error) {
-    console.error('Error en /perfiles/stats/institucion:', error);
+    console.error('[index] Error en stats:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
-app.get('/api/perfiles', requireAuth, (req, res) => {
+app.get('/api/perfiles/stats/institucion/:id', requireAuth, async (req, res) => {
   try {
-    const filterRol = req.query.rol;
-    const filterInst = req.query.institucion_id;
-    const busqueda = req.query.busqueda;
-    const page = parseInt(req.query.page || '0');
-    const pageSize = parseInt(req.query.page_size || '20');
-    const offset = page * pageSize;
-
-    let where = 'WHERE 1=1';
-    const params = [];
-
-    if (filterRol && filterRol !== 'todos') {
-      params.push(filterRol);
-      where += ` AND rol = ?`;
-    }
-    if (filterInst && filterInst !== 'todas') {
-      params.push(filterInst);
-      where += ` AND institucion_id = ?`;
-    }
-    if (busqueda) {
-      params.push(`%${busqueda}%`, `%${busqueda}%`);
-      where += ` AND (nombre_completo LIKE ? OR email LIKE ?)`;
-    }
-
-    const total = db.prepare(`SELECT COUNT(*) as c FROM perfiles ${where}`).get(...params).c;
-
-    const rows = db.prepare(
-      `SELECT id, email, nombre_completo, rol, institucion_id, reporta_a, activo, created_at
-       FROM perfiles ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`
-    ).all(...params, pageSize, offset);
-
-    res.json({ data: rows, total, hasMore: offset + pageSize < total });
-  } catch (error) {
-    console.error('Error en /perfiles:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-
-app.get('/api/perfiles/stats', requireAuth, (_req, res) => {
-  try {
-    const rows = db.prepare('SELECT rol FROM perfiles').all();
-    const counts = { total: rows.length };
-    rows.forEach(r => {
-      counts[r.rol] = (counts[r.rol] || 0) + 1;
+    const { id } = req.params;
+    const total = await db.prepare('SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND activo = 1').get(id);
+    const coordinadores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND rol = 'coordinador' AND activo = 1").get(id);
+    const mentores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND rol = 'mentor' AND activo = 1").get(id);
+    const emprendedores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND rol IN ('emprendedor','dueno') AND activo = 1").get(id);
+    res.json({
+      total: total.n,
+      coordinadores: coordinadores.n,
+      mentores: mentores.n,
+      emprendedores: emprendedores.n,
     });
-    res.json(counts);
   } catch (error) {
-    console.error('Error en /perfiles/stats:', error);
+    console.error('[index] Error en stats institucion:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
-// ── Frontend compilado (produccion) ──────────────────────────
-// Sirve el build de Vite (dist/) desde el mismo origen, de modo que
-// el dominio www.pymedu.cl atiende frontend + API en una sola app.
+app.get('/api/perfiles', requireAuth, async (req, res) => {
+  try {
+    const { rol, institucion_id, busqueda, page = '1', pageSize = '20' } = req.query;
+    const limite = parseInt(pageSize, 10) || 20;
+    const offset = ((parseInt(page, 10) || 1) - 1) * limite;
+    const condiciones = [];
+    const parametros = [];
+    if (rol) { condiciones.push('rol = ?'); parametros.push(rol); }
+    if (institucion_id) { condiciones.push('institucion_id = ?'); parametros.push(institucion_id); }
+    if (busqueda) { condiciones.push('(nombre_completo LIKE ? OR email LIKE ?)'); parametros.push(`%${busqueda}%`, `%${busqueda}%`); }
+    const where = condiciones.length ? ` WHERE ${condiciones.join(' AND ')}` : '';
+    const totalRow = await db.prepare(`SELECT COUNT(*)::int AS n FROM perfiles${where}`).get(...parametros);
+    const filas = await db.prepare(`SELECT * FROM perfiles${where} ORDER BY nombre_completo LIMIT ? OFFSET ?`).all(...parametros, limite, offset);
+    res.json({ data: filas, total: totalRow.n, hasMore: offset + filas.length < totalRow.n });
+  } catch (error) {
+    console.error('[index] Error listando perfiles:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+app.get('/api/pagos/estadisticas', requireAuth, async (req, res) => {
+  try {
+    const total = await db.prepare("SELECT COUNT(*)::int AS n FROM pagos WHERE estado IN ('aprobado','pagada','iniciado')").get();
+    const aprobados = await db.prepare("SELECT COUNT(*)::int AS n FROM pagos WHERE estado IN ('aprobado','pagada')").get();
+    const ingresos = await db.prepare("SELECT COALESCE(SUM(monto), 0)::int AS s FROM pagos WHERE estado IN ('aprobado','pagada')").get();
+    res.json({ total: total.n, aprobados: aprobados.n, ingresos: ingresos.s });
+  } catch (error) {
+    console.error('[index] Error en estadisticas pagos:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+app.post('/api/perfiles', requireAuth, async (req, res) => {
+  try {
+    const { email, password, nombre_completo, rol = 'emprendedor', institucion_id = null } = req.body;
+    if (!email || !password || !nombre_completo) {
+      return res.status(400).json({ error: 'Email, password y nombre son requeridos' });
+    }
+    const existente = await db.prepare('SELECT id FROM perfiles WHERE email = ?').get(email);
+    if (existente) {
+      return res.status(409).json({ error: 'El email ya esta registrado' });
+    }
+    const id = randomUUID();
+    const password_hash = bcrypt.hashSync(password, 10);
+    await db.prepare(`
+      INSERT INTO perfiles (id, email, password_hash, nombre_completo, rol, institucion_id, activo, membresia_nivel)
+      VALUES (?, ?, ?, ?, ?, ?, 1, 'free')
+    `).run(id, email, password_hash, nombre_completo, rol, institucion_id);
+    const perfil = await db.prepare('SELECT * FROM perfiles WHERE id = ?').get(id);
+    res.status(201).json({ perfil });
+  } catch (error) {
+    console.error('[index] Error creando perfil:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+app.get('/api/perfiles/institucion/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rol, busqueda } = req.query;
+    const condiciones = ['institucion_id = ?'];
+    const parametros = [id];
+    if (rol && rol !== 'todos') { condiciones.push('rol = ?'); parametros.push(rol); }
+    if (busqueda) { condiciones.push('(nombre_completo LIKE ? OR email LIKE ?)'); parametros.push(`%${busqueda}%`, `%${busqueda}%`); }
+    const filas = await db.prepare(
+      `SELECT id, email, nombre_completo, rol, activo, membresia_nivel, created_at
+       FROM perfiles WHERE ${condiciones.join(' AND ')} ORDER BY nombre_completo`
+    ).all(...parametros);
+    res.json({ data: filas });
+  } catch (error) {
+    console.error('[index] Error listando perfiles de institucion:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+const PORT = parseInt(process.env.PORT || '4000', 10);
+
 const distPath = path.join(__dirname, '..', '..', 'dist');
 if (existsSync(path.join(distPath, 'index.html'))) {
   app.use(express.static(distPath));
@@ -155,6 +173,14 @@ if (existsSync(path.join(distPath, 'index.html'))) {
   });
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`PymEdu API corriendo en http://0.0.0.0:${PORT}`);
+app.listen(PORT, async () => {
+  console.log(`[index] PymEdu API escuchando en http://localhost:${PORT}`);
+  try {
+    await db.initDB();
+    await db.seedDB().catch(() => {});
+  } catch (error) {
+    console.error('[index] Error inicializando base de datos:', error);
+  }
 });
+
+export default app;

@@ -1,238 +1,228 @@
-import { randomUUID, randomBytes } from 'crypto';
+import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import db from './db.js';
 import { requireAuth } from './auth.js';
 
 const router = Router();
-const parseForm = (req, res, next) => {
-  req.body = { ...(req.body || {}) };
-  let data = '';
-  req.on('data', (chunk) => { data += chunk; });
-  req.on('end', () => {
-    new URLSearchParams(data).forEach((value, key) => {
-      req.body[key] = value;
-    });
-    next();
-  });
-};
-
-// ════════════════════════════════════════════════════
-// Configuración Transbank (Webpay Plus REST v1.2)
-// https://www.transbankdevelopers.cl/referencia/webpay
-// ════════════════════════════════════════════════════
-
-const TBK_HOSTS = {
-  integracion: 'https://webpay3gint.transbank.cl',
-  produccion: 'https://webpay3g.transbank.cl',
-};
 
 const TBK_ENV = process.env.TBK_ENV || 'integracion';
-const COMMERCE_CODE = process.env.TBK_COMMERCE_CODE || '597055555532';
-const API_KEY_SECRET =
-  process.env.TBK_API_KEY_SECRET ||
-  '579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C';
-
-const FRONT_URL = process.env.FRONT_URL || 'http://localhost:3000';
-
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const TBK_BASE_URL = TBK_ENV === 'produccion'
+  ? 'https://webpay3g.transbank.cl'
+  : 'https://webpay3gint.transbank.cl';
+const TBK_COMERCIO_CODIGO = process.env.TBK_COMERCIO_CODIGO || '597055555532';
+const TBK_API_KEY_SECRET = process.env.TBK_API_KEY_SECRET || '579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1';
 
 const PLANES = {
-  pro: { nombre: 'Plan Pro', monto: 10000 },
-  premium: { nombre: 'Plan Premium', monto: 20000 },
+  pro: { monto: 10000, duracion_dias: 30, nombre: 'Plan Pro' },
+  premium: { monto: 20000, duracion_dias: 90, nombre: 'Plan Premium' },
 };
 
-function tbkHeaders() {
-  return {
-    'Tbk-Api-Key-Id': COMMERCE_CODE,
-    'Tbk-Api-Key-Secret': API_KEY_SECRET,
-    'Content-Type': 'application/json',
-  };
+function generarBuyOrder() {
+  const fecha = new Date().toISOString().replace(/[-T:.]/g, '').slice(0, 14);
+  return `PM-${fecha}-${Math.floor(Math.random() * 90000 + 10000)}`;
 }
 
-function tbkHost() {
-  return TBK_HOSTS[TBK_ENV] || TBK_HOSTS.integracion;
-}
-
-async function tbkFetch(url, options, timeoutMs = 20000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function crearTransaccionTbk({ buy_order, session_id, amount, return_url }) {
-  const res = await tbkFetch(`${tbkHost()}/rswebpaytransaction/api/webpay/v1.2/transactions`, {
+async function crearTransaccionTbk({ tokenWs, buyOrder, sessionId, monto }) {
+  const res = await fetch(`${TBK_BASE_URL}/rswebpaytransaction/api/webpay/v1.2/transactions`, {
     method: 'POST',
-    headers: tbkHeaders(),
-    body: JSON.stringify({ buy_order, session_id, amount, return_url }),
+    headers: {
+      'Tbk-Api-Key-Id': TBK_COMERCIO_CODIGO,
+      'Tbk-Api-Key-Secret': TBK_API_KEY_SECRET,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      buy_order: buyOrder,
+      session_id: sessionId,
+      amount: monto,
+      return_url: `${process.env.API_PUBLIC_URL || process.env.FRONT_URL || ''}/api/pagos/webpay/retorno`,
+    }),
   });
+
   if (!res.ok) {
-    const detalle = await res.text().catch(() => '');
-    throw new Error(`Transbank create ${res.status}: ${detalle}`);
+    const cuerpo = await res.text().catch(() => '');
+    console.error(`[webpay] Transbank HTTP ${res.status}: ${cuerpo.slice(0, 300)}`);
+    throw new Error(`Transbank devolvio HTTP ${res.status}`);
   }
   return res.json();
 }
 
-async function confirmarTransaccionTbk(token) {
-  const res = await tbkFetch(`${tbkHost()}/rswebpaytransaction/api/webpay/v1.2/transactions/${token}`, {
+async function confirmarTransaccionTbk(tokenWs) {
+  const res = await fetch(`${TBK_BASE_URL}/rswebpaytransaction/api/webpay/v1.2/transactions/${encodeURIComponent(tokenWs)}`, {
     method: 'PUT',
-    headers: tbkHeaders(),
+    headers: {
+      'Tbk-Api-Key-Id': TBK_COMERCIO_CODIGO,
+      'Tbk-Api-Key-Secret': TBK_API_KEY_SECRET,
+      'Content-Type': 'application/json',
+    },
     body: '{}',
   });
+
   if (!res.ok) {
-    const detalle = await res.text().catch(() => '');
-    throw new Error(`Transbank commit ${res.status}: ${detalle}`);
+    const cuerpo = await res.text().catch(() => '');
+    console.error(`[webpay] Confirmacion HTTP ${res.status}: ${cuerpo.slice(0, 300)}`);
+    throw new Error(`No se pudo confirmar la transaccion (HTTP ${res.status})`);
   }
   return res.json();
 }
 
-async function activarMembresiaSupabase(usuarioId, plan) {
+async function activarMembresiaSupabase({ userId, nivel, duracionDias }) {
   const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !serviceKey || !usuarioId) return false;
-  const expira = new Date(Date.now() + 30 * 86400000).toISOString();
-  const res = await fetch(`${supabaseUrl}/rest/v1/perfiles?id=eq.${usuarioId}`, {
-    method: 'PATCH',
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify({ membresia_nivel: plan, membresia_expira: expira }),
-  });
-  if (!res.ok) {
-    console.error('Error actualizando membresia en Supabase:', res.status);
+  if (!supabaseUrl || !serviceKey) {
+    console.error('[webpay] SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configuradas');
     return false;
   }
-  return true;
-}
 
-function generarBuyOrder() {
-  return `PM-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`;
-}
+  const expira = new Date(Date.now() + duracionDias * 24 * 60 * 60 * 1000).toISOString();
 
-// ══ Crear transacción ════════════════════════════
+  for (const tabla of ['perfiles', 'usuarios', 'profiles']) {
+    const res = await fetch(`${supabaseUrl}/rest/v1/${tabla}?id=eq.${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({ membresia_nivel: nivel, membresia_expira: expira }),
+    });
+    if (res.ok) {
+      console.log(`[webpay] Membresia ${nivel} activada para ${userId} (tabla ${tabla})`);
+      return true;
+    }
+  }
+  console.error('[webpay] No se pudo activar membresia en Supabase');
+  return false;
+}
 
 router.post('/webpay/crear', requireAuth, async (req, res) => {
   try {
-    const { plan, usuario_id, email } = req.body || {};
-
+    const { plan, usuario_id, email } = req.body;
     const configPlan = PLANES[plan];
     if (!configPlan) {
-      return res.status(400).json({ error: 'Plan invalido. Planes disponibles: pro, premium' });
+      return res.status(400).json({ error: 'Plan invalido' });
     }
-    if (!usuario_id) {
-      return res.status(400).json({ error: 'usuario_id es requerido' });
+    if (!usuario_id || !email) {
+      return res.status(400).json({ error: 'usuario_id y email son requeridos' });
     }
 
-    const buy_order = generarBuyOrder();
-    const session_id = randomUUID();
+    const buyOrder = generarBuyOrder();
+    const sessionId = randomUUID();
+    const id = randomUUID();
 
-    const transaccion = await crearTransaccionTbk({
-      buy_order,
-      session_id,
-      amount: configPlan.monto,
-      return_url: `${process.env.API_PUBLIC_URL || 'http://localhost:4000'}/api/pagos/webpay/retorno`,
+    await db.prepare(`
+      INSERT INTO pagos (id, usuario_id, email, plan, monto, buy_order, session_id, estado)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'iniciado')
+    `).run(id, usuario_id, email, plan, configPlan.monto, buyOrder, sessionId);
+
+    const tbk = await crearTransaccionTbk({
+      tokenWs: '',
+      buyOrder,
+      sessionId,
+      monto: configPlan.monto,
     });
 
-    db.prepare(`
-      INSERT INTO pagos (id, usuario_id, email, plan, monto, buy_order, session_id, token_ws, estado)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'iniciado')
-    `).run(randomUUID(), usuario_id, email || null, plan, configPlan.monto, buy_order, session_id, transaccion.token);
+    await db.prepare('UPDATE pagos SET token_ws = ? WHERE id = ?').run(tbk.token_ws, id);
 
     res.json({
-      token_ws: transaccion.token,
-      url: transaccion.url,
+      token_ws: tbk.token_ws,
+      url: tbk.url,
       monto: configPlan.monto,
       plan,
-      buy_order,
+      buy_order: buyOrder,
     });
   } catch (error) {
-    console.error('Error creando transaccion Webpay:', error);
-    res.status(502).json({ error: 'No se pudo iniciar el pago con Webpay' });
+    console.error('[webpay] Error creando transaccion:', error);
+    res.status(500).json({ error: 'No se pudo iniciar la transaccion Webpay' });
   }
 });
 
-// ══ Retorno desde Webpay ═════════════════════════
+// Webpay puede redirigir por POST (form) o por GET (anulacion/timeout), y en caso
+// de cancelacion envia TBK_TOKEN en vez de token_ws.
+router.use('/webpay/retorno', (req, res, next) => {
+  if (req.method === 'GET' && !req.query.token_ws && (req.query.TBK_TOKEN || req.body?.TBK_TOKEN)) {
+    req.body = { TBK_TOKEN: req.query.TBK_TOKEN || req.body.TBK_TOKEN };
+  }
+  next();
+});
 
-// Webpay puede redirigir al usuario por POST o por GET (ej: anulacion/timeout),
-// por eso se acepta cualquier metodo y el token se busca en el body o en la query.
-router.all('/webpay/retorno', parseForm, async (req, res) => {
-  const irAResultado = (estado, extra = '') =>
-    res.redirect(303, `${FRONT_URL}/erp/suscripcion/resultado?estado=${encodeURIComponent(estado)}${extra}`);
-
-  console.log(`[webpay] retorno ${req.method} query=${JSON.stringify(req.query)} body=${JSON.stringify(Object.keys(req.body || {}))}`);
+router.post('/webpay/retorno', async (req, res) => {
+  const frenteUrl = process.env.FRONT_URL || '';
+  const irAResultado = (estado, orden = '') =>
+    res.redirect(303, `${frenteUrl}/erp/suscripcion/resultado?estado=${encodeURIComponent(estado)}&orden=${encodeURIComponent(orden)}`);
 
   try {
-    const tokenWs = (req.body && req.body.token_ws) || req.query.token_ws;
-    const tbkToken = (req.body && req.body.TBK_TOKEN) || req.query.TBK_TOKEN;
+    const tokenWs = req.body.token_ws || req.query.token_ws;
+    const tbkToken = req.body.TBK_TOKEN || req.query.TBK_TOKEN;
 
     // Pago anulado por el usuario o timeout: Webpay envia TBK_TOKEN
     if (tbkToken && !tokenWs) {
-      db.prepare(`UPDATE pagos SET estado = 'cancelado', updated_at = datetime('now') WHERE token_ws = ?`)
-        .run(tbkToken);
+      await db.prepare("UPDATE pagos SET estado = 'cancelado', updated_at = now() WHERE token_ws = ?").run(tbkToken);
       return irAResultado('cancelado');
     }
+
     if (!tokenWs) {
       return irAResultado('error');
     }
 
-    const respuesta = await confirmarTransaccionTbk(tokenWs);
+    const confirmacion = await confirmarTransaccionTbk(tokenWs);
+    const aprobada = confirmacion.response_code === 0;
 
-    const pago = db.prepare('SELECT * FROM pagos WHERE token_ws = ?').get(tokenWs);
+    const pago = await db.prepare('SELECT * FROM pagos WHERE token_ws = ?').get(tokenWs);
+
     if (!pago) {
       return irAResultado('error');
     }
 
-    const aprobada = respuesta.status === 'AUTHORIZED' && respuesta.response_code === 0;
-
-    db.prepare(`
-      UPDATE pagos SET
-        estado = ?,
-        codigo_autorizacion = ?,
-        tarjeta = ?,
-        respuesta_tbk = ?,
-        updated_at = datetime('now')
+    const nuevoEstado = aprobada ? 'pagada' : 'rechazada';
+    await db.prepare(`
+      UPDATE pagos
+      SET estado = ?, codigo_autorizacion = ?, tarjeta = ?, respuesta_tbk = ?, updated_at = now()
       WHERE id = ?
     `).run(
-      aprobada ? 'pagada' : 'rechazada',
-      aprobada ? String(respuesta.authorization_code ?? '') : null,
-      respuesta.card_detail?.card_number ? `**** ${respuesta.card_detail.card_number}` : null,
-      JSON.stringify(respuesta),
-      pago.id,
+      nuevoEstado,
+      aprobada ? String(confirmacion.authorization_code ?? '') : null,
+      confirmacion.card_detail?.card_number ? `**** ${confirmacion.card_detail.card_number}` : null,
+      JSON.stringify(confirmacion),
+      pago.id
     );
 
-    if (!aprobada) {
-      return irAResultado('rechazado', `&orden=${encodeURIComponent(pago.buy_order)}`);
+    if (aprobada) {
+      await activarMembresiaSupabase({
+        userId: pago.usuario_id,
+        nivel: pago.plan,
+        duracionDias: PLANES[pago.plan]?.duracion_dias || 30,
+      });
+      return irAResultado('aprobado', pago.buy_order);
     }
-
-    await activarMembresiaSupabase(pago.usuario_id, pago.plan);
-    return irAResultado('aprobado', `&orden=${encodeURIComponent(pago.buy_order)}`);
+    return irAResultado('rechazado', pago.buy_order);
   } catch (error) {
-    console.error('Error en retorno Webpay:', error);
+    console.error('[webpay] Error en retorno:', error);
     return irAResultado('error');
   }
 });
 
-// ══ Consultar pago por orden de compra ═══════════
-
-router.get('/:buyOrder', requireAuth, (req, res) => {
+router.get('/:buyOrder', requireAuth, async (req, res) => {
   try {
-    const pago = db.prepare(`
-      SELECT buy_order, usuario_id, email, plan, monto, estado, codigo_autorizacion, tarjeta, created_at, updated_at
-      FROM pagos WHERE buy_order = ?
-    `).get(req.params.buyOrder);
-
+    const pago = await db.prepare('SELECT * FROM pagos WHERE buy_order = ?').get(req.params.buyOrder);
     if (!pago) {
       return res.status(404).json({ error: 'Pago no encontrado' });
     }
-    res.json({ data: pago });
+    res.json({
+      data: {
+        id: pago.id,
+        buy_order: pago.buy_order,
+        estado: pago.estado,
+        plan: pago.plan,
+        monto: pago.monto,
+        email: pago.email,
+        codigo_autorizacion: pago.codigo_autorizacion,
+        tarjeta: pago.tarjeta,
+        created_at: pago.created_at,
+      },
+    });
   } catch (error) {
-    console.error('Error consultando pago:', error);
+    console.error('[webpay] Error obteniendo pago:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
