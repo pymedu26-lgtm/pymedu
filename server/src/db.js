@@ -71,7 +71,7 @@ const db = {
         nombre_completo TEXT NOT NULL,
         rol TEXT NOT NULL CHECK (rol IN (
           'superadmin', 'admin_institucional', 'coordinador',
-          'mentor', 'emprendedor', 'dueno', 'vendedor',
+          'mentor', 'emprendedor', 'dueño', 'dueno', 'vendedor',
           'gestor', 'encargado_rrhh', 'empleado', 'contador_externo', 'demo'
         )),
         institucion_id TEXT REFERENCES instituciones(id) ON DELETE SET NULL,
@@ -144,6 +144,57 @@ const db = {
       );
 
       CREATE INDEX IF NOT EXISTS idx_pagos_usuario ON pagos(usuario_id);
+
+      CREATE TABLE IF NOT EXISTS solicitudes_vinculacion (
+        id TEXT PRIMARY KEY,
+        usuario_id TEXT NOT NULL REFERENCES perfiles(id) ON DELETE CASCADE,
+        institucion_id TEXT NOT NULL REFERENCES instituciones(id) ON DELETE CASCADE,
+        estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobada', 'rechazada', 'cancelada')),
+        mensaje TEXT,
+        respondida_por TEXT REFERENCES perfiles(id) ON DELETE SET NULL,
+        respondida_at TEXT,
+        created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')),
+        updated_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')),
+        UNIQUE (usuario_id, institucion_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_solicitudes_institucion ON solicitudes_vinculacion(institucion_id);
+      CREATE INDEX IF NOT EXISTS idx_solicitudes_usuario ON solicitudes_vinculacion(usuario_id);
+      CREATE INDEX IF NOT EXISTS idx_solicitudes_estado ON solicitudes_vinculacion(estado);
+
+      CREATE TABLE IF NOT EXISTS codigos_invitacion (
+        id TEXT PRIMARY KEY,
+        institucion_id TEXT NOT NULL REFERENCES instituciones(id) ON DELETE CASCADE,
+        codigo TEXT NOT NULL UNIQUE,
+        rol TEXT NOT NULL DEFAULT 'emprendedor' CHECK (rol IN ('emprendedor', 'dueño', 'mentor', 'coordinador')),
+        reporta_a TEXT REFERENCES perfiles(id) ON DELETE SET NULL,
+        usos_max INTEGER NOT NULL DEFAULT 1 CHECK (usos_max >= 1),
+        usos_actuales INTEGER NOT NULL DEFAULT 0 CHECK (usos_actuales >= 0),
+        activo INTEGER NOT NULL DEFAULT 1,
+        expira_at TEXT,
+        creado_por TEXT REFERENCES perfiles(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_codigos_invitacion_institucion ON codigos_invitacion(institucion_id);
+      CREATE INDEX IF NOT EXISTS idx_codigos_invitacion_activo ON codigos_invitacion(activo);
+
+      CREATE TABLE IF NOT EXISTS erp_datos (
+        usuario_id TEXT NOT NULL REFERENCES perfiles(id) ON DELETE CASCADE,
+        coleccion TEXT NOT NULL,
+        id TEXT NOT NULL,
+        data JSONB NOT NULL DEFAULT '{}'::jsonb,
+        updated_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')),
+        CONSTRAINT erp_datos_pk PRIMARY KEY (usuario_id, coleccion, id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_erp_datos_usuario ON erp_datos(usuario_id);
+
+      -- Reparación idempotente del CHECK de rol en DBs existentes
+      -- (acepta tanto 'dueño' como 'dueno' para no romper datos migrados).
+      ALTER TABLE perfiles DROP CONSTRAINT IF EXISTS perfiles_rol_check;
+      ALTER TABLE perfiles ADD CONSTRAINT perfiles_rol_check CHECK (rol IN (
+        'superadmin', 'admin_institucional', 'coordinador',
+        'mentor', 'emprendedor', 'dueño', 'dueno', 'vendedor',
+        'gestor', 'encargado_rrhh', 'empleado', 'contador_externo', 'demo'
+      ));
     `);
   },
 
@@ -177,10 +228,33 @@ const db = {
       `).run(...perfil);
     }
   },
+
+  async seedDemo() {
+    const pw = bcrypt.hashSync('Demo#2026', 10);
+    const clave = await preparar('SELECT id FROM instituciones WHERE nombre = ?').get('Instituto San Jose');
+    const inst = clave ? clave.id : null;
+    const demo = [
+      ['supadmin@pymedu.com', pw, 'Super Admin', 'superadmin', null, 'premium', 'A'],
+      ['admin@colegiosanjose.cl', pw, 'Admin Institucional San Jose', 'admin_institucional', inst, 'premium', 'A'],
+      ['coord@colegiosanjose.cl', pw, 'Coordinador San Jose', 'coordinador', inst, 'premium', 'A'],
+      ['mentor@colegiosanjose.cl', pw, 'Mentor San Jose', 'mentor', inst, 'pro', 'A'],
+      ['emprendedor@pymedu.com', pw, 'Emprendedor Demo', 'emprendedor', null, 'free', 'C'],
+      ['demo@pymedu.com', pw, 'Cuenta Demo', 'demo', null, 'premium', 'A'],
+    ];
+    for (const [email, hash, nombre, rol, institucion_id, membresia, segmento] of demo) {
+      await preparar(`
+        INSERT INTO perfiles
+          (id, email, password_hash, nombre_completo, rol, institucion_id, activo, membresia_nivel, segmento_negocio)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ON CONFLICT (email) DO NOTHING
+      `).run(randomUUID(), email, hash, nombre, rol, institucion_id, membresia, segmento);
+    }
+  },
 };
 
 db.initDB()
   .then(() => db.seedDB())
+  .then(() => db.seedDemo())
   .then(() => console.log('[db] Base de datos Postgres inicializada'))
   .catch((err) => {
     console.error('[db] Error inicializando Postgres:', err);

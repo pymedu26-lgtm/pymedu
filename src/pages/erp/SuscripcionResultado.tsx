@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
 
 interface PagoDetalle {
   buy_order: string;
@@ -57,17 +56,12 @@ export default function SuscripcionResultado() {
 
       setActivando(true);
       const expira = new Date(Date.now() + 30 * 86400000).toISOString();
-      // activa SU PROPIA membresia via funcion SECURITY DEFINER
-      // (un UPDATE directo a perfiles no pasa las politicas RLS)
-      const { error } = await supabase.rpc('activar_membresia', {
-        p_nivel: nivel,
-        p_expira: expira,
-      });
-
-      if (error) {
-        console.error('No se pudo activar la membresia:', error.message);
-      } else {
+      // Activa SU PROPIA membresia en el Postgres de Railway.
+      try {
+        await api.activarMembresia(nivel, expira);
         await recargarPerfil();
+      } catch (err) {
+        console.error('No se pudo activar la membresia:', err instanceof Error ? err.message : err);
       }
       setActivando(false);
     };

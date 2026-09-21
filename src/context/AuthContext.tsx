@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
+import { api, setToken } from '../lib/api';
 
 export type Rol =
   | 'superadmin'
@@ -44,6 +44,7 @@ interface AuthContextType {
   perfil: Perfil | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<Perfil>;
+  register: (email: string, password: string, full_name: string, extra?: Record<string, unknown>) => Promise<Perfil>;
   signOut: () => Promise<void>;
   puedeHacer: (permiso: string) => boolean;
   recargarPerfil: () => Promise<void>;
@@ -52,108 +53,71 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null, perfil: null, isLoading: true,
   signIn: async () => { throw new Error('AuthContext no inicializado'); },
+  register: async () => { throw new Error('AuthContext no inicializado'); },
   signOut: async () => {},
   puedeHacer: () => false,
   recargarPerfil: async () => {},
 });
-
-async function cargarPerfil(userId: string): Promise<Perfil> {
-  const { data, error } = await supabase
-    .from('perfiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-
-  if (error) {
-    const e = new Error(`Perfil no encontrado (${error.code ?? '?'}: ${error.message})`) as Error & { code?: string };
-    e.code = error.code ?? 'PERFIL_NOT_FOUND';
-    throw e;
-  }
-  if (!data) {
-    throw new Error('Perfil no encontrado (sin fila para el id)');
-  }
-  if (data.acceso_revocado_at) {
-    throw new Error('Acceso revocado');
-  }
-  return data as Perfil;
-}
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const aplicarPerfil = (p: Perfil) => {
+    setPerfil(p);
+    setUser(p ? { id: p.id, email: p.email } : null);
+  };
+
+  // Restaura la sesion desde el token guardado en localStorage
   useEffect(() => {
     let active = true;
-
-    const aplicarSession = async (session: { user: { id: string; email?: string } | null; access_token?: string | null } | null) => {
-      if (session?.access_token) {
-        localStorage.setItem('pymedu_token', session.access_token);
-      }
-      if (session?.user) {
-        const u = { id: session.user.id, email: session.user.email ?? '' };
-        try {
-          const p = await cargarPerfil(u.id);
-          if (!active) return;
-          setUser(u);
-          setPerfil(p);
-        } catch {
-          if (!active) return;
-          setUser(null);
-          setPerfil(null);
-          supabase.auth.signOut();
+    (async () => {
+      try {
+        const { perfil: p } = await api.me();
+        if (active) {
+          aplicarPerfil(p as Perfil);
+          setUser({ id: p.id as string, email: p.email as string });
         }
-      } else {
-        localStorage.removeItem('pymedu_token');
-        setUser(null);
-        setPerfil(null);
+      } catch {
+        setToken(null);
+        if (active) {
+          setPerfil(null);
+          setUser(null);
+        }
+      } finally {
+        if (active) setIsLoading(false);
       }
-      if (active) setIsLoading(false);
-    };
-
-    supabase.auth.getSession().then(({ data }) => aplicarSession(data.session));
-
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      aplicarSession(session);
-    });
-
-    return () => {
-      active = false;
-      subscription.subscription.unsubscribe();
-    };
+    })();
+    return () => { active = false; };
   }, []);
 
   const signIn = async (email: string, password: string): Promise<Perfil> => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error || !data.user) {
-      if (error?.code === 'email_not_confirmed') {
-        const err = new Error('Debes confirmar tu correo antes de iniciar sesión') as Error & { code?: string };
-        err.code = 'email_not_confirmed';
-        throw err;
-      }
-      throw new Error(error?.message || 'Credenciales inválidas');
-    }
-    const p = await cargarPerfil(data.user.id);
-    if (data.session) {
-      localStorage.setItem('pymedu_token', data.session.access_token);
-    }
-    setUser({ id: data.user.id, email: data.user.email ?? '' });
-    setPerfil(p);
+    const { token, perfil: p } = await api.login(email, password);
+    setToken(token);
+    aplicarPerfil(p as Perfil);
     setIsLoading(false);
-    return p;
+    return p as Perfil;
+  };
+
+  const register = async (email: string, password: string, full_name: string, extra: Record<string, unknown> = {}): Promise<Perfil> => {
+    const { token, perfil: p } = await api.register(email, password, full_name, extra);
+    setToken(token);
+    aplicarPerfil(p as Perfil);
+    setIsLoading(false);
+    return p as Perfil;
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('pymedu_token');
-    setUser(null);
+    setToken(null);
     setPerfil(null);
+    setUser(null);
   };
 
   const recargarPerfil = async () => {
-    if (!user) return;
     try {
-      setPerfil(await cargarPerfil(user.id));
+      const { perfil: p } = await api.me();
+      aplicarPerfil(p as Perfil);
     } catch {
       // mantiene el perfil actual si la recarga falla
     }
@@ -181,8 +145,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       case 'emprendedor':
       case 'dueño':
         // El dueño del negocio siempre puede registrar ventas y gastos.
-        // (El esquema de Supabase los creaba en false al registrarse, ocultando
-        // 'Ventas' y 'Compras y gastos' del menu ERP para cuentas nuevas.)
         if (permiso === 'crear_ventas' || permiso === 'crear_gastos') return true;
         if (typeof flags[permiso] === 'boolean') return flags[permiso];
         return [
@@ -218,7 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, perfil, isLoading, signIn, signOut, puedeHacer, recargarPerfil,
+      user, perfil, isLoading, signIn, register, signOut, puedeHacer, recargarPerfil,
     }}>
       {children}
     </AuthContext.Provider>

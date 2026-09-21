@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 interface MiVinculacion {
@@ -52,8 +52,12 @@ export default function MiInstitucion() {
   const [codigoInput, setCodigoInput] = useState('');
 
   const cargar = useCallback(async () => {
-    const { data, error } = await supabase.rpc('mi_vinculacion');
-    if (!error && data) setVinculacion(data as MiVinculacion);
+    try {
+      const { data } = await api.miVinculacion();
+      if (data) setVinculacion(data as unknown as MiVinculacion);
+    } catch {
+      // sin vinculacion o sin sesion: se muestra el panel vacio
+    }
     setCargando(false);
   }, []);
 
@@ -69,8 +73,12 @@ export default function MiInstitucion() {
     }
     const timer = setTimeout(async () => {
       setBuscandoInst(true);
-      const { data, error } = await supabase.rpc('buscar_instituciones', { busqueda: termino });
-      if (active && !error) setResultadosInst((data ?? []) as InstitucionResultado[]);
+      try {
+        const { data } = await api.buscarInstituciones(termino);
+        if (active) setResultadosInst((data ?? []) as unknown as InstitucionResultado[]);
+      } catch {
+        if (active) setResultadosInst([]);
+      }
       if (active) setBuscandoInst(false);
     }, 350);
     return () => {
@@ -90,19 +98,19 @@ export default function MiInstitucion() {
     setTrabajando(true);
     setErrorMsg('');
     setSuccessMsg('');
-    const { error } = await supabase.from('solicitudes_vinculacion').insert({
-      usuario_id: perfil.id,
-      institucion_id: institucion.id,
-    });
-    setTrabajando(false);
-    if (error) {
+    try {
+      await api.solicitarVinculacion(institucion.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      setTrabajando(false);
       setErrorMsg(
-        error.message.includes('duplicate') || error.message.includes('unique')
+        msg.includes('duplicate') || msg.includes('unique')
           ? 'Ya tienes una solicitud pendiente para esta institución.'
-          : error.message
+          : msg
       );
       return;
     }
+    setTrabajando(false);
     setSuccessMsg(`Solicitud enviada a ${institucion.nombre}.`);
     setInstitucion(null);
     await cargar();
@@ -113,13 +121,17 @@ export default function MiInstitucion() {
     setTrabajando(true);
     setErrorMsg('');
     setSuccessMsg('');
-    const { error } = await supabase
-      .from('solicitudes_vinculacion')
-      .update({ estado: 'cancelada' })
-      .eq('usuario_id', perfil.id)
-      .eq('estado', 'pendiente');
+    try {
+      const { data } = await api.miVinculacion();
+      const solicitudId = (data as unknown as MiVinculacion | null)?.solicitud_id;
+      if (!solicitudId) throw new Error('Sin solicitud pendiente.');
+      await api.cancelarSolicitud(solicitudId);
+    } catch (err) {
+      setTrabajando(false);
+      setErrorMsg(err instanceof Error ? err.message : 'Error al cancelar la solicitud.');
+      return;
+    }
     setTrabajando(false);
-    if (error) { setErrorMsg(error.message); return; }
     setSuccessMsg('Solicitud cancelada.');
     await cargar();
   };
@@ -131,16 +143,16 @@ export default function MiInstitucion() {
     setTrabajando(true);
     setErrorMsg('');
     setSuccessMsg('');
-    const { data, error } = await supabase.rpc('redimir_codigo', { p_codigo: codigo });
-    setTrabajando(false);
-    if (error) {
-      setErrorMsg(errorLegible[error.message] ?? error.message);
+    try {
+      await api.redimirCodigo(codigo);
+    } catch (err) {
+      setTrabajando(false);
+      setErrorMsg(errorLegible[err instanceof Error ? err.message : ''] ?? (err instanceof Error ? err.message : 'Error al canjear el código'));
       return;
     }
-    if (data) {
-      setSuccessMsg('¡Vinculación exitosa! Tu cuenta quedó asociada a la institución del código.');
-      setCodigoInput('');
-    }
+    setTrabajando(false);
+    setSuccessMsg('¡Vinculación exitosa! Tu cuenta quedó asociada a la institución del código.');
+    setCodigoInput('');
     await cargar();
     await recargarPerfil();
   };

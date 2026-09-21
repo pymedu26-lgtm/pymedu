@@ -1,21 +1,22 @@
-import { supabase } from './supabase';
+// Cliente HTTP hacia la API PymEdu (Express + PostgreSQL en Railway).
+// En desarrollo usa el proxy de vite.config.ts; en produccion VITE_API_URL
+// (o el mismo origen, que es como Railway sirve el SPA + la API).
 
-// En desarrollo (Vite) usa el proxy de vite.config.ts.
-// En produccion apunta a la API desplegada (VITE_API_URL, ej: Vercel + Render).
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-// Devuelve el access token de la sesion Supabase actual (refrescada si hace falta).
-async function getToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token ?? null;
-  if (token) {
-    localStorage.setItem('pymedu_token', token);
-  }
-  return token;
+const TOKEN_KEY = 'pymedu_token';
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string | null) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = await getToken();
+  const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -45,31 +46,38 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 }
 
-export const api = {
-  login: (email: string, password: string) =>
-    request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    }),
+const json = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
-  register: (email: string, password: string, full_name: string) =>
-    request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, full_name }),
-    }),
+export const api = {
+  // ── Auth ──────────────────────────────────────────────
+  login: (email: string, password: string) =>
+    request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/login', json({ email, password })),
+
+  register: (email: string, password: string, full_name: string, extra: Record<string, unknown> = {}) =>
+    request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/register', json({ email, password, full_name, ...extra })),
 
   me: () =>
     request<{ perfil: Record<string, unknown> }>('/api/auth/me'),
 
+  // ── Instituciones ─────────────────────────────────────
   getInstituciones: () =>
     request<{ data: Record<string, unknown>[] }>('/api/instituciones'),
 
+  buscarInstituciones: (q: string) => {
+    const query = encodeURIComponent(q);
+    return request<{ data: Record<string, unknown>[] }>(`/api/instituciones?q=${query}`);
+  },
+
+  // ── Perfiles (admin global) ───────────────────────────
   getPerfiles: (params: Record<string, string> = {}) => {
     const query = new URLSearchParams(params).toString();
     return request<{ data: Record<string, unknown>[]; total: number; hasMore: boolean }>(
       `/api/perfiles${query ? `?${query}` : ''}`
     );
   },
+
+  getRolCounts: () =>
+    request<{ data: Record<string, number> }>('/api/admin/perfiles/conteo-por-rol'),
 
   getPerfilesStats: () =>
     request<Record<string, number>>('/api/perfiles/stats'),
@@ -86,13 +94,64 @@ export const api = {
       `/api/perfiles/stats/institucion/${institucionId}`
     ),
 
+  // ── Superadmin: crear usuario ─────────────────────────
+  crearUsuario: (payload: Record<string, unknown>) =>
+    request<{ perfil: Record<string, unknown> }>('/api/admin/crear-usuario', json(payload)),
+
+  // ── Vinculación ───────────────────────────────────────
+  miVinculacion: () =>
+    request<{ data: Record<string, unknown> | null }>('/api/vinculacion/mi'),
+
+  solicitarVinculacion: (institucion_id: string) =>
+    request<{ ok: boolean }>('/api/vinculacion/solicitar', json({ institucion_id })),
+
+  cancelarSolicitud: (solicitud_id: string) =>
+    request<{ ok: boolean }>(`/api/vinculacion/solicitudes/${encodeURIComponent(solicitud_id)}/cancelar`, json({})),
+
+  aprobarSolicitud: (solicitud_id: string, aprobada: boolean) =>
+    request<{ ok: boolean }>(`/api/vinculacion/solicitudes/${encodeURIComponent(solicitud_id)}/aprobar`, json({ aprobada })),
+
+  generarCodigo: (institucion_id: string, rol: string, usos_max: number) =>
+    request<{ data: string }>('/api/vinculacion/codigos', json({ institucion_id, rol, usos_max })),
+
+  desactivarCodigo: (codigo_id: string) =>
+    request<{ ok: boolean }>(`/api/vinculacion/codigos/${encodeURIComponent(codigo_id)}/desactivar`, json({})),
+
+  redimirCodigo: (codigo: string) =>
+    request<{ ok: boolean }>('/api/vinculacion/redimir', json({ codigo })),
+
+  getUsuariosInstitucion: (institucionId: string, params: Record<string, string> = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request<{ data: Record<string, unknown>[] }>(
+      `/api/vinculacion/instituciones/${institucionId}/usuarios${query ? `?${query}` : ''}`
+    );
+  },
+
+  getSolicitudesInstitucion: (institucionId: string) =>
+    request<{ data: Record<string, unknown>[] }>(`/api/vinculacion/instituciones/${institucionId}/solicitudes`),
+
+  getCodigosInstitucion: (institucionId: string) =>
+    request<{ data: Record<string, unknown>[] }>(`/api/vinculacion/instituciones/${institucionId}/codigos`),
+
+  // ── Membresía ─────────────────────────────────────────
+  activarMembresia: (nivel: string, expira: string | null) =>
+    request<{ ok: boolean }>('/api/membresia/activar', json({ nivel, expira })),
+
+  // ── ERP (colecciones JSON del usuario) ────────────────
+  getErp: () =>
+    request<{ data: { coleccion: string; id: string; data: unknown }[] }>('/api/erp'),
+
+  upsertErp: (rows: { coleccion: string; id: string; data: unknown }[]) =>
+    request<{ ok: boolean }>('/api/erp/upsert', json({ rows })),
+
+  deleteErp: (coleccion: string, ids: string[]) =>
+    request<{ ok: boolean }>('/api/erp/delete', json({ coleccion, ids })),
+
+  // ── Pagos Webpay ──────────────────────────────────────
   crearPagoWebpay: (plan: string, usuario_id: string, email: string) =>
     request<{ token_ws: string; url: string; monto: number; plan: string; buy_order: string }>(
       '/api/pagos/webpay/crear',
-      {
-        method: 'POST',
-        body: JSON.stringify({ plan, usuario_id, email }),
-      }
+      json({ plan, usuario_id, email })
     ),
 
   getPagoWebpay: (buyOrder: string) =>

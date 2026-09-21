@@ -4,7 +4,7 @@ const integraciones = [
   { id: 'sso', nombre: 'SSO / SAML', descripcion: 'Inicio de sesion unico con proveedores corporativos', icon: 'key', estado: 'activo' as const, proveedor: 'Okta', ultimaSync: 'Hace 5 min' },
   { id: 'stripe', nombre: 'Pasarela de Pagos', descripcion: 'Cobros y suscripciones de planes', icon: 'payments', estado: 'activo' as const, proveedor: 'Stripe', ultimaSync: 'Hace 12 min' },
   { id: 'sendgrid', nombre: 'Email Transaccional', descripcion: 'Envio de correos, notificaciones y alertas', icon: 'mail', estado: 'activo' as const, proveedor: 'SendGrid', ultimaSync: 'Hace 1 hora' },
-  { id: 'supabase', nombre: 'Base de Datos', descripcion: 'Backend-as-a-Service, auth y almacenamiento', icon: 'database', estado: 'activo' as const, proveedor: 'Supabase', ultimaSync: 'Tiempo real' },
+  { id: 'postgres', nombre: 'Base de Datos', descripcion: 'PostgreSQL alojado en Railway', estado: 'activo' as const, proveedor: 'Railway', ultimaSync: 'Tiempo real' },
   { id: 'analytics', nombre: 'Analytics', descripcion: 'Metricas de uso y comportamiento', icon: 'analytics', estado: 'inactivo' as const, proveedor: 'No configurado', ultimaSync: '—' },
   { id: 'webhooks', nombre: 'Webhooks', descripcion: 'Endpoints para integraciones externas', icon: 'webhook', estado: 'activo' as const, proveedor: '3 endpoints activos', ultimaSync: 'Hace 30 min' },
 ];

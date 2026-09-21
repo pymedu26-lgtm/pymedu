@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import {
   createDocumentFromPurchase,
   createDocumentFromSale,
@@ -286,7 +286,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
   const saldoActual = movimientos.reduce((acc, m) => m.tipo === 'Ingreso' ? acc + m.monto : acc - m.monto, 0);
 
-  // ══ Carga desde Supabase ══════════════════════
+  // ══ Carga desde Railway Postgres ══════════════════
   useEffect(() => {
     let active = true;
     setHydrated(false);
@@ -295,11 +295,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from('erp_datos')
-          .select('coleccion, id, data');
+        const { data } = await api.getErp();
 
-        if (error) throw error;
         if (!active) return;
 
         const grouped = (data ?? []).reduce<Record<string, unknown[]>>((acc, r) => {
@@ -361,7 +358,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         const cfg = grouped.config?.[0] as ConfiguracionCumplimiento | undefined;
         if (cfg) setConfiguracionCumplimiento({ ...DEMO_CONFIG, ...cfg });
       } catch (err) {
-        console.error('No se pudo cargar el ERP desde Supabase (¿ejecutaste 10-erp-persistencia.sql?):', err);
+        console.error('No se pudo cargar el ERP desde Railway (¿existe la tabla erp_datos?):', err);
       } finally {
         if (active) setHydrated(true);
       }
@@ -370,7 +367,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     return () => { active = false; };
   }, [user?.id]);
 
-  // ══ Guardado en Supabase (debounced) ══════════
+  // ══ Guardado en Railway (debounced) ════════════
   useEffect(() => {
     if (!hydrated || !user) return;
 
@@ -401,22 +398,18 @@ export function ERPProvider({ children }: { children: ReactNode }) {
             data: it as unknown as Record<string, unknown>,
           }));
           if (rows.length > 0) {
-            await supabase.from('erp_datos').upsert(rows, { onConflict: 'usuario_id,coleccion,id' });
+            await api.upsertErp(rows);
           }
           const known = dbIdsRef.current[coleccion] ?? new Set<string>();
           const live = new Set(items.map((i) => i.id));
           const toDelete = [...known].filter((id) => !live.has(id));
           if (toDelete.length > 0) {
-            await supabase
-              .from('erp_datos')
-              .delete()
-              .match({ usuario_id: user.id, coleccion })
-              .in('id', toDelete);
+            await api.deleteErp(coleccion, toDelete);
           }
           dbIdsRef.current[coleccion] = live;
         }
       } catch (err) {
-        console.error('No se pudo guardar el ERP en Supabase:', err);
+        console.error('No se pudo guardar el ERP en Railway:', err);
       }
     }, 600);
 

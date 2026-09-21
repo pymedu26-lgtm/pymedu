@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 interface InstitucionResultado {
@@ -17,13 +18,13 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [institucion, setInstitucion] = useState<InstitucionResultado | null>(null);
   const [busquedaInst, setBusquedaInst] = useState('');
   const [resultadosInst, setResultadosInst] = useState<InstitucionResultado[]>([]);
   const [buscandoInst, setBuscandoInst] = useState(false);
   const [codigoInvitacion, setCodigoInvitacion] = useState('');
   const navigate = useNavigate();
+  const { register } = useAuth();
 
   // Búsqueda de instituciones (debounce 350ms) para solicitar vinculación
   useEffect(() => {
@@ -36,9 +37,11 @@ export default function Register() {
     }
     const timer = setTimeout(async () => {
       setBuscandoInst(true);
-      const { data, error } = await supabase.rpc('buscar_instituciones', { busqueda: termino });
-      if (active && !error) {
-        setResultadosInst((data ?? []) as InstitucionResultado[]);
+      try {
+        const { data } = await api.buscarInstituciones(termino);
+        if (active) setResultadosInst((data ?? []) as unknown as InstitucionResultado[]);
+      } catch {
+        if (active) setResultadosInst([]);
       }
       if (active) setBuscandoInst(false);
     }, 350);
@@ -60,82 +63,32 @@ export default function Register() {
     setError('');
 
     try {
-      const meta: Record<string, string> = { full_name: fullName, rol: 'emprendedor' };
-      if (institucion) meta.institucion_id = institucion.id;
-      if (codigoInvitacion.trim()) meta.codigo_invitacion = codigoInvitacion.trim().toUpperCase();
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
+      const perfil = await register(
+        email.trim(),
         password,
-        options: { data: meta },
-      });
-      if (error) throw error;
-
-      if (data.session && data.user) {
-        // Sin confirmacion de email: el trigger de Supabase creo el perfil, verificarlo alli
-        const { data: perfil, error: perfilError } = await supabase
-          .from('perfiles')
-          .select('id, rol')
-          .eq('id', data.user.id)
-          .single();
-
-        if (perfilError || !perfil) {
-          await supabase.auth.signOut();
-          throw new Error('No se pudo crear tu perfil en Supabase. Intenta iniciar sesion.');
+        fullName.trim(),
+        {
+          institucion_id: institucion ? institucion.id : undefined,
+          codigo_invitacion: codigoInvitacion.trim() ? codigoInvitacion.trim().toUpperCase() : undefined,
         }
+      );
 
-        const rolRedirectMap: Record<string, string> = {
-          superadmin: '/admin/inicio',
-          admin_institucional: '/institucion/inicio',
-          coordinador: '/programa/inicio',
-          mentor: '/mentor/inicio',
-          emprendedor: '/erp/inicio',
-          dueño: '/erp/inicio',
-          demo: '/demo/inicio',
-        };
-        navigate(rolRedirectMap[String(perfil.rol)] ?? '/erp/inicio', { replace: true });
-        return;
-      }
-
-      // Confirmacion de email activa: el perfil se creara al confirmar
-      setSuccess(true);
+      const rolRedirectMap: Record<string, string> = {
+        superadmin: '/admin/inicio',
+        admin_institucional: '/institucion/inicio',
+        coordinador: '/programa/inicio',
+        mentor: '/mentor/inicio',
+        emprendedor: '/erp/inicio',
+        dueño: '/erp/inicio',
+        demo: '/demo/inicio',
+      };
+      navigate(rolRedirectMap[String(perfil.rol)] ?? '/erp/inicio', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrarse');
     } finally {
       setLoading(false);
     }
   };
-
-  if (success) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md bg-surface-container-lowest rounded-3xl p-8 shadow-xl text-center">
-          <div className="w-16 h-16 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-6">
-            <span className="material-symbols-outlined text-3xl">check_circle</span>
-          </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">¡Registro exitoso!</h2>
-          <p className="text-on-surface-variant mb-4">
-            Te enviamos un correo para confirmar tu cuenta. Una vez confirmado, tu perfil de
-            emprendedor estara listo en Supabase y podras iniciar sesion.
-          </p>
-          {institucion && (
-            <p className="text-on-surface-variant mb-4 font-bold">
-              Solicitud de vinculación enviada a <span className="text-primary">{institucion.nombre}</span>.
-              El administrador de la institución deberá aprobarla.
-            </p>
-          )}
-          {codigoInvitacion.trim() && (
-            <p className="text-on-surface-variant mb-4 font-bold">
-              Si el código de invitación era válido, tu cuenta quedó vinculada de inmediato.
-            </p>
-          )}
-          <Link to="/login" className="px-6 py-3 bg-primary text-white rounded-xl font-bold">
-            Ir al Login
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4">

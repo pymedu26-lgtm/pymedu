@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { supabase } from '../../../lib/supabase';
+import { api } from '../../../lib/api';
 import { useAuth } from '../../../context/AuthContext';
 
 const rolConfig: Record<string, { label: string; color: string; icon: string }> = {
@@ -49,60 +49,61 @@ export default function InstUsuarios() {
     if (!perfil?.institucion_id) return;
     setLoading(true);
 
-    let query = supabase
-      .from('perfiles')
-      .select('id, email, nombre_completo, rol, activo, membresia_nivel, created_at')
-      .eq('institucion_id', perfil.institucion_id)
-      .neq('rol', 'superadmin');
+    const params: Record<string, string> = {};
+    if (filtroRol !== 'todos') params.rol = filtroRol;
+    if (busqueda) params.busqueda = busqueda;
 
-    if (filtroRol !== 'todos') query = query.eq('rol', filtroRol);
-    if (busqueda) query = query.or(`nombre_completo.ilike.%${busqueda}%,email.ilike.%${busqueda}%`);
-
-    const { data, error } = await query.order('nombre_completo');
-    if (error) { console.error('Error cargando usuarios:', error); setLoading(false); return; }
-    setUsuarios((data ?? []) as unknown as Record<string, unknown>[]);
+    try {
+      const { data } = await api.getUsuariosInstitucion(perfil.institucion_id, params);
+      setUsuarios(data as unknown as Record<string, unknown>[]);
+    } catch (err) {
+      console.error('Error cargando usuarios:', err);
+    }
     setLoading(false);
   }, [perfil?.institucion_id, busqueda, filtroRol]);
 
   const fetchStats = useCallback(async () => {
     if (!perfil?.institucion_id) return;
-    const { data, error } = await supabase
-      .from('perfiles')
-      .select('rol')
-      .eq('institucion_id', perfil.institucion_id)
-      .neq('rol', 'superadmin');
-    if (error) { console.error('Error cargando stats:', error); return; }
-    const rows = (data ?? []) as { rol: string }[];
-    const computados = { total: rows.length, coordinadores: 0, mentores: 0, emprendedores: 0 };
-    rows.forEach(r => {
-      if (r.rol === 'coordinador') computados.coordinadores++;
-      if (r.rol === 'mentor') computados.mentores++;
-      if (r.rol === 'emprendedor' || r.rol === 'dueño') computados.emprendedores++;
-    });
-    setStats(computados);
+    try {
+      setStats(await api.getPerfilesStatsByInstitucion(perfil.institucion_id));
+    } catch (err) {
+      console.error('Error cargando stats:', err);
+    }
   }, [perfil?.institucion_id]);
 
   const fetchSolicitudes = useCallback(async () => {
     if (!perfil?.institucion_id) return;
-    const { data, error } = await supabase
-      .from('solicitudes_vinculacion')
-      .select('id, usuario_id, institucion_id, estado, mensaje, created_at, perfil:perfiles(nombre_completo, email), institucion:instituciones(nombre)')
-      .eq('institucion_id', perfil.institucion_id)
-      .eq('estado', 'pendiente')
-      .order('created_at', { ascending: false });
-    if (error) { console.error('Error cargando solicitudes:', error); return; }
-    setSolicitudes((data ?? []) as unknown as SolicitudVinculacion[]);
+    try {
+      const { data } = await api.getSolicitudesInstitucion(perfil.institucion_id);
+      const filas = (data ?? []) as (Record<string, unknown> & {
+        perfil_nombre?: string | null; perfil_email?: string | null;
+      })[];
+      setSolicitudes(filas.map((s) => ({
+        id: String(s.id),
+        usuario_id: String(s.usuario_id),
+        institucion_id: String(s.institucion_id),
+        estado: String(s.estado),
+        mensaje: (s.mensaje as string | null) ?? null,
+        created_at: String(s.created_at),
+        perfil: {
+          nombre_completo: s.perfil_nombre ?? 'Usuario',
+          email: s.perfil_email ?? '',
+        },
+        institucion: s.institucion_nombre ? { nombre: String(s.institucion_nombre) } : null,
+      })));
+    } catch (err) {
+      console.error('Error cargando solicitudes:', err);
+    }
   }, [perfil?.institucion_id]);
 
   const fetchCodigos = useCallback(async () => {
     if (!perfil?.institucion_id) return;
-    const { data, error } = await supabase
-      .from('codigos_invitacion')
-      .select('*')
-      .eq('institucion_id', perfil.institucion_id)
-      .order('created_at', { ascending: false });
-    if (error) { console.error('Error cargando códigos:', error); return; }
-    setCodigos((data ?? []) as CodigoInvitacion[]);
+    try {
+      const { data } = await api.getCodigosInstitucion(perfil.institucion_id);
+      setCodigos((data ?? []) as unknown as CodigoInvitacion[]);
+    } catch (err) {
+      console.error('Error cargando códigos:', err);
+    }
   }, [perfil?.institucion_id]);
 
   useEffect(() => {
@@ -114,15 +115,15 @@ export default function InstUsuarios() {
 
   const responderSolicitud = async (id: string, aprobar: boolean) => {
     setGestionando(true);
-    const { error } = await supabase.rpc('aprobar_solicitud', {
-      p_solicitud_id: id,
-      p_aprobada: aprobar,
-    });
-    setGestionando(false);
-    if (error) {
-      alert(`No se pudo ${aprobar ? 'aprobar' : 'rechazar'} la solicitud: ${error.message}`);
+    try {
+      await api.aprobarSolicitud(id, aprobar);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo gestionar la solicitud.';
+      alert(`No se pudo ${aprobar ? 'aprobar' : 'rechazar'} la solicitud: ${msg}`);
+      setGestionando(false);
       return;
     }
+    setGestionando(false);
     await fetchSolicitudes();
   };
 
@@ -130,25 +131,30 @@ export default function InstUsuarios() {
     e.preventDefault();
     if (!perfil?.institucion_id) return;
     setGestionando(true);
-    const { data, error } = await supabase.rpc('generar_codigo_invitacion', {
-      p_institucion_id: perfil.institucion_id,
-      p_rol: rolInv,
-      p_usos_max: Number(usosMax) || 1,
-    });
-    setGestionando(false);
-    if (error) {
-      alert(`No se pudo generar el código: ${error.message}`);
+    try {
+      const { data } = await api.generarCodigo(perfil.institucion_id, rolInv, Number(usosMax) || 1);
+      if (data) setUltimoCodigo(data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo generar el código.';
+      alert(`No se pudo generar el código: ${msg}`);
+      setGestionando(false);
       return;
     }
-    if (data) setUltimoCodigo(String(data));
+    setGestionando(false);
     await fetchCodigos();
   };
 
   const desactivarCodigo = async (id: string) => {
     setGestionando(true);
-    const { error } = await supabase.rpc('desactivar_codigo', { p_codigo_id: id });
+    try {
+      await api.desactivarCodigo(id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo desactivar el código.';
+      alert(`No se pudo desactivar el código: ${msg}`);
+      setGestionando(false);
+      return;
+    }
     setGestionando(false);
-    if (error) { alert(`No se pudo desactivar el código: ${error.message}`); return; }
     await fetchCodigos();
   };
 

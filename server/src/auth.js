@@ -3,6 +3,7 @@ import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import db from './db.js';
+import { registrarVinculacionTrasRegistro } from './vinculacionServicio.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'pymedu-secret-key-change-in-production';
@@ -141,7 +142,7 @@ router.post('/login', async (req, res) => {
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, full_name } = req.body;
+    const { email, password, full_name, institucion_id = null, codigo_invitacion = null } = req.body;
     if (!email || !password || !full_name) {
       return res.status(400).json({ error: 'Email, contrasena y nombre son requeridos' });
     }
@@ -158,6 +159,13 @@ router.post('/register', async (req, res) => {
       INSERT INTO perfiles (id, email, password_hash, nombre_completo, rol, activo, membresia_nivel, segmento_negocio)
       VALUES (?, ?, ?, ?, 'emprendedor', 1, 'free', 'C')
     `).run(id, email, passwordHash, full_name);
+
+    // Vinculacion opcional: codigo de invitacion (inmediata) o institucion (solicitud pendiente)
+    await registrarVinculacionTrasRegistro({
+      usuarioId: id,
+      institucionId,
+      codigo: codigo_invitacion,
+    });
 
     const perfil = await db.prepare('SELECT * FROM perfiles WHERE id = ?').get(id);
     const token = generarToken(perfil);

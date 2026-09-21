@@ -65,33 +65,16 @@ async function confirmarTransaccionTbk(tokenWs) {
   return res.json();
 }
 
-async function activarMembresiaSupabase({ userId, nivel, duracionDias }) {
-  const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !serviceKey) {
-    console.error('[webpay] SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no configuradas');
-    return false;
-  }
-
+async function activarMembresia({ userId, nivel, duracionDias }) {
+  if (!['free', 'pro', 'premium'].includes(nivel)) return false;
   const expira = new Date(Date.now() + duracionDias * 24 * 60 * 60 * 1000).toISOString();
-
-  for (const tabla of ['perfiles', 'usuarios', 'profiles']) {
-    const res = await fetch(`${supabaseUrl}/rest/v1/${tabla}?id=eq.${encodeURIComponent(userId)}`, {
-      method: 'PATCH',
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({ membresia_nivel: nivel, membresia_expira: expira }),
-    });
-    if (res.ok) {
-      console.log(`[webpay] Membresia ${nivel} activada para ${userId} (tabla ${tabla})`);
-      return true;
-    }
+  const res = await db.prepare('UPDATE perfiles SET membresia_nivel = ?, membresia_expira = ? WHERE id = ?')
+    .run(nivel, expira, userId);
+  if (res.changes > 0) {
+    console.log(`[webpay] Membresia ${nivel} activada para ${userId} en Railway Postgres`);
+    return true;
   }
-  console.error('[webpay] No se pudo activar membresia en Supabase');
+  console.error('[webpay] No se encontro el perfil para activar membresia:', userId);
   return false;
 }
 
@@ -188,7 +171,7 @@ router.post('/webpay/retorno', async (req, res) => {
     );
 
     if (aprobada) {
-      await activarMembresiaSupabase({
+      await activarMembresia({
         userId: pago.usuario_id,
         nivel: pago.plan,
         duracionDias: PLANES[pago.plan]?.duracion_dias || 30,

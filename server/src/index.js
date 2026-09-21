@@ -1,13 +1,15 @@
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
 import express from 'express';
 import cors from 'cors';
-import bcrypt from 'bcrypt';
 import db from './db.js';
 import authRouter, { requireAuth, sanitizarPerfil } from './auth.js';
 import webpayRouter from './webpay.js';
+import vinculacionRouter from './vinculacion.js';
+import erpRouter from './erp.js';
+import membresiaRouter from './membresia.js';
+import adminRouter from './admin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +37,10 @@ app.use(express.urlencoded({ extended: false }));
 
 app.use('/api/auth', authRouter);
 app.use('/api/pagos', webpayRouter);
+app.use('/api/vinculacion', vinculacionRouter);
+app.use('/api/erp', erpRouter);
+app.use('/api/membresia', membresiaRouter);
+app.use('/api/admin', adminRouter);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, servicio: 'PymEdu API', entorno: process.env.RAILWAY_ENV || 'local', ts: Date.now() });
@@ -42,6 +48,14 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/instituciones', async (req, res) => {
   try {
+    const { q } = req.query;
+    if (q) {
+      const termino = `%${String(q).replace(/[%_]/g, (m) => `\\${m}`)}%`;
+      const filas = await db.prepare(
+        "SELECT id, nombre, rubro, region, comuna FROM instituciones WHERE activa = 1 AND lower(nombre) LIKE lower(?) ESCAPE '\\' ORDER BY nombre LIMIT 8"
+      ).all(termino);
+      return res.json({ data: filas });
+    }
     const filas = await db.prepare('SELECT id, nombre, activa FROM instituciones ORDER BY nombre').all();
     res.json({ data: filas });
   } catch (error) {
@@ -55,7 +69,7 @@ app.get('/api/perfiles/stats', requireAuth, async (req, res) => {
     const total = await db.prepare('SELECT COUNT(*)::int AS n FROM perfiles WHERE activo = 1').get();
     const coordinadores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol = 'coordinador' AND activo = 1").get();
     const mentores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol = 'mentor' AND activo = 1").get();
-    const emprendedores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol IN ('emprendedor','dueno') AND activo = 1").get();
+    const emprendedores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol IN ('emprendedor','dueño','dueno') AND activo = 1").get();
     res.json({
       total: total.n,
       coordinadores: coordinadores.n,
@@ -74,7 +88,7 @@ app.get('/api/perfiles/stats/institucion/:id', requireAuth, async (req, res) => 
     const total = await db.prepare('SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND activo = 1').get(id);
     const coordinadores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND rol = 'coordinador' AND activo = 1").get(id);
     const mentores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND rol = 'mentor' AND activo = 1").get(id);
-    const emprendedores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND rol IN ('emprendedor','dueno') AND activo = 1").get(id);
+    const emprendedores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE institucion_id = ? AND rol IN ('emprendedor','dueño','dueno') AND activo = 1").get(id);
     res.json({
       total: total.n,
       coordinadores: coordinadores.n,
@@ -89,17 +103,27 @@ app.get('/api/perfiles/stats/institucion/:id', requireAuth, async (req, res) => 
 
 app.get('/api/perfiles', requireAuth, async (req, res) => {
   try {
-    const { rol, institucion_id, busqueda, page = '1', pageSize = '20' } = req.query;
+    const { rol, institucion_id, busqueda, page = '1', pageSize = '20', sort = 'nombre_completo', dir = 'asc', excluir_superadmin = '1' } = req.query;
     const limite = parseInt(pageSize, 10) || 20;
     const offset = ((parseInt(page, 10) || 1) - 1) * limite;
     const condiciones = [];
     const parametros = [];
+    if (excluir_superadmin === '1') { condiciones.push("rol <> 'superadmin'"); }
     if (rol) { condiciones.push('rol = ?'); parametros.push(rol); }
     if (institucion_id) { condiciones.push('institucion_id = ?'); parametros.push(institucion_id); }
-    if (busqueda) { condiciones.push('(nombre_completo LIKE ? OR email LIKE ?)'); parametros.push(`%${busqueda}%`, `%${busqueda}%`); }
+    if (busqueda) {
+      condiciones.push("(nombre_completo ILIKE ? ESCAPE '\\' OR email ILIKE ? ESCAPE '\\')");
+      const term = `%${String(busqueda).replace(/[%_]/g, (m) => `\\${m}`)}%`;
+      parametros.push(term, term);
+    }
     const where = condiciones.length ? ` WHERE ${condiciones.join(' AND ')}` : '';
+    const columnaOrden = ['nombre_completo', 'email', 'rol', 'created_at', 'membresia_nivel'].includes(sort) ? sort : 'nombre_completo';
+    const direccion = dir === 'desc' ? 'DESC' : 'ASC';
     const totalRow = await db.prepare(`SELECT COUNT(*)::int AS n FROM perfiles${where}`).get(...parametros);
-    const filas = await db.prepare(`SELECT * FROM perfiles${where} ORDER BY nombre_completo LIMIT ? OFFSET ?`).all(...parametros, limite, offset);
+    const filas = await db.prepare(
+      `SELECT id, email, nombre_completo, rol, institucion_id, reporta_a, activo, membresia_nivel, membresia_expira, segmento_negocio, created_at
+       FROM perfiles${where} ORDER BY ${columnaOrden} ${direccion} LIMIT ? OFFSET ?`
+    ).all(...parametros, limite, offset);
     res.json({ data: filas, total: totalRow.n, hasMore: offset + filas.length < totalRow.n });
   } catch (error) {
     console.error('[index] Error listando perfiles:', error);
@@ -115,30 +139,6 @@ app.get('/api/pagos/estadisticas', requireAuth, async (req, res) => {
     res.json({ total: total.n, aprobados: aprobados.n, ingresos: ingresos.s });
   } catch (error) {
     console.error('[index] Error en estadisticas pagos:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-
-app.post('/api/perfiles', requireAuth, async (req, res) => {
-  try {
-    const { email, password, nombre_completo, rol = 'emprendedor', institucion_id = null } = req.body;
-    if (!email || !password || !nombre_completo) {
-      return res.status(400).json({ error: 'Email, password y nombre son requeridos' });
-    }
-    const existente = await db.prepare('SELECT id FROM perfiles WHERE email = ?').get(email);
-    if (existente) {
-      return res.status(409).json({ error: 'El email ya esta registrado' });
-    }
-    const id = randomUUID();
-    const password_hash = bcrypt.hashSync(password, 10);
-    await db.prepare(`
-      INSERT INTO perfiles (id, email, password_hash, nombre_completo, rol, institucion_id, activo, membresia_nivel)
-      VALUES (?, ?, ?, ?, ?, ?, 1, 'free')
-    `).run(id, email, password_hash, nombre_completo, rol, institucion_id);
-    const perfil = await db.prepare('SELECT * FROM perfiles WHERE id = ?').get(id);
-    res.status(201).json({ perfil });
-  } catch (error) {
-    console.error('[index] Error creando perfil:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

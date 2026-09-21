@@ -1,7 +1,6 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, Rol } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
 import { Loader2 } from 'lucide-react';
 
 const rolRedirectMap: Record<string, string> = {
@@ -28,57 +27,23 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
-  const [resendOk, setResendOk] = useState(false);
   const navigate = useNavigate();
   const { user, perfil, signIn } = useAuth();
 
-  const handleLoginError = async (err: unknown, emailUsado: string) => {
-    const code = (err as { code?: string })?.code;
-    if (code === 'email_not_confirmed' || (err instanceof Error && err.message.includes('confirm'))) {
-      setConfirmEmail(emailUsado);
-      setError('Debes confirmar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.');
-    } else {
-      setConfirmEmail(null);
-      setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
-    }
+  const handleLoginError = (err: unknown) => {
+    setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
   };
-
-  const handleResend = async () => {
-    if (!confirmEmail) return;
-    setLoading(true);
-    setError('');
-    try {
-      const { error: resendError } = await supabase.auth.resend({
-        type: 'signup',
-        email: confirmEmail,
-      });
-      if (resendError) throw resendError;
-      setResendOk(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al reenviar el correo');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user && perfil) {
-      navigate(rolRedirectMap[perfil.rol] ?? '/erp/inicio', { replace: true });
-    }
-  }, [user, perfil, navigate]);
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setResendOk(false);
 
     try {
       const p = await signIn(email, password);
       navigate(rolRedirectMap[p.rol as string] ?? '/erp/inicio', { replace: true });
     } catch (err) {
-      await handleLoginError(err, email);
+      handleLoginError(err);
     } finally {
       setLoading(false);
     }
@@ -87,12 +52,11 @@ export default function Login() {
   const handleTestLogin = async (email: string, password: string) => {
     setLoading(true);
     setError('');
-    setResendOk(false);
     try {
       const p = await signIn(email, password);
       navigate(rolRedirectMap[p.rol as string] ?? '/erp/inicio', { replace: true });
     } catch (err) {
-      await handleLoginError(err, email);
+      handleLoginError(err);
     } finally {
       setLoading(false);
     }
@@ -112,21 +76,6 @@ export default function Login() {
         {error && (
           <div className="p-4 mb-6 bg-red-50 text-red-600 rounded-xl text-sm font-medium">
             {error}
-            {confirmEmail && !resendOk && (
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={loading}
-                className="mt-3 block w-full py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-60"
-              >
-                Reenviar correo de confirmación
-              </button>
-            )}
-            {resendOk && (
-              <p className="mt-2 text-emerald-700 font-bold">
-                Correo reenviado. Revisa tu bandeja de entrada (y spam).
-              </p>
-            )}
           </div>
         )}
 
