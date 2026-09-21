@@ -98,4 +98,23 @@ router.post('/crear-usuario', soloSuperadmin, async (req, res) => {
   }
 });
 
+// Superadmin elimina un usuario (cascade: errores de ERP, solicitudes,
+// usuario_programas; reporta_a/creado_por pasan a NULL).
+router.delete('/perfiles/:id', soloSuperadmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (id === req.perfil.id) {
+      return res.status(400).json({ error: 'No puedes eliminar tu propio usuario.' });
+    }
+    const existente = await db.prepare('SELECT email FROM perfiles WHERE id = ?').get(id);
+    if (!existente) return res.status(404).json({ error: 'El usuario no existe.' });
+
+    await db.prepare('DELETE FROM perfiles WHERE id = ?').run(id);
+    res.json({ ok: true, email: existente.email });
+  } catch (error) {
+    console.error('[admin] Error eliminando usuario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 export default router;

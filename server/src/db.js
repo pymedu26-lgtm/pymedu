@@ -202,7 +202,8 @@ const db = {
     const c = await preparar('SELECT COUNT(*) as c FROM perfiles').get();
     if (c.c > 0) return;
 
-    const pw = bcrypt.hashSync('demo123', 10     );
+    // NOTA: los perfiles ya NO se siembran. La base de datos debe contener solo
+    // usuarios creados manualmente (superadmin infinitum), no cuentas seed.
 
     const instituciones = [
       ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Instituto San Jose', '76.123.456-7', 'Educacion', 'Metropolitana', 'Santiago'],
@@ -213,19 +214,6 @@ const db = {
       await preparar(
         'INSERT INTO instituciones (id, nombre, rut, rubro, region, comuna) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING'
       ).run(id, nombre, rut, rubro, region, comuna);
-    }
-
-    const perfiles = [
-      ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01', 'superadmin@pymedu.com', pw, 'Super Administrador', 'superadmin', null, null, 1, 1, 1, 1, 1, 1, 1, null, 'premium', 'A'],
-    ];
-    for (const perfil of perfiles) {
-      await preparar(`
-        INSERT INTO perfiles (id, email, password_hash, nombre_completo, rol, institucion_id, reporta_a,
-          puede_ver_remuneraciones, puede_ver_caja, puede_ver_reportes, puede_crear_ventas, puede_crear_gastos,
-          notif_email, notif_push, push_token, membresia_nivel, segmento_negocio)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (id) DO NOTHING
-      `).run(...perfil);
     }
   },
 
@@ -257,13 +245,15 @@ const db = {
   },
 };
 
-// Inicializa schema + datos base + cuentas demo.
+// Inicializa schema + datos base + (opcional) cuentas demo.
 // Se llama UNA sola vez desde index.js (importar db.js no debe disparar DDL:
 // dos inits concurrentes provocaban deadlock 40P01 en Railway).
 export async function inicializar() {
   await db.initDB();
   await db.seedDB().catch((err) => console.error('[db] Error en seedDB (no crítico):', err.message));
-  await db.seedDemo().catch((err) => console.error('[db] Error en seedDemo (no crítico):', err.message));
+  if (process.env.SEED_DEMO === '1') {
+    await db.seedDemo().catch((err) => console.error('[db] Error en seedDemo (no crítico):', err.message));
+  }
   console.log('[db] Base de datos Postgres inicializada');
 }
 
