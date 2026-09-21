@@ -3,6 +3,23 @@ import { useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
 
+const validarRUT = (rut: string): boolean => {
+  const limpio = (rut ?? '').replace(/[^0-9kK]/g, '');
+  if (limpio.length < 2) return false;
+  const cuerpo = limpio.slice(0, -1);
+  const dv = limpio.slice(-1).toUpperCase();
+  if (cuerpo.length < 1 || cuerpo.length > 8) return false;
+  let suma = 0;
+  let factor = 2;
+  for (let i = cuerpo.length - 1; i >= 0; i--) {
+    suma += Number(cuerpo[i]) * factor;
+    factor = factor === 7 ? 2 : factor + 1;
+  }
+  const resto = 11 - (suma % 11);
+  const dvEsperado = resto === 11 ? '0' : resto === 10 ? 'K' : String(resto);
+  return dv === dvEsperado;
+};
+
 export default function ERPClientes() {
   const { clientes, addCliente, deleteCliente, getSaldoPendienteVenta, ventas } = useERP();
   const [busqueda, setBusqueda] = useState('');
@@ -10,6 +27,7 @@ export default function ERPClientes() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState({ nombre: '', rut: '', telefono: '', email: '', comuna: '', limite_credito: '' });
+  const [rutError, setRutError] = useState('');
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
@@ -23,6 +41,11 @@ export default function ERPClientes() {
 
   const guardar = () => {
     if (!nuevo.nombre.trim()) return;
+    if (nuevo.rut.trim() && !validarRUT(nuevo.rut)) {
+      setRutError('RUT inválido. Revisa el dígito verificador.');
+      return;
+    }
+    setRutError('');
     addCliente({
       nombre: nuevo.nombre.trim(),
       rut: nuevo.rut || undefined,
@@ -81,7 +104,7 @@ export default function ERPClientes() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['Cliente', 'Contacto', 'Ventas', 'Deuda pendiente', 'Limite credito', 'Acciones'].map(h => (
+                {['Cliente', 'Contacto', 'Ventas', 'Deuda pendiente', 'Límite de crédito', 'Acciones'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>
@@ -108,7 +131,18 @@ export default function ERPClientes() {
                         {fmt(saldoReal)}
                       </span>
                     </td>
-                    <td className="p-4 text-on-surface-variant">{c.limite_credito ? fmt(c.limite_credito) : '—'}</td>
+                    <td className="p-4">
+                      {c.limite_credito ? (
+                        <div>
+                          <p className="text-on-surface-variant">{fmt(c.limite_credito)}</p>
+                          {c.deuda >= c.limite_credito && c.limite_credito > 0 ? (
+                            <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-error/10 px-2 py-0.5 text-[10px] font-black text-error uppercase tracking-wide">Límite alcanzado</span>
+                          ) : c.deuda >= c.limite_credito * 0.85 && c.limite_credito > 0 ? (
+                            <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-black text-amber-600 uppercase tracking-wide">Cerca del límite</span>
+                          ) : null}
+                        </div>
+                      ) : '—'}
+                    </td>
                     <td className="p-4">
                       <button
                         onClick={() => { setItemToDelete(c.id); setDeleteModalOpen(true); }}
@@ -129,18 +163,18 @@ export default function ERPClientes() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
               <h3 className="text-lg font-bold text-primary">Nuevo Cliente</h3>
-              <button onClick={() => setShowModal(false)} className="text-on-surface-variant hover:text-on-surface">
+              <button onClick={() => { setShowModal(false); setRutError(''); }} className="text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
               {[
-                { key: 'nombre' as const, label: 'Nombre / Razon social' },
+                { key: 'nombre' as const, label: 'Nombre / Razón social' },
                 { key: 'rut' as const, label: 'RUT (opcional)' },
-                { key: 'telefono' as const, label: 'Telefono' },
+                { key: 'telefono' as const, label: 'Teléfono' },
                 { key: 'email' as const, label: 'Email' },
                 { key: 'comuna' as const, label: 'Comuna (opcional)' },
-                { key: 'limite_credito' as const, label: 'Limite de credito (opcional)' },
+                { key: 'limite_credito' as const, label: 'Límite de crédito (opcional)' },
               ].map(f => (
                 <div key={f.key}>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">{f.label}</label>
@@ -152,9 +186,14 @@ export default function ERPClientes() {
                   />
                 </div>
               ))}
+              {rutError && (
+                <p className="flex items-center gap-1.5 text-xs font-bold text-error">
+                  <span className="material-symbols-outlined text-sm">error</span> {rutError}
+                </p>
+              )}
             </div>
             <div className="px-6 pb-6 flex gap-3 shrink-0">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button onClick={() => { setShowModal(false); setRutError(''); }} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
               <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20 disabled:opacity-50">Guardar Cliente</button>
             </div>
           </div>

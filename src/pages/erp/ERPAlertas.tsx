@@ -5,7 +5,10 @@ export default function ERPAlertas() {
   const { ventas, gastos, inventario, documentosTributarios, pagosPOS, promociones, getSaldoPendienteVenta, getSaldoPendienteGasto } = useERP();
   const [filtro, setFiltro] = useState<'todas' | 'stock' | 'documentos' | 'pagos' | 'vencimientos'>('todas');
 
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
 
   const alertas = useMemo(() => {
     const items: { id: string; severidad: 'alta' | 'media' | 'info'; categoria: 'stock' | 'documentos' | 'pagos' | 'vencimientos'; titulo: string; detalle: string }[] = [];
@@ -14,7 +17,7 @@ export default function ERPAlertas() {
       items.push({
         id: `stock-${p.id}`, severidad: p.stock === 0 ? 'alta' : 'media', categoria: 'stock',
         titulo: `Stock bajo: ${p.nombre}`,
-        detalle: `Quedan ${p.stock} unidades (minimo ${p.stockMinimo}).`,
+        detalle: `Quedan ${p.stock} unidades (mínimo ${p.stockMinimo}).`,
       });
     });
 
@@ -38,7 +41,7 @@ export default function ERPAlertas() {
       items.push({
         id: `vp-${v.id}`, severidad: 'alta', categoria: 'vencimientos',
         titulo: 'Cuenta por cobrar vencida',
-        detalle: `${v.cliente} · saldo $${getSaldoPendienteVenta(v.id).toLocaleString('es-CL')} · vencio ${v.fecha_vencimiento}.`,
+        detalle: `${v.cliente} · saldo $${getSaldoPendienteVenta(v.id).toLocaleString('es-CL')} · venció ${v.fecha_vencimiento}.`,
       });
     });
 
@@ -55,8 +58,8 @@ export default function ERPAlertas() {
       if (dias <= 3) {
         items.push({
           id: `promo-${p.id}`, severidad: 'info', categoria: 'pagos',
-          titulo: `Promocion "${p.nombre}" termina pronto`,
-          detalle: `Quedan ${dias} dia(s) (${p.fechaFin}).`,
+          titulo: `Promoción "${p.nombre}" termina pronto`,
+          detalle: `Quedan ${dias} día(s) (${p.fechaFin}).`,
         });
       }
     });
@@ -99,8 +102,8 @@ export default function ERPAlertas() {
         {filtradas.length === 0 && (
           <div className="rounded-3xl border border-dashed border-outline-variant bg-surface-container-lowest p-10 text-center">
             <span className="material-symbols-outlined text-4xl text-emerald-600">verified</span>
-            <p className="mt-3 font-bold text-on-surface">Sin alertas en esta categoria</p>
-            <p className="text-sm text-on-surface-variant mt-1">Todo esta al dia.</p>
+            <p className="mt-3 font-bold text-on-surface">Sin alertas en esta categoría</p>
+            <p className="text-sm text-on-surface-variant mt-1">Todo está al día.</p>
           </div>
         )}
         {filtradas.map(a => (

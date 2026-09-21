@@ -11,7 +11,9 @@ export default function ERPReportes() {
   const gastosPeriodo = gastos.filter(g => g.fecha.slice(0, 7) === periodo);
   const ingresos = ventasPeriodo.reduce((a, v) => a + v.monto, 0);
   const egresos = gastosPeriodo.reduce((a, g) => a + g.monto, 0);
-  const margenBruto = ingresos - egresos;
+  const netos = ventasPeriodo.reduce((a, v) => a + (v.subtotal ?? v.monto), 0);
+  const costoVendido = ventasPeriodo.reduce((a, v) => a + v.productos.reduce((s, p) => s + (p.costoUnitario ?? 0) * (p.cantidad ?? 0), 0), 0);
+  const margenBruto = netos - costoVendido;
   const valorInventario = inventario.reduce((a, p) => a + p.costo * p.stock, 0);
 
   const f29 = getF29Preparador(periodo);
@@ -50,7 +52,7 @@ export default function ERPReportes() {
         <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20">
           <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Margen bruto</p>
           <p className={`text-2xl font-black mt-1 ${margenBruto >= 0 ? 'text-emerald-600' : 'text-error'}`}>{fmt(margenBruto)}</p>
-          <p className="text-[10px] font-bold text-on-surface-variant mt-1">{ingresos > 0 ? Math.round((margenBruto / ingresos) * 100) : 0}% de margen</p>
+          <p className="text-[10px] font-bold text-on-surface-variant mt-1">{netos > 0 ? Math.round((margenBruto / netos) * 100) : 0}% de margen · sobre venta neta ({fmt(costoVendido)} de costo)</p>
         </div>
         <div className="bg-secondary/10 p-5 rounded-2xl border border-secondary/20">
           <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Valor de inventario</p>
@@ -62,25 +64,25 @@ export default function ERPReportes() {
         <div className="p-6 border-b border-outline-variant/20 flex items-center gap-3">
           <span className="material-symbols-outlined text-primary">account_balance_wallet</span>
           <div>
-            <h3 className="font-bold text-on-surface">Liquidacion IVA Mensual (F29) — {periodo}</h3>
-            <p className="text-xs text-on-surface-variant">Estimacion interna del formulario 29. No reemplaza la declaracion oficial.</p>
+            <h3 className="font-bold text-on-surface">Liquidación IVA Mensual (F29) — {periodo}</h3>
+            <p className="text-xs text-on-surface-variant">Estimación interna del formulario 29. No reemplaza la declaración oficial.</p>
           </div>
         </div>
         <div className="p-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             {[
-              { label: 'IVA debito', value: f29.ivaDebito },
-              { label: 'IVA credito', value: f29.ivaCredito },
-              { label: 'Notas de credito', value: f29.ivaNotasCredito },
+              { label: 'IVA débito', value: f29.ivaDebito },
+              { label: 'IVA crédito', value: f29.ivaCredito },
+              { label: 'Notas de crédito', value: f29.ivaNotasCredito },
               { label: 'Diferencia a pagar', value: f29.diferenciaIva },
-              { label: 'PPM pagado', value: f29.ppm },
+              { label: 'PPM estimado', value: f29.ppm },
               { label: 'Total estimado', value: f29.totalEstimado },
-              { label: 'Ventas POS conciliadas', value: f29.ventasPOSConciliadas },
-              { label: 'Documentos pendientes', value: f29.documentosPendientes },
+              { label: 'Ventas POS conciliadas', value: f29.ventasPOSConciliadas, count: true },
+              { label: 'Documentos pendientes', value: f29.documentosPendientes, count: true },
             ].map(item => (
               <div key={item.label} className="rounded-2xl bg-surface-container-low p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">{item.label}</p>
-                <p className="text-xl font-black text-on-surface mt-1">{fmt(item.value)}</p>
+                <p className="text-xl font-black text-on-surface mt-1">{item.count ? item.value : fmt(item.value)}</p>
               </div>
             ))}
           </div>

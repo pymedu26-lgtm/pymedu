@@ -7,43 +7,41 @@ type AlertaQuick = { icon: string; color: string; bg: string; titulo: string; de
 export default function Dashboard() {
   const { perfil } = useAuth();
   const {
-    ventas, gastos, inventario, movimientosInventario,
+    ventas, gastos, inventario, movimientosInventario, movimientos,
     documentosTributarios, pagosPOS,
-    getF29Preparador,
+    getF29Preparador, getSaldoPendienteVenta, getSaldoPendienteGasto,
   } = useERP();
 
   const hoy = new Date();
   const mesActual = hoy.getMonth();
   const anioActual = hoy.getFullYear();
   const diaDelMes = hoy.getDate();
+  const hoyIso = `${anioActual}-${String(mesActual + 1).padStart(2, '0')}-${String(diaDelMes).padStart(2, '0')}`;
+  const mesIso = hoyIso.slice(0, 7);
   const esPremium = perfil?.membresia_nivel === 'pro' || perfil?.membresia_nivel === 'premium';
 
   const negocioVacio = ventas.length === 0 && gastos.length === 0 && inventario.length === 0;
 
-  // Métricas del MES ACTUAL
-  const ventasDelMes = ventas.filter(v => {
-    const d = new Date(v.fecha);
-    return d.getMonth() === mesActual && d.getFullYear() === anioActual;
-  });
-  const gastosDelMes = gastos.filter(g => {
-    const d = new Date(g.fecha);
-    return d.getMonth() === mesActual && d.getFullYear() === anioActual;
-  });
+  // Métricas del MES ACTUAL (comparación por string, sin zona horaria)
+  const ventasDelMes = ventas.filter(v => v.fecha.slice(0, 7) === mesIso);
+  const gastosDelMes = gastos.filter(g => g.fecha.slice(0, 7) === mesIso);
   const totalVentasMes = ventasDelMes.reduce((acc, v) => acc + v.monto, 0);
   const totalGastosMes = gastosDelMes.reduce((acc, g) => acc + g.monto, 0);
+  const metaVentas = Math.round(totalGastosMes * 1.35);
+  const metaProgreso = metaVentas > 0 ? Math.min(100, Math.round((totalVentasMes / metaVentas) * 100)) : 0;
+  const metaCumplida = totalVentasMes >= metaVentas;
 
-  // Métricas HOY
-  const ventasHoy = ventas.filter(v => new Date(v.fecha).toDateString() === hoy.toDateString());
-  const gastosHoy = gastos.filter(g => new Date(g.fecha).toDateString() === hoy.toDateString());
-  const ingresosHoy = ventasHoy.reduce((acc, v) => acc + v.monto, 0);
-  const egresosHoy = gastosHoy.reduce((acc, g) => acc + g.monto, 0);
+  // Métricas HOY (movimientos reales de caja, no montos de documentos)
+  const movimientosHoy = movimientos.filter(m => m.fecha.slice(0, 10) === hoyIso);
+  const ingresosHoy = movimientosHoy.filter(m => m.tipo === 'Ingreso').reduce((acc, m) => acc + m.monto, 0);
+  const egresosHoy = movimientosHoy.filter(m => m.tipo === 'Egreso').reduce((acc, m) => acc + m.monto, 0);
 
   // Alertas
   const productosStockBajo = inventario.filter(p => p.tipo === 'producto' && p.stock <= p.stockMinimo && p.estado === 'activo');
-  const ventasPendientes = ventas.filter(v => v.estado === 'Pendiente');
-  const gastosPorPagar = gastos.filter(g => g.estado === 'Por Pagar');
-  const totalCxC = ventasPendientes.reduce((acc, v) => acc + (v.saldo_pendiente ?? v.monto), 0);
-  const totalCxP = gastosPorPagar.reduce((acc, g) => acc + (g.saldo_pendiente ?? g.monto), 0);
+  const ventasPendientes = ventas.filter(v => getSaldoPendienteVenta(v.id) > 0);
+  const gastosPorPagar = gastos.filter(g => getSaldoPendienteGasto(g.id) > 0);
+  const totalCxC = ventasPendientes.reduce((acc, v) => acc + getSaldoPendienteVenta(v.id), 0);
+  const totalCxP = gastosPorPagar.reduce((acc, g) => acc + getSaldoPendienteGasto(g.id), 0);
 
   const periodoActual = `${anioActual}-${String(mesActual + 1).padStart(2, '0')}`;
   const documentosMes = documentosTributarios.filter(d => d.periodoTributario === periodoActual);
@@ -65,7 +63,7 @@ export default function Dashboard() {
     });
   } else {
     if (diaDelMes <= 5) {
-      alertasQuick.push({ icon: 'badge', color: 'text-purple-600', bg: 'bg-purple-100', titulo: 'Paga sueldos antes del día 5', desc: 'Plazo legal del Código del Trabajo para pago de remuneraciones.', label: 'Ver Nómina', url: '/erp/remuneraciones' });
+      alertasQuick.push({ icon: 'badge', color: 'text-purple-600', bg: 'bg-purple-100', titulo: 'Paga sueldos antes del día 5', desc: 'Plazo legal del Código del Trabajo para pago de remuneraciones.', label: 'Ver CxP', url: '/erp/pagar' });
     }
     if (documentosPendientes.length > 0) {
       alertasQuick.push({ icon: 'receipt_long', color: 'text-primary', bg: 'bg-primary/10', titulo: `${documentosPendientes.length} documento(s) por revisar`, desc: 'Antes de cerrar IVA conviene resolver documentos pendientes u observados.', label: 'Preparar F29', url: '/erp/iva-mensual' });
@@ -78,7 +76,7 @@ export default function Dashboard() {
       alertasQuick.push({ icon: 'inventory_2', color: 'text-red-600', bg: 'bg-red-100', titulo: `Stock bajo: "${p.nombre}"`, desc: `Solo quedan ${p.stock} unidades (mínimo: ${p.stockMinimo}).`, label: 'Ver Inventario', url: '/erp/inventario' });
     }
     if (diaDelMes >= 20) {
-      alertasQuick.push({ icon: 'account_balance', color: 'text-blue-600', bg: 'bg-blue-100', titulo: 'Cierre de mes SII próximo', desc: `El pago de IVA de ${nombreMes} vence el último día hábil del mes.`, label: esPremium ? 'Ver F29' : '🔒 Premium', url: esPremium ? '/erp/reportes' : '/erp/suscripcion' });
+      alertasQuick.push({ icon: 'account_balance', color: 'text-blue-600', bg: 'bg-blue-100', titulo: 'Cierre de mes SII próximo', desc: `El pago de IVA de ${nombreMes} vence el último día hábil del mes.`, label: 'Ver F29', url: '/erp/reportes' });
     }
     if (ventasPendientes.length > 0 && alertasQuick.length < 3) {
       alertasQuick.push({ icon: 'request_quote', color: 'text-amber-600', bg: 'bg-amber-100', titulo: `${ventasPendientes.length} venta(s) sin cobrar`, desc: `Tienes ${fmt(totalCxC)} que aún no te han pagado.`, label: 'Ver CxC', url: '/erp/cobrar' });
@@ -267,8 +265,7 @@ export default function Dashboard() {
                 { icon: 'receipt_long', label: 'Gasto', url: '/erp/gastos', color: 'text-red-400 bg-red-500/15', glow: 'glow-red' },
                 { icon: 'inventory_2', label: 'Stock', url: '/erp/inventario', color: 'text-primary bg-primary/15', glow: 'glow-primary' },
                 { icon: 'people', label: 'Clientes', url: '/erp/clientes', color: 'text-purple-400 bg-purple-500/15', glow: 'glow-purple' },
-                { icon: 'badge', label: 'Equipo', url: '/erp/remuneraciones', color: 'text-amber-400 bg-amber-500/15', glow: 'glow-amber' },
-                { icon: 'bar_chart', label: 'Reportes', url: esPremium ? '/erp/reportes' : '/erp/suscripcion', color: 'text-secondary bg-secondary/15', glow: 'glow-secondary' },
+                { icon: 'bar_chart', label: 'Reportes', url: '/erp/reportes', color: 'text-secondary bg-secondary/15', glow: 'glow-secondary' },
               ].map(a => (
                 <Link key={a.url} to={a.url}
                   className={`flex flex-col items-center gap-2 p-3 rounded-2xl hover:shadow-md transition-all hover:-translate-y-0.5 group ${a.glow}`}>
@@ -284,6 +281,27 @@ export default function Dashboard() {
 
         {/* Columna Derecha */}
         <div className="lg:col-span-4 space-y-6">
+
+          {/* Meta del mes */}
+          <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-6">
+            <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider mb-1">Meta del mes</h3>
+            <p className="text-xs text-on-surface-variant mb-3">Venta objetivo: {fmt(metaVentas)} ({fmt(totalGastosMes)} de gastos + 35%)</p>
+            <div className="flex items-end justify-between mb-2">
+              <p className="text-2xl font-black text-on-surface">{fmt(totalVentasMes)}</p>
+              <span className={`text-xs font-black ${metaCumplida ? 'text-emerald-600' : 'text-secondary'}`}>{metaProgreso}%</span>
+            </div>
+            <div className="h-2.5 w-full bg-surface-container-high rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 ${metaCumplida ? 'bg-emerald-500' : 'bg-secondary'}`}
+                style={{ width: `${metaProgreso}%` }}
+              />
+            </div>
+            {metaCumplida && (
+              <p className="mt-2 text-xs font-bold text-emerald-600 flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">check_circle</span> ¡Meta del mes cumplida!
+              </p>
+            )}
+          </div>
 
           {/* Calendario tributario */}
           <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-6">

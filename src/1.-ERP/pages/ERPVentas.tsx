@@ -367,6 +367,7 @@ export default function ERPVentas() {
         modo_integracion: nuevaVenta.modo_integracion,
         monto_efectivo: nuevaVenta.metodo_pago === 'efectivo' ? pagoInicial : undefined,
         monto_digital: nuevaVenta.metodo_pago !== 'efectivo' ? pagoInicial : undefined,
+        saldo_base: saldoPendiente,
         saldo_pendiente: saldoPendiente,
         fecha_vencimiento: saldoPendiente > 0 ? nuevaVenta.fecha_vencimiento : undefined,
         nota: nuevaVenta.nota,
@@ -463,7 +464,7 @@ export default function ERPVentas() {
             >
               <option value="este_mes">Este Mes</option>
               <option value="mes_anterior">Mes Anterior</option>
-              <option value="este_anio">Este Ano</option>
+              <option value="este_anio">Este Año</option>
               <option value="todos">Todo el Historial</option>
               <option value="personalizado">Rango Personalizado</option>
             </select>
@@ -723,7 +724,7 @@ export default function ERPVentas() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cliente</label>
                   <select
@@ -755,19 +756,6 @@ export default function ERPVentas() {
                     onChange={(e) => setNuevaVenta({...nuevaVenta, fecha: e.target.value})}
                     className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Modo</label>
-                  <select
-                    value={nuevaVenta.modo_integracion}
-                    onChange={(e) => setNuevaVenta({ ...nuevaVenta, modo_integracion: e.target.value as any })}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                  >
-                    <option value="sandbox">Sandbox - prueba visible</option>
-                    <option value="manual_controlled">Manual controlado</option>
-                    <option value="api_integrated">API preparada</option>
-                  </select>
-                  <p className="text-[11px] text-on-surface-variant/60 mt-1">No emite al SII en esta fase.</p>
                 </div>
               </div>
 
@@ -972,8 +960,8 @@ export default function ERPVentas() {
                       >
                         <option value="efectivo">Efectivo</option>
                         <option value="transferencia">Transferencia</option>
-                        <option value="debito">Debito</option>
-                        <option value="credito">Credito</option>
+                        <option value="debito">Débito</option>
+                        <option value="credito">Crédito</option>
                         <option value="mixto">Mixto</option>
                         <option value="cheque">Cheque</option>
                       </select>

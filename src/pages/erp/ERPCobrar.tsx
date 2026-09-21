@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useERP, MetodoPago } from '../../1.-ERP/context/ERPContext';
-import { cn } from '@/lib/utils';
+import { cn, formatFecha } from '@/lib/utils';
 
 const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'efectivo', label: 'Efectivo' },
   { value: 'transferencia', label: 'Transferencia' },
-  { value: 'debito', label: 'Debito' },
-  { value: 'credito', label: 'Credito' },
+  { value: 'debito', label: 'Débito' },
+  { value: 'credito', label: 'Crédito' },
   { value: 'cheque', label: 'Cheque' },
 ];
 
@@ -76,11 +76,11 @@ export default function ERPCobrar() {
                 return (
                   <tr key={v.id} className="hover:bg-surface-container-low/50 transition-colors">
                     <td className="p-4 font-mono text-xs text-outline">{v.id}</td>
-                    <td className="p-4 text-on-surface-variant whitespace-nowrap">{v.fecha}</td>
+                    <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(v.fecha)}</td>
                     <td className="p-4 font-bold text-on-surface">{v.cliente}</td>
                     <td className="p-4 font-bold text-on-surface">{fmt(v.monto)}</td>
                     <td className="p-4 font-extrabold text-secondary">{fmt(saldo)}</td>
-                    <td className="p-4 text-on-surface-variant text-xs">{v.fecha_vencimiento || '—'}</td>
+                    <td className="p-4 text-on-surface-variant text-xs">{formatFecha(v.fecha_vencimiento)}</td>
                     <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
                     <td className="p-4">
                       <button onClick={() => setAbonoVentaId(v.id)}
@@ -126,7 +126,7 @@ export default function ERPCobrar() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Metodo de pago</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Método de pago</label>
                   <select value={form.metodo_pago} onChange={e => setForm({ ...form, metodo_pago: e.target.value as MetodoPago })}
                     className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-secondary outline-none bg-surface-container-lowest text-on-surface">
                     {METODOS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}

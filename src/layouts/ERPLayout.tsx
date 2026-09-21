@@ -68,7 +68,7 @@ export default function ERPLayout() {
           permiso: 'ver_mi_perfil',
         },
 {
-          name: 'Configuracion',
+          name: 'Configuración',
           path: '/erp/configuracion',
           icon: 'settings',
           tag: 'CF',
@@ -76,15 +76,15 @@ export default function ERPLayout() {
           permiso: 'editar_mi_negocio',
         },
         {
-          name: 'Mi institucion',
+name: 'Mi institución',
           path: '/erp/mi-institucion',
-          icon: 'apartment',
+          icon: 'account_balance',
           tag: 'MI',
-          hint: 'Vinculacion a tu institucion, solicitudes y codigos de invitacion.',
+          hint: 'Vinculación a tu institución, solicitudes y códigos de invitación.',
           permiso: 'editar_mi_negocio',
         },
         {
-          name: 'Plan y suscripcion',
+          name: 'Plan y suscripción',
           path: '/erp/suscripcion',
           icon: 'workspace_premium',
           tag: 'PL',
@@ -196,51 +196,55 @@ export default function ERPLayout() {
       label: 'RRHH',
       icon: 'account_balance_wallet',
       items: [
-        {
+{
           name: 'Remuneraciones',
           path: '/erp/remuneraciones',
           icon: 'badge',
           tag: 'RH',
-          hint: 'Nomina, liquidaciones y vacaciones.',
+          hint: 'Nómina, liquidaciones y vacaciones.',
           permiso: 'ver_remuneraciones',
+          lock: true,
         },
 {
           name: 'Equipo',
           path: '/erp/equipo',
           icon: 'group',
           tag: 'EQ',
-          hint: 'Altas, roles y gestion del personal.',
+          hint: 'Altas, roles y gestión del personal.',
           permiso: 'ver_equipo',
+          lock: true,
         },
         {
           name: 'Organigrama',
           path: '/erp/organigrama',
           icon: 'account_tree',
           tag: 'OR',
-          hint: 'Estructura y jerarquia del equipo.',
+          hint: 'Estructura y jerarquía del equipo.',
           permiso: 'ver_organigrama',
+          lock: true,
         },
         {
           name: 'Documentos laborales',
           path: '/erp/documentos',
           icon: 'description',
           tag: 'DC',
-          hint: 'Contratos, anexos y firma electronica.',
+          hint: 'Contratos, anexos y firma electrónica.',
           permiso: 'ver_documentos',
+          lock: true,
         },
       ],
     },
     {
       key: 'mercadospublicos',
-      label: 'Mercados publicos',
+      label: 'Mercados públicos',
       icon: 'gavel',
       items: [
 {
-          name: 'Mercados Publicos',
+          name: 'Mercados Públicos',
           path: '/erp/mercados-publicos',
           icon: 'fact_check',
           tag: 'MP',
-          hint: 'Licitaciones, requisitos y oportunidades de compra publica.',
+          hint: 'Licitaciones, requisitos y oportunidades de compra pública.',
           permiso: 'ver_mercados_publicos',
         },
         {
@@ -259,11 +263,11 @@ export default function ERPLayout() {
       icon: 'school',
       items: [
 {
-          name: 'Mentorias',
+          name: 'Mentorías',
           path: '/erp/mentorias',
           icon: 'school',
           tag: 'ME',
-          hint: 'Acompanamiento experto para crecer mejor.',
+          hint: 'Acompañamiento experto para crecer mejor.',
           permiso: 'ver_mentorias',
         },
         {
@@ -271,7 +275,7 @@ export default function ERPLayout() {
           path: '/erp/academia',
           icon: 'auto_stories',
           tag: 'AC',
-          hint: 'Guias y recursos practicos para el negocio.',
+          hint: 'Guías y recursos prácticos para el negocio.',
           permiso: 'ver_academia',
         },
       ],
@@ -400,7 +404,7 @@ export default function ERPLayout() {
                           {group.label}
                         </p>
                         <p className="text-sm font-semibold text-white/95">
-                          {visibleItems.length} modulo{visibleItems.length > 1 ? 's' : ''}
+                          {visibleItems.length} módulo{visibleItems.length > 1 ? 's' : ''}
                         </p>
                       </div>
                     )}
@@ -481,12 +485,12 @@ export default function ERPLayout() {
                               </span>
                             </span>
 
-                            <div className="min-w-0 flex-1">
+<div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="truncate text-sm font-bold">{item.name}</span>
+                                <span className={cn('truncate text-sm font-bold', item.lock && 'text-indigo-100/70')}>{item.name}</span>
                                 {item.lock && (
-                                  <span className="material-symbols-outlined text-xs opacity-60">
-                                    lock
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white/80">
+                                    <span className="material-symbols-outlined text-[10px]">lock</span> Próximamente
                                   </span>
                                 )}
                                 {badge && !item.lock && (
@@ -504,7 +508,7 @@ export default function ERPLayout() {
                                   </span>
                                 )}
                               </div>
-                              <p className="mt-1 text-xs leading-5 text-indigo-100/60">
+                              <p className={cn('mt-1 text-xs leading-5 text-indigo-100/60', item.lock && 'text-indigo-100/40')}>
                                 {item.hint}
                               </p>
                             </div>
@@ -600,11 +604,11 @@ export default function ERPLayout() {
                     </div>
                     <Link to="/erp/configuracion" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-low cursor-pointer">
                       <span className="material-symbols-outlined text-xl">settings</span>
-                      Configuracion
+Configuración
                     </Link>
                     <Link to="/erp/suscripcion" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-amber-600 transition-colors hover:bg-amber-50 cursor-pointer">
                       <span className="material-symbols-outlined text-xl">workspace_premium</span>
-                      Mi plan y suscripcion
+                      Mi plan y suscripción
                     </Link>
                     <div className="my-2 border-t border-surface-container-high" />
                     <button
@@ -612,7 +616,7 @@ export default function ERPLayout() {
                       className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
                     >
                       <span className="material-symbols-outlined text-xl">logout</span>
-                      Cerrar sesion
+Cerrar sesión
                     </button>
                   </div>
                 </>

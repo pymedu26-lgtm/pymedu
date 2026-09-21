@@ -20,7 +20,7 @@ export default function ERPIVAMensual() {
             <span className="material-symbols-outlined text-4xl">account_balance_wallet</span>
             IVA Mensual (F29)
           </h2>
-          <p className="text-on-surface-variant mt-1 text-sm">Debito y credito fiscal por periodo, con detalle de documentos.</p>
+          <p className="text-on-surface-variant mt-1 text-sm">Débito y crédito fiscal por periodo, con detalle de documentos.</p>
         </div>
         <select value={periodo} onChange={e => setPeriodo(e.target.value)}
           className="px-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm font-bold text-on-surface outline-none focus:border-primary bg-surface-container-lowest">
@@ -31,17 +31,17 @@ export default function ERPIVAMensual() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-primary/5 p-6 rounded-2xl border border-primary/20">
-          <p className="text-[10px] font-black uppercase tracking-widest text-primary">IVA debito (ventas)</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary">IVA débito (ventas)</p>
           <p className="text-3xl font-black text-primary mt-1">{fmt(f29.ivaDebito)}</p>
         </div>
         <div className="bg-error/5 p-6 rounded-2xl border border-error/20">
-          <p className="text-[10px] font-black uppercase tracking-widest text-error">IVA credito (compras)</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-error">IVA crédito (compras)</p>
           <p className="text-3xl font-black text-error mt-1">{fmt(f29.ivaCredito)}</p>
         </div>
         <div className="bg-secondary/10 p-6 rounded-2xl border border-secondary/20">
           <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Diferencia (a pagar / saldo a favor)</p>
           <p className={`text-3xl font-black mt-1 ${f29.diferenciaIva >= 0 ? 'text-secondary' : 'text-emerald-600'}`}>{fmt(f29.diferenciaIva)}</p>
-          {f29.ivaNotasCredito > 0 && <p className="text-[10px] font-bold text-on-surface-variant mt-1">Incluye notas de credito: {fmt(f29.ivaNotasCredito)}</p>}
+          {f29.ivaNotasCredito > 0 && <p className="text-[10px] font-bold text-on-surface-variant mt-1">Incluye notas de crédito: {fmt(f29.ivaNotasCredito)}</p>}
         </div>
       </div>
 
@@ -50,8 +50,8 @@ export default function ERPIVAMensual() {
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined text-primary">receipt_long</span>
             <div>
-              <h3 className="font-bold text-on-surface">Estimacion del formulario</h3>
-              <p className="text-xs text-on-surface-variant">Herramienta interna de preparacion; no reemplaza la declaracion oficial ante el SII.</p>
+              <h3 className="font-bold text-on-surface">Estimación del formulario</h3>
+              <p className="text-xs text-on-surface-variant">Herramienta interna de preparación; no reemplaza la declaración oficial ante el SII.</p>
             </div>
           </div>
           <div className="text-right">
@@ -77,7 +77,7 @@ export default function ERPIVAMensual() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['Folio', 'Tipo', 'Operacion', 'Neto', 'IVA', 'Total', 'Estado'].map(h => (
+                {[ 'Folio', 'Tipo', 'Operación', 'Neto', 'IVA', 'Total', 'Estado'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>

@@ -2,14 +2,14 @@ import { useState, useMemo, useEffect } from 'react';
 import { useERP, Gasto, MetodoPago } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ModalSincronizacionSIICompras from '../components/ModalSincronizacionSIICompras';
-import { cn } from '@/lib/utils';
+import { cn, formatFecha } from '@/lib/utils';
 
 const CATEGORIAS_GASTO = ['Insumos/Mercaderia','Servicios Basicos','Arriendo','Sueldos','Publicidad','Tecnologia','Transporte','Capacitacion','Mantencion','IVA/Impuestos','Otros'];
 const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'efectivo', label: 'Efectivo' },
   { value: 'transferencia', label: 'Transferencia' },
-  { value: 'debito', label: 'Debito' },
-  { value: 'credito', label: 'Credito' },
+  { value: 'debito', label: 'Débito' },
+  { value: 'credito', label: 'Crédito' },
   { value: 'cheque', label: 'Cheque' },
 ];
 
@@ -121,6 +121,7 @@ export default function ERPGastos() {
       fecha_vencimiento: nuevoGasto.estado === 'Por Pagar' ? nuevoGasto.fecha_vencimiento : undefined,
       recurrente: nuevoGasto.recurrente, dia_recurrente: nuevoGasto.recurrente ? 1 : undefined,
       notas: nuevoGasto.notas,
+      saldo_base: saldoPendiente > 0 ? saldoPendiente : undefined,
       saldo_pendiente: saldoPendiente > 0 ? saldoPendiente : undefined,
     };
 
@@ -191,7 +192,7 @@ export default function ERPGastos() {
             >
               <option value="este_mes">Este Mes</option>
               <option value="mes_anterior">Mes Anterior</option>
-              <option value="este_anio">Este Ano</option>
+              <option value="este_anio">Este Año</option>
               <option value="todos">Todo el Historial</option>
             </select>
           </div>
@@ -202,7 +203,7 @@ export default function ERPGastos() {
             <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total de Ventas</p>
             <h3 className="text-3xl font-black text-primary">{fmt(totalVentasPeriodo)}</h3>
             <p className="text-[10px] text-primary/60 mt-2 font-bold uppercase">
-              {periodoSeleccionado === 'todos' ? 'Acumulado historico' : 'En el periodo seleccionado'}
+              {periodoSeleccionado === 'todos' ? 'Acumulado histórico' : 'En el periodo seleccionado'}
             </p>
           </div>
           <div className="bg-error/5 p-6 rounded-2xl shadow-sm border border-error/20">
@@ -227,7 +228,7 @@ export default function ERPGastos() {
         <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-5 mb-5">
           <h3 className="font-bold text-on-surface text-sm mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
-            Top Categorias de Gasto
+            Top Categorías de Gasto
           </h3>
           <div className="space-y-2.5">
             {porCategoria.map(([cat, monto]) => (
@@ -252,7 +253,7 @@ export default function ERPGastos() {
         </div>
         <select value={categoria} onChange={e => setCategoria(e.target.value)}
           className="px-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm font-bold text-on-surface outline-none focus:border-primary bg-surface-container-lowest">
-          <option value="Todas">Todas las categorias</option>
+          <option value="Todas">Todas las categorías</option>
           {CATEGORIAS_GASTO.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
@@ -276,7 +277,7 @@ export default function ERPGastos() {
                 return (
                   <tr key={g.id} className={cn('hover:bg-surface-container-low/50 transition-colors', saldo > 0 ? 'bg-secondary/5' : '')}>
                     <td className="p-4 font-mono text-xs text-outline">{g.id}</td>
-                    <td className="p-4 text-on-surface-variant whitespace-nowrap">{new Date(g.fecha).toLocaleDateString('es-CL')}</td>
+                    <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</td>
                     <td className="p-4">
                       <p className="font-bold text-on-surface">{g.proveedor}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
@@ -359,7 +360,7 @@ export default function ERPGastos() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Metodo de Pago</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Método de Pago</label>
                   <select value={nuevoGasto.metodo_pago} onChange={e => setNuevoGasto({ ...nuevoGasto, metodo_pago: e.target.value as MetodoPago })}
                     className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface">
                     {METODOS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}

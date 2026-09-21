@@ -67,6 +67,8 @@ export interface Venta {
   metodo_pago?: MetodoPago;
   monto_efectivo?: number;
   monto_digital?: number;
+  /** Saldo base antes de abonos (no se descuenta en addAbono). */
+  saldo_base?: number;
   saldo_pendiente?: number;
   fecha_vencimiento?: string;
   nota?: string;
@@ -87,6 +89,8 @@ export interface Gasto {
   tipo_documento_compra?: TipoDocumento;
   estado: EstadoPago;
   metodo_pago?: MetodoPago;
+  /** Saldo base antes de abonos (no se descuenta en addAbono). */
+  saldo_base?: number;
   saldo_pendiente?: number;
   fecha_vencimiento?: string;
   recurrente?: boolean;
@@ -308,8 +312,42 @@ export function ERPProvider({ children }: { children: ReactNode }) {
           return acc;
         }, {});
 
-        setVentas((grouped.ventas ?? []) as Venta[]);
-        setGastos((grouped.gastos ?? []) as Gasto[]);
+        // ══ Cura de saldos (una sola vez) ═══════════════════
+        // Datos creados antes del fix ya tenían `saldo_pendiente` descontado en
+        // cada abono. Se recupera la base como `saldo_pendiente + Σ abonos`
+        // (tope: el monto) y se marca con `saldo_base` para no re-inflar al recargar.
+        const abonosCrudos = (grouped.abonos ?? []) as Abono[];
+        const curarVentas = (raw: Venta[]): Venta[] => raw.map(v => {
+          if (v.saldo_base !== undefined) return v;
+          const cobrado = abonosCrudos
+            .filter(a => a.referencia_id === v.id && a.tipo === 'cobro')
+            .reduce((acc, a) => acc + a.monto_abono, 0);
+          const base = Math.max(0, Math.min(v.monto ?? 0, (v.saldo_pendiente ?? 0) + cobrado));
+          const restante = Math.max(0, base - cobrado);
+          return {
+            ...v,
+            saldo_base: base,
+            saldo_pendiente: base,
+            estado: restante <= 0 ? 'Pagado' : v.estado === 'Pagado' ? 'Pendiente' : v.estado,
+          };
+        });
+        const curarGastos = (raw: Gasto[]): Gasto[] => raw.map(g => {
+          if (g.saldo_base !== undefined) return g;
+          const pagado = abonosCrudos
+            .filter(a => a.referencia_id === g.id && a.tipo === 'pago')
+            .reduce((acc, a) => acc + a.monto_abono, 0);
+          const base = Math.max(0, Math.min(g.monto ?? 0, (g.saldo_pendiente ?? 0) + pagado));
+          const restante = Math.max(0, base - pagado);
+          return {
+            ...g,
+            saldo_base: base,
+            saldo_pendiente: base,
+            estado: restante <= 0 ? 'Pagado' : g.estado === 'Pagado' ? 'Por Pagar' : g.estado,
+          };
+        });
+
+        setVentas(curarVentas((grouped.ventas ?? []) as Venta[]));
+        setGastos(curarGastos((grouped.gastos ?? []) as Gasto[]));
         setClientes((grouped.clientes ?? []) as Cliente[]);
         setProveedores((grouped.proveedores ?? []) as Proveedor[]);
         setMovimientos((grouped.movimientos ?? []) as Movimiento[]);
@@ -399,7 +437,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     const venta = ventas.find(v => v.id === ventaId);
     if (!venta) return 0;
     const montoAbonado = abonos.filter(a => a.referencia_id === ventaId && a.tipo === 'cobro').reduce((acc, a) => acc + a.monto_abono, 0);
-    const saldoInicial = venta.saldo_pendiente !== undefined ? venta.saldo_pendiente : (venta.estado === 'Pendiente' ? venta.monto : 0);
+    const saldoInicial = venta.saldo_base ?? venta.saldo_pendiente ?? (venta.estado === 'Pendiente' ? venta.monto : 0);
     return Math.max(0, saldoInicial - montoAbonado);
   };
 
@@ -407,7 +445,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     const gasto = gastos.find(g => g.id === gastoId);
     if (!gasto) return 0;
     const totalPagado = abonos.filter(a => a.referencia_id === gastoId && a.tipo === 'pago').reduce((acc, a) => acc + a.monto_abono, 0);
-    const saldoInicial = gasto.saldo_pendiente !== undefined ? gasto.saldo_pendiente : (gasto.estado === 'Por Pagar' ? gasto.monto : 0);
+    const saldoInicial = gasto.saldo_base ?? gasto.saldo_pendiente ?? (gasto.estado === 'Por Pagar' ? gasto.monto : 0);
     return Math.max(0, saldoInicial - totalPagado);
   };
 
@@ -439,12 +477,13 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     setAbonos(prev => [nuevoAbono, ...prev]);
 
     if (abono.tipo === 'cobro') {
+      const venta = ventas.find(v => v.id === abono.referencia_id);
+      const base = venta ? (venta.saldo_base ?? venta.saldo_pendiente ?? (venta.estado === 'Pendiente' ? venta.monto : 0)) : 0;
+      const yaCobrado = abonos.filter(a => a.referencia_id === abono.referencia_id && a.tipo === 'cobro').reduce((acc, a) => acc + a.monto_abono, 0);
+      const restante = Math.max(0, base - yaCobrado - abono.monto_abono);
       setVentas(prev => prev.map(v => {
         if (v.id !== abono.referencia_id) return v;
-        const saldoActualV = v.saldo_pendiente !== undefined ? v.saldo_pendiente : (v.estado === 'Pendiente' ? v.monto : 0);
-        const nuevoSaldo = Math.max(0, saldoActualV - abono.monto_abono);
-        const nuevoEstado: EstadoPago = nuevoSaldo === 0 ? 'Pagado' : 'Pendiente';
-        return { ...v, saldo_pendiente: nuevoSaldo, estado: nuevoEstado };
+        return { ...v, saldo_pendiente: base, estado: restante <= 0 ? 'Pagado' : 'Pendiente' };
       }));
       setClientes(prev => prev.map(c => {
         if (c.nombre.toLowerCase() !== (abono.cliente_proveedor || '').toLowerCase()) return c;
@@ -458,12 +497,13 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         metodo_pago: abono.metodo_pago, referencia_id: abono.referencia_id,
       }, ...prev]);
     } else {
+      const gasto = gastos.find(g => g.id === abono.referencia_id);
+      const base = gasto ? (gasto.saldo_base ?? gasto.saldo_pendiente ?? (gasto.estado === 'Por Pagar' ? gasto.monto : 0)) : 0;
+      const yaPagado = abonos.filter(a => a.referencia_id === abono.referencia_id && a.tipo === 'pago').reduce((acc, a) => acc + a.monto_abono, 0);
+      const restante = Math.max(0, base - yaPagado - abono.monto_abono);
       setGastos(prev => prev.map(g => {
         if (g.id !== abono.referencia_id) return g;
-        const saldoActualG = g.saldo_pendiente !== undefined ? g.saldo_pendiente : (g.estado === 'Por Pagar' ? g.monto : 0);
-        const nuevoSaldo = Math.max(0, saldoActualG - abono.monto_abono);
-        const nuevoEstado: EstadoPago = nuevoSaldo === 0 ? 'Pagado' : 'Por Pagar';
-        return { ...g, saldo_pendiente: nuevoSaldo, estado: nuevoEstado };
+        return { ...g, saldo_pendiente: base, estado: restante <= 0 ? 'Pagado' : 'Por Pagar' };
       }));
       setProveedores(prev => prev.map(p => {
         if (p.nombre.toLowerCase() !== (abono.cliente_proveedor || '').toLowerCase()) return p;
@@ -523,6 +563,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       modo_integracion: documento.modoIntegracion,
       estado_documento: documento.estado,
       tipo_documento: documento.tipoDocumento,
+      saldo_base: saldoPendiente,
       saldo_pendiente: saldoPendiente,
       iva: documento.iva,
       subtotal: documento.neto || documento.exento || venta.subtotal,
@@ -614,6 +655,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       documento_id: documento.id,
       periodo_tributario: documento.periodoTributario,
       tipo_documento_compra: documento.tipoDocumento,
+      saldo_base: saldoPendiente,
       saldo_pendiente: saldoPendiente,
     };
     setGastos(prev => [newGasto, ...prev]);
@@ -744,8 +786,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     if (original.ventaId) {
       setVentas(prev => prev.map(v => {
         if (v.id !== original.ventaId) return v;
-        const nuevoSaldo = Math.max(0, (v.saldo_pendiente ?? 0) - monto);
-        return { ...v, saldo_pendiente: nuevoSaldo, estado: nuevoSaldo === 0 ? 'Pagado' : v.estado };
+        const nuevoBase = Math.max(0, (v.saldo_base ?? v.saldo_pendiente ?? 0) - monto);
+        return { ...v, saldo_base: nuevoBase, saldo_pendiente: nuevoBase, estado: nuevoBase === 0 ? 'Pagado' : v.estado };
       }));
     }
   };

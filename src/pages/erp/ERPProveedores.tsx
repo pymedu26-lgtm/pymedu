@@ -65,7 +65,7 @@ export default function ERPProveedores() {
 
       <div className="relative">
         <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
-        <input type="text" placeholder="Buscar por nombre o categoria..." value={busqueda}
+        <input type="text" placeholder="Buscar por nombre o categoría..." value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
       </div>
@@ -75,7 +75,7 @@ export default function ERPProveedores() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['Proveedor', 'Categoria', 'Contacto', 'Deuda pendiente', 'Condicion', 'Acciones'].map(h => (
+                {['Proveedor', 'Categoría', 'Contacto', 'Deuda pendiente', 'Condición', 'Acciones'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>
@@ -124,12 +124,12 @@ export default function ERPProveedores() {
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre / Razon social</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre / Razón social</label>
                 <input type="text" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoria</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoría</label>
                 <select value={nuevo.categoria} onChange={e => setNuevo({ ...nuevo, categoria: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface">
                   {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
@@ -137,7 +137,7 @@ export default function ERPProveedores() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Telefono</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Teléfono</label>
                   <input type="text" value={nuevo.telefono} onChange={e => setNuevo({ ...nuevo, telefono: e.target.value })}
                     className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
                 </div>
@@ -148,8 +148,8 @@ export default function ERPProveedores() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Condicion de pago</label>
-                <input type="text" placeholder="Ej: 30 dias" value={nuevo.condicion_pago} onChange={e => setNuevo({ ...nuevo, condicion_pago: e.target.value })}
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Condición de pago</label>
+                <input type="text" placeholder="Ej: 30 días" value={nuevo.condicion_pago} onChange={e => setNuevo({ ...nuevo, condicion_pago: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
               </div>
             </div>
