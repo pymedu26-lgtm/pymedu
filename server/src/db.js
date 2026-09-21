@@ -246,7 +246,12 @@ const db = {
         INSERT INTO perfiles
           (id, email, password_hash, nombre_completo, rol, institucion_id, activo, membresia_nivel, segmento_negocio)
         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-        ON CONFLICT (email) DO NOTHING
+        ON CONFLICT (email) DO UPDATE SET
+          password_hash = EXCLUDED.password_hash,
+          nombre_completo = EXCLUDED.nombre_completo,
+          rol = EXCLUDED.rol,
+          institucion_id = EXCLUDED.institucion_id,
+          membresia_nivel = EXCLUDED.membresia_nivel
       `).run(randomUUID(), email, hash, nombre, rol, institucion_id, membresia, segmento);
     }
   },
