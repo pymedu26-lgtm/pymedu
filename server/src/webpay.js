@@ -9,7 +9,7 @@ const TBK_ENV = process.env.TBK_ENV || 'integracion';
 const TBK_BASE_URL = TBK_ENV === 'produccion'
   ? 'https://webpay3g.transbank.cl'
   : 'https://webpay3gint.transbank.cl';
-const TBK_COMERCIO_CODIGO = process.env.TBK_COMERCIO_CODIGO || '597055555532';
+const TBK_COMERCIO_CODIGO = process.env.TBK_COMERCIO_CODIGO || process.env.TBK_COMMERCE_CODE || '597055555532';
 const TBK_API_KEY_SECRET = process.env.TBK_API_KEY_SECRET || '579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1';
 
 const PLANES = {

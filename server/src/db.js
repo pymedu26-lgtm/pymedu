@@ -252,13 +252,14 @@ const db = {
   },
 };
 
-db.initDB()
-  .then(() => db.seedDB())
-  .then(() => db.seedDemo())
-  .then(() => console.log('[db] Base de datos Postgres inicializada'))
-  .catch((err) => {
-    console.error('[db] Error inicializando Postgres:', err);
-    process.exit(1);
-  });
+// Inicializa schema + datos base + cuentas demo.
+// Se llama UNA sola vez desde index.js (importar db.js no debe disparar DDL:
+// dos inits concurrentes provocaban deadlock 40P01 en Railway).
+export async function inicializar() {
+  await db.initDB();
+  await db.seedDB().catch((err) => console.error('[db] Error en seedDB (no crítico):', err.message));
+  await db.seedDemo().catch((err) => console.error('[db] Error en seedDemo (no crítico):', err.message));
+  console.log('[db] Base de datos Postgres inicializada');
+}
 
 export default db;

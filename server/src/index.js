@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
-import db from './db.js';
+import db, { inicializar } from './db.js';
 import authRouter, { requireAuth, sanitizarPerfil } from './auth.js';
 import webpayRouter from './webpay.js';
 import vinculacionRouter from './vinculacion.js';
@@ -175,11 +175,21 @@ if (existsSync(path.join(distPath, 'index.html'))) {
 
 app.listen(PORT, async () => {
   console.log(`[index] PymEdu API escuchando en http://localhost:${PORT}`);
-  try {
-    await db.initDB();
-    await db.seedDB().catch(() => {});
-  } catch (error) {
-    console.error('[index] Error inicializando base de datos:', error);
+  // Inicializacion unica (schema + seed + demo), con reintentos por si la
+  // BD aun no esta lista durante el arranque.
+  const intentosMax = 3;
+  for (let i = 1; i <= intentosMax; i++) {
+    try {
+      await inicializar();
+      break;
+    } catch (error) {
+      console.error(`[index] Error inicializando base de datos (intento ${i}/${intentosMax}):`, error?.message || error);
+      if (i === intentosMax) {
+        console.error('[index] No se pudo inicializar; saliendo para que Railway reintente.');
+        process.exit(1);
+      }
+      await new Promise((res) => setTimeout(res, 5000));
+    }
   }
 });
 

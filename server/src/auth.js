@@ -163,7 +163,7 @@ router.post('/register', async (req, res) => {
     // Vinculacion opcional: codigo de invitacion (inmediata) o institucion (solicitud pendiente)
     await registrarVinculacionTrasRegistro({
       usuarioId: id,
-      institucionId,
+      institucionId: institucion_id,
       codigo: codigo_invitacion,
     });
 
