@@ -54,7 +54,7 @@ router.post('/crear-usuario', soloSuperadmin, async (req, res) => {
     if (String(password).length < 6) {
       return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
     }
-    if (!ROLES_CREABLES.includes(rol)) {
+    if (!ROLES_CREABLES.includes(rol) && rol !== 'superadmin') {
       return res.status(400).json({ error: `El rol no puede ser creado por un superadmin directo: ${rol}` });
     }
     if (!['free', 'pro', 'premium'].includes(membresia)) {
