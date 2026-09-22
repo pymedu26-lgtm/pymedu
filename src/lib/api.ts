@@ -59,6 +59,13 @@ export const api = {
   me: () =>
     request<{ perfil: Record<string, unknown> }>('/api/auth/me'),
 
+  // Actualiza datos propios del perfil (negocio, cuenta, notificaciones y contrasena)
+  actualizarMiPerfil: (datos: Record<string, unknown>) =>
+    request<{ perfil: Record<string, unknown> }>('/api/auth/mi', {
+      method: 'PUT',
+      body: JSON.stringify(datos),
+    }),
+
   // ── Instituciones ─────────────────────────────────────
   getInstituciones: () =>
     request<{ data: Record<string, unknown>[] }>('/api/instituciones'),

@@ -26,6 +26,14 @@ function sanitizarPerfil(p) {
     membresia_expira: p.membresia_expira,
     segmento_negocio: p.segmento_negocio,
     negocio_nombre: p.negocio_nombre,
+    negocio_rut: p.negocio_rut,
+    negocio_giro: p.negocio_giro,
+    negocio_rubro: p.negocio_rubro,
+    negocio_region: p.negocio_region,
+    negocio_comuna: p.negocio_comuna,
+    negocio_direccion: p.negocio_direccion,
+    notif_email: !!p.notif_email,
+    notif_push: !!p.notif_push,
     logo_url: p.logo_url,
     avatar_url: p.avatar_url,
     activo: !!p.activo,
@@ -182,6 +190,72 @@ router.post('/register', async (req, res) => {
 
 router.get('/me', requireAuth, (req, res) => {
   res.json({ perfil: sanitizarPerfil(req.perfil) });
+});
+
+// Actualiza datos propios del perfil (negocio, cuenta, notificaciones y/o contrasena).
+const CAMPOS_EDITABLES = new Map([
+  ['nombre_completo', 'string'],
+  ['negocio_nombre', 'string'],
+  ['negocio_rut', 'string'],
+  ['negocio_giro', 'string'],
+  ['negocio_rubro', 'string'],
+  ['negocio_region', 'string'],
+  ['negocio_comuna', 'string'],
+  ['negocio_direccion', 'string'],
+  ['logo_url', 'string'],
+]);
+
+router.put('/mi', requireAuth, async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const asignaciones = [];
+    const parametros = [];
+
+    for (const [campo, tipo] of CAMPOS_EDITABLES) {
+      if (body[campo] === undefined) continue;
+      const valor = tipo === 'bool' ? (body[campo] ? 1 : 0) : String(body[campo]).slice(0, 2000);
+      asignaciones.push(`${campo} = ?`);
+      parametros.push(valor);
+    }
+
+    if (body.segmento_negocio !== undefined) {
+      if (!['A', 'B', 'C'].includes(body.segmento_negocio)) {
+        return res.status(400).json({ error: 'segmento_invalido' });
+      }
+      asignaciones.push('segmento_negocio = ?');
+      parametros.push(body.segmento_negocio);
+    }
+
+    for (const campo of ['notif_email', 'notif_push']) {
+      if (body[campo] === undefined) continue;
+      asignaciones.push(`${campo} = ?`);
+      parametros.push(body[campo] ? 1 : 0);
+    }
+
+    // Cambio de contrasena opcional
+    if (body.nueva_contrasena !== undefined || body.confirmar_contrasena !== undefined) {
+      const nueva = body.nueva_contrasena ?? '';
+      const confirmar = body.confirmar_contrasena ?? '';
+      if (nueva.length < 6) return res.status(400).json({ error: 'La contrasena debe tener al menos 6 caracteres' });
+      if (nueva !== confirmar) return res.status(400).json({ error: 'Las contrasenas no coinciden' });
+      asignaciones.push('password_hash = ?');
+      parametros.push(bcrypt.hashSync(nueva, 10));
+    }
+
+    if (asignaciones.length === 0) {
+      return res.status(400).json({ error: 'sin_campos_para_actualizar' });
+    }
+
+    asignaciones.push('updated_at = to_char(now() AT TIME ZONE \'UTC\', \'YYYY-MM-DD HH24:MI:SS\')');
+
+    await db.prepare(`UPDATE perfiles SET ${asignaciones.join(', ')} WHERE id = ?`).run(...parametros, req.perfil.id);
+
+    const perfil = await db.prepare('SELECT * FROM perfiles WHERE id = ?').get(req.perfil.id);
+    res.json({ perfil: sanitizarPerfil(perfil) });
+  } catch (error) {
+    console.error('[auth] Error actualizando perfil:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
 });
 
 export default router;

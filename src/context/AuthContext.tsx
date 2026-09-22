@@ -48,6 +48,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   puedeHacer: (permiso: string) => boolean;
   recargarPerfil: () => Promise<void>;
+  actualizarPerfil: (datos: Record<string, unknown>) => Promise<Perfil>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -57,6 +58,7 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
   puedeHacer: () => false,
   recargarPerfil: async () => {},
+  actualizarPerfil: async () => { throw new Error('AuthContext no inicializado'); },
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -123,6 +125,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const actualizarPerfil = async (datos: Record<string, unknown>): Promise<Perfil> => {
+    const { perfil: p } = await api.actualizarMiPerfil(datos);
+    const actualizado = { ...perfil, ...(p as Perfil) } as Perfil;
+    aplicarPerfil(actualizado);
+    return actualizado;
+  };
+
   const puedeHacer = (permiso: string): boolean => {
     if (!perfil) return false;
     if (perfil.rol === 'superadmin') return true;
@@ -180,7 +189,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, perfil, isLoading, signIn, register, signOut, puedeHacer, recargarPerfil,
+      user, perfil, isLoading, signIn, register, signOut, puedeHacer, recargarPerfil, actualizarPerfil,
     }}>
       {children}
     </AuthContext.Provider>
