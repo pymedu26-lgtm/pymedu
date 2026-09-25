@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAuth } from '../../context/AuthContext';import ModalSincronizacionSII from '../components/ModalSincronizacionSII';
@@ -23,9 +23,6 @@ export default function ERPVentas() {
   const [avisoStock, setAvisoStock] = useState('');
   const [activeTab, setActiveTab] = useState<'lista' | 'analisis'>('lista');
 
-  const [scannerMode, setScannerMode] = useState(false);
-  const [scannerInput, setScannerInput] = useState('');
-  const scannerRef = useRef<HTMLInputElement>(null);
   /** Venta con texto libre (no inventariable): ítem escrito a mano, no toca stock. */
   const [modoItemLibre, setModoItemLibre] = useState(false);
   const [itemLibreActual, setItemLibreActual] = useState({ nombre: '', precio: '' });
@@ -123,79 +120,6 @@ const stockInsuficiente = productoSeleccionado
   ? productoSeleccionado.tipo === 'producto'
       && (cantidadEnVenta(productoActual.productoId) + (productoActual.cantidad || 0)) > stockDisponible
   : false;
-
-  const handleScannerSearch = (code: string) => {
-    if (!code) return;
-    
-    const producto = inventario.find(p => p.codigoBarras === code || p.codigo === code);
-    
-    if (producto) {
-      const existingIdx = (nuevaVenta.productos || []).findIndex(p => p.productoId === producto.id);
-      
-      if (existingIdx >= 0) {
-        setNuevaVenta(prev => {
-          const newProds = [...(prev.productos || [])];
-          const p = newProds[existingIdx];
-          const newQty = p.cantidad + 1;
-          const subtotalBruto = p.precioBase * newQty;
-          
-          let descuento = 0;
-          if (p.descuentoTipo === 'porcentaje') {
-            descuento = subtotalBruto * ((p.descuentoValor || 0) / 100);
-          } else if (p.descuentoTipo === 'monto') {
-            descuento = (p.descuentoValor || 0);
-          }
-          
-          const subtotalConDesc = Math.max(0, subtotalBruto - descuento);
-          let neto = subtotalConDesc;
-          let iva = 0;
-          let total = subtotalConDesc;
-
-          if (producto.incluyeIva) {
-            neto = Math.round(subtotalConDesc / 1.19);
-            iva = subtotalConDesc - neto;
-          } else {
-            iva = Math.round(subtotalConDesc * 0.19);
-            total = subtotalConDesc + iva;
-          }
-          
-          newProds[existingIdx] = { ...p, cantidad: newQty, subtotal: neto, iva, total };
-          return { ...prev, productos: newProds };
-        });
-      } else {
-        const precioUnitario = producto.precio;
-        let neto = precioUnitario;
-        let iva = 0;
-        let total = precioUnitario;
-        if (producto.incluyeIva) {
-          neto = Math.round(precioUnitario / 1.19);
-          iva = precioUnitario - neto;
-        } else {
-          iva = Math.round(precioUnitario * 0.19);
-          total = precioUnitario + iva;
-        }
-
-        const nuevo: VentaProducto = {
-          productoId: producto.id,
-          productoNombre: producto.nombre,
-          cantidad: 1,
-          precioBase: precioUnitario,
-          costoUnitario: producto.costo,
-          subtotal: neto,
-          iva,
-          total
-        };
-        setNuevaVenta(prev => ({ ...prev, productos: [...(prev.productos || []), nuevo] }));
-      }
-      setScannerInput('');
-    }
-  };
-
-  useEffect(() => {
-    if (scannerMode && scannerRef.current && showModal) {
-      scannerRef.current.focus();
-    }
-  }, [scannerMode, showModal]);
 
   const construirItemVenta = (
     producto: Producto,
@@ -844,8 +768,7 @@ const stockInsuficiente = productoSeleccionado
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
               <div>
-                <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar venta' : 'Nueva venta guiada'}</h3>
-                <p className="text-xs text-on-surface-variant mt-1">Producto / cliente / pago / documento / impacto / confirmacion</p>
+                <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar venta' : 'Nueva venta'}</h3>
               </div>
               <button onClick={cerrarModal} className="text-on-surface-variant hover:text-error transition-colors">
                 <span className="material-symbols-outlined">close</span>
@@ -853,14 +776,6 @@ const stockInsuficiente = productoSeleccionado
             </div>
             
             <div className="p-6 overflow-y-auto flex-grow space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                {['1 Producto', '2 Cliente', '3 Pago', '4 Documento', '5 Impacto'].map((paso, idx) => (
-                  <div key={paso} className={`rounded-2xl px-3 py-2 text-xs font-black border ${idx < 3 || (nuevaVenta.productos?.length ?? 0) > 0 ? 'bg-primary/5 border-primary/20 text-primary' : 'bg-surface-container-low border-outline-variant/30 text-on-surface-variant/50'}`}>
-                    {paso}
-                  </div>
-                ))}
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cliente</label>
@@ -903,18 +818,6 @@ const stockInsuficiente = productoSeleccionado
                     Agregar Producto
                   </h4>
                   <button 
-                    onClick={() => setScannerMode(!scannerMode)}
-                    className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black transition-all border-2",
-                      scannerMode 
-                        ? "bg-primary text-white border-primary shadow-md" 
-                        : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/50 hover:border-primary/50"
-                    )}
-                  >
-                    <span className="material-symbols-outlined text-sm">barcode_scanner</span>
-                    {scannerMode ? 'MODO ESCANER ACTIVO' : 'ACTIVAR PISTOLEO'}
-                  </button>
-                  <button 
                     onClick={() => setModoItemLibre(m => !m)}
                     className={cn(
                       "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black transition-all border-2",
@@ -928,30 +831,50 @@ const stockInsuficiente = productoSeleccionado
                   </button>
                 </div>
                 
-                {scannerMode && (
-                  <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <label className="block text-[10px] font-black text-primary uppercase tracking-widest mb-2">Esperando lectura de pistola...</label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-primary/50">qr_code_scanner</span>
-                      <input 
-                        ref={scannerRef}
-                        type="text" 
-                        value={scannerInput}
-                        onChange={(e) => setScannerInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleScannerSearch(scannerInput);
-                          }
-                        }}
-                        placeholder="Escanea el codigo de barras aqui..."
-                        className="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-2 border-primary/30 rounded-2xl text-lg font-bold text-on-surface focus:ring-4 focus:ring-primary/10 outline-none transition-all"
+                {modoItemLibre && (
+                <div className="bg-tertiary/5 p-4 rounded-xl border border-tertiary/25 space-y-3 animate-in fade-in">
+                  <p className="text-[10px] font-black text-tertiary uppercase tracking-widest flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">edit_note</span>
+                    Item libre / no inventariable (no descuenta stock)
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Producto / Servicio (texto libre)</label>
+                      <input
+                        type="text"
+                        value={itemLibreActual.nombre}
+                        onChange={(e) => setItemLibreActual({ ...itemLibreActual, nombre: e.target.value })}
+                        placeholder="Ej: Servicio de reparacion, flete, hora de taller..."
+                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                       />
                     </div>
-                    <p className="text-[10px] text-on-surface-variant/60 mt-2 font-medium">El producto se anadira automaticamente al detectar el codigo.</p>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio ($)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={itemLibreActual.precio}
+                        onChange={(e) => setItemLibreActual({ ...itemLibreActual, precio: e.target.value })}
+                        placeholder="$0"
+                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                      />
+                    </div>
                   </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleAgregarItemLibre}
+                      disabled={!itemLibreOk}
+                      className="px-4 py-2 bg-tertiary text-white rounded-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-sm">add</span>
+                      Agregar item libre
+                    </button>
+                  </div>
+                </div>
                 )}
 
-                <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-4 transition-opacity", scannerMode && "opacity-40 pointer-events-none")}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Producto / Servicio</label>
                     <select 
