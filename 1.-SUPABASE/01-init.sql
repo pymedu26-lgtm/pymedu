@@ -249,6 +249,11 @@ BEGIN
     RETURN TRUE;
   END IF;
   
+  -- Cuenta demo tiene acceso a todos los roles
+  IF usuario_rol = 'demo' THEN
+    RETURN TRUE;
+  END IF;
+  
   -- Admin Institucional tiene la mayoría de permisos
   IF usuario_rol = 'admin_institucional' THEN
     RETURN permiso NOT IN ('config_global', 'gestionar_planes', 'ver_auditoria_global');
@@ -257,11 +262,13 @@ BEGIN
   -- Verificar permisos específicos por rol
   RETURN CASE
     WHEN usuario_rol = 'coordinador' AND permiso IN ('ver_mentores', 'ver_emprendedores', 'gestionar_programas') THEN TRUE
-    WHEN usuario_rol = 'mentor' AND permiso IN ('ver_mis_emprendedores', 'editar_seguimiento') THEN TRUE
-    WHEN usuario_rol IN ('emprendedor', 'dueño') AND permiso IN ('ver_mi_perfil', 'editar_mi_negocio', 'ver_academia') THEN TRUE
-    WHEN usuario_rol = 'vendedor' AND permiso IN ('crear_ventas', 'ver_clientes') THEN TRUE
-    WHEN usuario_rol = 'encargado_rrhh' AND permiso IN ('ver_empleados', 'editar_remuneraciones') THEN TRUE
-    WHEN usuario_rol = 'contador_externo' AND permiso IN ('ver_contabilidad', 'ver_reportes_fiscales') THEN TRUE
+    WHEN usuario_rol = 'mentor' AND permiso IN ('ver_mis_emprendedores', 'editar_seguimiento', 'ver_academia') THEN TRUE
+    WHEN usuario_rol IN ('emprendedor', 'dueño') AND permiso IN ('ver_mi_perfil', 'editar_mi_negocio', 'ver_academia', 'ver_inventario', 'ver_clientes', 'ver_proveedores', 'ver_promociones', 'ver_equipo', 'ver_organigrama', 'ver_documentos', 'ver_mercados_publicos', 'ver_mentorias') THEN TRUE
+    WHEN usuario_rol = 'vendedor' AND permiso IN ('crear_ventas', 'ver_clientes', 'ver_mi_perfil') THEN TRUE
+    WHEN usuario_rol = 'gestor' AND permiso IN ('crear_ventas', 'crear_gastos', 'ver_inventario', 'ver_caja', 'ver_clientes', 'ver_proveedores', 'ver_promociones', 'ver_reportes', 'ver_mi_perfil', 'ver_academia') THEN TRUE
+    WHEN usuario_rol = 'encargado_rrhh' AND permiso IN ('ver_remuneraciones', 'editar_remuneraciones', 'ver_empleados', 'ver_equipo', 'ver_organigrama', 'ver_documentos', 'ver_mi_perfil') THEN TRUE
+    WHEN usuario_rol = 'empleado' AND permiso IN ('ver_mi_perfil', 'ver_remuneraciones', 'ver_academia') THEN TRUE
+    WHEN usuario_rol = 'contador_externo' AND permiso IN ('ver_caja', 'ver_reportes', 'ver_reportes_fiscales', 'ver_contabilidad', 'ver_clientes', 'ver_proveedores', 'ver_inventario', 'ver_mi_perfil') THEN TRUE
     ELSE FALSE
   END;
 END;

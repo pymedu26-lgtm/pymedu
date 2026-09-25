@@ -165,7 +165,7 @@ const db = {
         id TEXT PRIMARY KEY,
         institucion_id TEXT NOT NULL REFERENCES instituciones(id) ON DELETE CASCADE,
         codigo TEXT NOT NULL UNIQUE,
-        rol TEXT NOT NULL DEFAULT 'emprendedor' CHECK (rol IN ('emprendedor', 'dueño', 'mentor', 'coordinador')),
+        rol TEXT NOT NULL DEFAULT 'emprendedor' CHECK (rol IN ('emprendedor', 'dueño', 'dueno', 'mentor', 'coordinador', 'vendedor', 'gestor', 'encargado_rrhh', 'empleado', 'contador_externo')),
         reporta_a TEXT REFERENCES perfiles(id) ON DELETE SET NULL,
         usos_max INTEGER NOT NULL DEFAULT 1 CHECK (usos_max >= 1),
         usos_actuales INTEGER NOT NULL DEFAULT 0 CHECK (usos_actuales >= 0),
@@ -194,6 +194,14 @@ const db = {
         'superadmin', 'admin_institucional', 'coordinador',
         'mentor', 'emprendedor', 'dueño', 'dueno', 'vendedor',
         'gestor', 'encargado_rrhh', 'empleado', 'contador_externo', 'demo'
+      ));
+
+      -- Reparación idempotente del CHECK de rol en codigos_invitacion
+      -- (los roles PYME son definibles por el administrador de la PYME).
+      ALTER TABLE codigos_invitacion DROP CONSTRAINT IF EXISTS codigos_invitacion_rol_check;
+      ALTER TABLE codigos_invitacion ADD CONSTRAINT codigos_invitacion_rol_check CHECK (rol IN (
+        'emprendedor', 'dueño', 'dueno', 'mentor', 'coordinador',
+        'vendedor', 'gestor', 'encargado_rrhh', 'empleado', 'contador_externo'
       ));
     `);
   },

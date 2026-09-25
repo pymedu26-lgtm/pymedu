@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useERP, Venta, VentaProducto } from '../context/ERPContext';
+import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import ModalSincronizacionSII from '../components/ModalSincronizacionSII';
+import { useAuth } from '../../context/AuthContext';import ModalSincronizacionSII from '../components/ModalSincronizacionSII';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { cn } from '@/lib/utils';
 import { 
@@ -10,18 +10,31 @@ import {
 } from 'recharts';
 
 export default function ERPVentas() {
-  const { ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, addVenta, updateVenta, deleteVenta, previewVentaImpacto } = useERP();
+  const { user: userAuth, perfil } = useAuth();
+  const {
+    ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto
+  } = useERP();
   const [showModal, setShowModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [montoPagado, setMontoPagado] = useState('');
+  const [avisoStock, setAvisoStock] = useState('');
   const [activeTab, setActiveTab] = useState<'lista' | 'analisis'>('lista');
 
   const [scannerMode, setScannerMode] = useState(false);
   const [scannerInput, setScannerInput] = useState('');
   const scannerRef = useRef<HTMLInputElement>(null);
+  /** Venta con texto libre (no inventariable): ítem escrito a mano, no toca stock. */
+  const [modoItemLibre, setModoItemLibre] = useState(false);
+  const [itemLibreActual, setItemLibreActual] = useState({ nombre: '', precio: '' });
+  const itemLibreOk = itemLibreActual.nombre.trim().length > 0 
+    && Number(itemLibreActual.precio) > 0;
+  /** Propina 10% opcional: campo separado (Caja), no infla IVA ni documento tributario. */
+  const [aplicarPropina, setAplicarPropina] = useState(false);
+  /** Venta seleccionada en la tabla → abre Nota de Venta formato Chile (imprimir/PDF). */
+  const [ventaNota, setVentaNota] = useState<Venta | null>(null);
 
   const [filtros, setFiltros] = useState({
     fechaInicio: '',
@@ -45,7 +58,7 @@ export default function ERPVentas() {
     productos: [],
     tipo_documento: 'boleta_electronica',
     metodo_pago: 'efectivo',
-    modo_integracion: 'sandbox',
+    modo_integracion: configuracionCumplimiento.modoIntegracion,
   });
 
   const [productoActual, setProductoActual] = useState({
@@ -83,7 +96,33 @@ export default function ERPVentas() {
     }
   }, [promocionActiva, productoActual.descuentoTipo, productoActual.descuentoMotivo]);
 
-  const stockInsuficiente = productoSeleccionado?.tipo === 'producto' && (productoSeleccionado.stock < productoActual.cantidad);
+  const cantidadEnVenta = (productoId: string) =>
+    (nuevaVenta.productos || [])
+      .filter(p => p.productoId === productoId)
+      .reduce((acc, p) => acc + (p.cantidad || 0), 0);
+
+const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefined;
+
+// Stock originalmente consumido por la venta que se esta editando: al guardar se
+// restaura y se vuelve a descontar, por lo que queda disponible como "buffer".
+const stockYaReservado = useMemo(() => {
+  const mapa: Record<string, number> = {};
+  (ventaEditada?.productos ?? []).forEach(pp => {
+    mapa[pp.productoId] = (mapa[pp.productoId] || 0) + (pp.cantidad || 0);
+  });
+  return mapa;
+}, [ventaEditada?.id, ventaEditada?.productos]);
+
+// Para el producto seleccionado, el stock disponible considera tambien lo que la
+// venta en edicion ya tenia reservado (se restaura al guardar).
+const stockDisponible = productoSeleccionado
+  ? productoSeleccionado.stock + (editingId ? stockYaReservado[productoActual.productoId] || 0 : 0)
+  : 0;
+
+const stockInsuficiente = productoSeleccionado
+  ? productoSeleccionado.tipo === 'producto'
+      && (cantidadEnVenta(productoActual.productoId) + (productoActual.cantidad || 0)) > stockDisponible
+  : false;
 
   const handleScannerSearch = (code: string) => {
     if (!code) return;
@@ -158,27 +197,29 @@ export default function ERPVentas() {
     }
   }, [scannerMode, showModal]);
 
-  const handleAddProducto = () => {
-    if (!productoSeleccionado || stockInsuficiente || productoActual.cantidad < 1) return;
+  const construirItemVenta = (
+    producto: Producto,
+    cantidad: number,
+    descuentoTipo: 'porcentaje' | 'monto' | 'ninguno' = 'ninguno',
+    descuentoValor = 0,
+    descuentoMotivo = ''
+  ): VentaProducto => {
+    const subtotalBruto = producto.precio * cantidad;
 
-    const precioUnitario = productoSeleccionado.precio;
-    const cantidad = productoActual.cantidad;
-    const subtotalBruto = precioUnitario * cantidad;
-    
     let descuento = 0;
-    if (productoActual.descuentoTipo === 'porcentaje') {
-      descuento = subtotalBruto * (productoActual.descuentoValor / 100);
-    } else if (productoActual.descuentoTipo === 'monto') {
-      descuento = productoActual.descuentoValor;
+    if (descuentoTipo === 'porcentaje') {
+      descuento = subtotalBruto * (descuentoValor / 100);
+    } else if (descuentoTipo === 'monto') {
+      descuento = descuentoValor;
     }
-    
+
     const subtotalConDescuento = Math.max(0, subtotalBruto - descuento);
-    
+
     let iva = 0;
     let total = subtotalConDescuento;
     let subtotalNeto = subtotalConDescuento;
 
-    if (productoSeleccionado.incluyeIva) {
+    if (producto.incluyeIva) {
       subtotalNeto = Math.round(subtotalConDescuento / 1.19);
       iva = subtotalConDescuento - subtotalNeto;
       total = subtotalConDescuento;
@@ -188,24 +229,49 @@ export default function ERPVentas() {
       subtotalNeto = subtotalConDescuento;
     }
 
-    const nuevoProducto: VentaProducto = {
-      productoId: productoSeleccionado.id,
-      productoNombre: productoSeleccionado.nombre,
+    return {
+      productoId: producto.id,
+      productoNombre: producto.nombre,
       cantidad,
-      precioBase: precioUnitario,
-      costoUnitario: productoSeleccionado.costo,
-      descuentoTipo: productoActual.descuentoTipo,
-      descuentoValor: productoActual.descuentoValor,
-      descuentoMotivo: productoActual.descuentoMotivo,
+      precioBase: producto.precio,
+      costoUnitario: producto.costo,
+      descuentoTipo,
+      descuentoValor,
       subtotal: subtotalNeto,
       iva,
-      total
+      total,
     };
+  };
 
-    setNuevaVenta(prev => ({
-      ...prev,
-      productos: [...(prev.productos || []), nuevoProducto]
-    }));
+  const handleAddProducto = () => {
+    if (!productoSeleccionado || stockInsuficiente || productoActual.cantidad < 1) return;
+
+    const item = construirItemVenta(
+      productoSeleccionado,
+      productoActual.cantidad,
+      productoActual.descuentoTipo,
+      productoActual.descuentoValor,
+      productoActual.descuentoMotivo
+    );
+
+    setNuevaVenta(prev => {
+      const prods = prev.productos || [];
+      const idx = prods.findIndex(p => p.productoId === item.productoId);
+      if (idx >= 0) {
+        // Mismo producto ya en la venta: sumar cantidad y recalcular con el descuento vigente
+        const actual = prods[idx];
+        const usarDescuento = productoActual.descuentoTipo === 'ninguno'
+          ? (actual.descuentoTipo ?? 'ninguno')
+          : productoActual.descuentoTipo;
+        const usarValor = usarDescuento === 'ninguno' ? 0 : productoActual.descuentoValor;
+        const usarMotivo = usarDescuento === 'ninguno' ? (actual.descuentoMotivo || '') : productoActual.descuentoMotivo;
+        const combinado = construirItemVenta(productoSeleccionado, actual.cantidad + item.cantidad, usarDescuento, usarValor, usarMotivo);
+        const newProds = prods.slice();
+        newProds[idx] = combinado;
+        return { ...prev, productos: newProds };
+      }
+      return { ...prev, productos: [...prods, item] };
+    });
 
     setProductoActual({
       productoId: '',
@@ -224,6 +290,31 @@ export default function ERPVentas() {
     });
   };
 
+  /** Agregar ítem de texto libre (no inventariable): se escribe a mano, id inexistente en
+   *  inventario (`TEXTO-LIBRE-*`) → el contexto NO descuenta stock ni crea salida de inventario. */
+  const handleAgregarItemLibre = () => {
+    if (!itemLibreOk) return;
+    const precio = Number(itemLibreActual.precio || 0);
+    setNuevaVenta(prev => ({
+      ...prev,
+      productos: [...(prev.productos || []), {
+        productoId: `TEXTO-LIBRE-${crypto.randomUUID().slice(0, 8)}`,
+        productoNombre: itemLibreActual.nombre.trim(),
+        cantidad: 1,
+        precioBase: precio,
+        costoUnitario: 0,
+        descuentoTipo: 'ninguno' as const,
+        descuentoValor: 0,
+        subtotal: precio,
+        iva: 0,
+        total: precio,
+        esInventariable: false,
+      }],
+    }));
+    setItemLibreActual({ nombre: '', precio: '' });
+    setModoItemLibre(false);
+  };
+
   const totalesVenta = useMemo(() => {
     const prods = nuevaVenta.productos || [];
     const subtotal = prods.reduce((acc, p) => acc + p.subtotal, 0);
@@ -234,6 +325,10 @@ export default function ERPVentas() {
     
     return { subtotal, iva, total, margenEstimado };
   }, [nuevaVenta.productos]);
+
+  const propinaCalculada = aplicarPropina && totalesVenta.subtotal > 0
+    ? Math.round(totalesVenta.subtotal * 0.10)
+    : 0;
 
   const impactoVenta = useMemo(() => previewVentaImpacto({
     fecha: nuevaVenta.fecha || new Date().toISOString().split('T')[0],
@@ -352,6 +447,26 @@ export default function ERPVentas() {
     if (nuevaVenta.productos && nuevaVenta.productos.length > 0 && nuevaVenta.fecha) {
       const pagoInicial = Number(montoPagado || (nuevaVenta.estado === 'Pagado' ? totalesVenta.total : 0));
       const saldoPendiente = Math.max(0, totalesVenta.total - pagoInicial);
+
+      // Candado de stock: la suma acumulada de cada producto en la venta no puede
+      // superar stock actual + (lo que esta venta en edicion ya tenia reservado).
+      const itemsPorProducto: Record<string, number> = {};
+      (nuevaVenta.productos || []).forEach(pp => {
+        itemsPorProducto[pp.productoId] = (itemsPorProducto[pp.productoId] || 0) + (pp.cantidad || 0);
+      });
+      const productoStockMap: Record<string, Producto> = {};
+      inventario.filter(i => i.tipo === 'producto').forEach(prod => { productoStockMap[prod.id] = prod as Producto; });
+      for (const pp of nuevaVenta.productos) {
+        const prod = productoStockMap[pp.productoId];
+        if (!prod) continue;
+        const disponible = prod.stock + (editingId ? stockYaReservado[pp.productoId] || 0 : 0);
+        if (itemsPorProducto[pp.productoId] > disponible) {
+          setAvisoStock(`Stock insuficiente para "${prod.nombre}": se necesitan ${itemsPorProducto[pp.productoId]} unidades y hay ${Math.max(0, disponible)} disponibles.`);
+          return;
+        }
+      }
+      setAvisoStock('');
+
       const datos = {
         fecha: nuevaVenta.fecha,
         cliente: nuevaVenta.cliente || 'Cliente General',
@@ -361,6 +476,8 @@ export default function ERPVentas() {
         iva: impactoVenta.ivaDebito,
         monto: totalesVenta.total,
         margenEstimado: totalesVenta.margenEstimado,
+        /** Propina separada de un documento que SI es venta indicada (no infla IVA). */
+        propina: propinaCalculada,
         estado: saldoPendiente > 0 ? 'Pendiente' : 'Pagado',
         tipo_documento: tipoDocumentoNormalizado,
         metodo_pago: nuevaVenta.metodo_pago,
@@ -387,7 +504,7 @@ export default function ERPVentas() {
         productos: [],
         tipo_documento: 'boleta_electronica',
         metodo_pago: 'efectivo',
-        modo_integracion: 'sandbox',
+        modo_integracion: configuracionCumplimiento.modoIntegracion,
       });
     }
   };
@@ -404,7 +521,7 @@ export default function ERPVentas() {
       productos: venta.productos,
       tipo_documento: venta.tipo_documento,
       metodo_pago: (venta.metodo_pago as any) || 'efectivo',
-      modo_integracion: venta.modo_integracion || 'sandbox',
+      modo_integracion: venta.modo_integracion || configuracionCumplimiento.modoIntegracion,
       fecha_vencimiento: venta.fecha_vencimiento,
       nota: venta.nota,
     });
@@ -624,6 +741,7 @@ export default function ERPVentas() {
                 <th className="px-6 py-4">Documento</th>
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4">Cliente</th>
+                <th className="px-6 py-4">Realizado por</th>
                 <th className="px-6 py-4">Productos</th>
                 <th className="px-6 py-4 text-right">Total</th>
                 <th className="px-6 py-4 text-right">Margen</th>
@@ -633,7 +751,7 @@ export default function ERPVentas() {
             </thead>
             <tbody className="divide-y divide-outline-variant/20">
               {ventasFiltradas.map((venta) => (
-                <tr key={venta.id} className="hover:bg-surface-container-low/30 transition-colors">
+                <tr key={venta.id} className="hover:bg-surface-container-low/30 transition-colors cursor-pointer" onClick={() => setVentaNota(venta)}>
                   <td className="px-6 py-4 font-medium text-primary">{venta.id}</td>
                   <td className="px-6 py-4">
                     <p className="text-xs font-black text-on-surface">
@@ -644,7 +762,18 @@ export default function ERPVentas() {
                     </p>
                   </td>
                   <td className="px-6 py-4 text-on-surface-variant">{venta.fecha}</td>
-                  <td className="px-6 py-4 font-semibold text-on-surface">{venta.cliente}</td>
+                  <td className="px-6 py-4 font-semibold text-on-surface">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-sm text-primary/70">person</span>
+                      {venta.cliente}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-on-surface-variant">
+                      <span className="material-symbols-outlined text-sm text-tertiary">badge</span>
+                      {venta.creado_por || venta.creado_por_id?.slice(0, 6)?.toUpperCase() || 'Sistema'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-on-surface">
                     {venta.productos.length === 1 ? (
                       <>
@@ -659,7 +788,7 @@ export default function ERPVentas() {
                     <span className="block text-[10px] text-on-surface-variant/60 font-normal">IVA: ${venta.iva?.toLocaleString('es-CL')}</span>
                   </td>
                   <td className="px-6 py-4 text-right font-bold text-emerald-600">
-                    {venta.margenEstimado?.toFixed(1)}%
+                    {venta.margenEstimado != null ? `${venta.margenEstimado.toFixed(1)}%` : '—'}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${venta.estado === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-secondary/20 text-secondary'}`}>
@@ -669,14 +798,22 @@ export default function ERPVentas() {
                   <td className="px-6 py-4 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <button 
-                        onClick={() => abrirEdicion(venta)}
+                        onClick={(e) => { e.stopPropagation(); setVentaNota(venta); }}
+                        className="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
+                        title="Ver Nota de Venta (formato Chile)"
+                      >
+                        <span className="material-symbols-outlined text-xl">receipt_long</span>
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); abrirEdicion(venta); }}
                         className="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
                         title="Editar"
                       >
                         <span className="material-symbols-outlined text-xl">edit</span>
                       </button>
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setItemToDelete(venta.id);
                           setDeleteModalOpen(true);
                         }}
@@ -776,6 +913,18 @@ export default function ERPVentas() {
                   >
                     <span className="material-symbols-outlined text-sm">barcode_scanner</span>
                     {scannerMode ? 'MODO ESCANER ACTIVO' : 'ACTIVAR PISTOLEO'}
+                  </button>
+                  <button 
+                    onClick={() => setModoItemLibre(m => !m)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black transition-all border-2",
+                      modoItemLibre 
+                        ? "bg-tertiary text-white border-tertiary shadow-md" 
+                        : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/50 hover:border-tertiary/50"
+                    )}
+                  >
+                    <span className="material-symbols-outlined text-sm">edit_note</span>
+                    {modoItemLibre ? 'MEMORIA: DETALLE LIBRE' : 'MEMORIA / TEXTO LIBRE'}
                   </button>
                 </div>
                 
@@ -979,6 +1128,30 @@ export default function ERPVentas() {
                     )}
                   </div>
 
+                <div className="flex items-center justify-between gap-4 rounded-2xl border border-tertiary/25 bg-tertiary/5 p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary text-xl">restaurant</span>
+                    <div>
+                      <button 
+                        type="button" 
+                        onClick={() => setAplicarPropina(!aplicarPropina)}
+                        className={cn(
+                          "flex items-center gap-2 text-sm font-black uppercase tracking-wide transition-all",
+                          aplicarPropina ? "text-tertiary" : "text-on-surface-variant"
+                        )}
+                      >
+                        <span className={`material-symbols-outlined ${aplicarPropina ? 'text-tertiary' : ''}`}>{aplicarPropina ? 'toggle_on' : 'toggle_off'}</span>
+                        Propina 10% (opcional)
+                      </button>
+                      <p className="text-[10px] text-on-surface-variant/70 mt-0.5">Campo separado: no infla IVA ni documento; se registra en Caja como propina.</p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/70 font-bold">Propina</p>
+                    <p className="text-lg font-black text-tertiary">${propinaCalculada.toLocaleString('es-CL')}</p>
+                  </div>
+                </div>
+
                   <div className="rounded-2xl bg-inverse-surface p-4 text-inverse-on-surface">
                     <p className="text-[10px] uppercase tracking-[0.22em] text-primary-container font-black">Impacto antes de guardar</p>
                     <div className="mt-3 space-y-2 text-sm">
@@ -1029,6 +1202,11 @@ export default function ERPVentas() {
               </div>
             </div>
             
+            {avisoStock && (
+              <div className="px-6 py-3 bg-error/10 text-error text-sm font-semibold flex items-center gap-2">
+                <span>⚠</span>{avisoStock}
+              </div>
+            )}
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50 shrink-0">
               <button onClick={cerrarModal} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high/50 transition-colors">
                 Cancelar
@@ -1044,6 +1222,139 @@ export default function ERPVentas() {
           </div>
         </div>
       )}
+
+        {ventaNota && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+            <div className="nota-venta-sheet w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-outline-variant/30 bg-surface px-5 py-3 print:hidden">
+                <h3 className="flex items-center gap-2 text-lg font-black text-on-surface">
+                  <span className="material-symbols-outlined text-primary">receipt_long</span>
+                  Nota de Venta
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-on-primary transition-colors hover:bg-primary-dark"
+                    title="Imprimir / Guardar PDF"
+                  >
+                    <span className="material-symbols-outlined text-base">print</span>
+                    Imprimir / PDF
+                  </button>
+                  <button
+                    onClick={() => setVentaNota(null)}
+                    className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
+                    title="Cerrar"
+                  >
+                    <span className="material-symbols-outlined text-xl">close</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 text-on-surface">
+                <div className="mb-5 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xl font-black tracking-tight text-on-surface">
+                      {DOCUMENT_LABELS[normalizeDocumentType(ventaNota.tipo_documento)] || 'Nota de Venta'}
+                    </p>
+                    <p className="mt-0.5 text-sm text-on-surface-variant">
+                      {ventaNota.estado === 'Pagado' ? 'COMPROBANTE DE PAGO' : 'DOCUMENTO PENDIENTE'}
+                    </p>
+                  </div>
+                  <div className="text-right text-sm">
+                    <p className="font-bold text-on-surface">Folio: <span className="text-primary">{ventaNota.id}</span></p>
+                    <p className="text-on-surface-variant">Fecha: {ventaNota.fecha?.split('T')[0]}</p>
+                    {ventaNota.documento_id && (
+                      <p className="text-on-surface-variant">Doc. SII: {ventaNota.documento_id}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mb-4 rounded-xl bg-surface-container-low/50 p-4 text-sm">
+                  <p className="text-xs font-bold uppercase tracking-wider text-primary">Emisor</p>
+                  <p className="mt-1 font-black text-on-surface">
+                    {perfil?.negocio_nombre || perfil?.institucion_nombre || 'Mi PYME'}
+                  </p>
+                  <p className="text-on-surface-variant">RUT {perfil?.rut || '—'} • Giro: Venta al por menor</p>
+                  <p className="text-on-surface-variant">Dirección: {perfil?.direccion || '—'}</p>
+                </div>
+
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-primary">Cliente</p>
+                    <p className="text-base font-black text-on-surface">{ventaNota.cliente}</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${ventaNota.estado === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {ventaNota.estado}
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-outline-variant/30">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-outline-variant/30 bg-surface-container-low/50 text-[11px] uppercase tracking-wider text-on-surface-variant">
+                        <th className="px-3 py-2">Descripción</th>
+                        <th className="px-3 py-2 text-right">Cant.</th>
+                        <th className="px-3 py-2 text-right">P.Unit</th>
+                        <th className="px-3 py-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/20">
+                      {ventaNota.productos.map((vp, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-2">
+                            <p className="font-medium text-on-surface">{vp.productoNombre}</p>
+                            {vp.descuentoTipo && vp.descuentoTipo !== 'ninguno' && (
+                              <p className="text-[11px] text-primary">
+                                Descuento {vp.descuentoValor}{vp.descuentoTipo === 'porcentaje' ? '%' : ''}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right text-on-surface-variant">{vp.cantidad}</td>
+                          <td className="px-3 py-2 text-right text-on-surface-variant">${vp.precioBase.toLocaleString('es-CL')}</td>
+                          <td className="px-3 py-2 text-right font-bold text-on-surface">${vp.total.toLocaleString('es-CL')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 ml-auto w-full max-w-xs space-y-1.5 text-sm">
+                  <div className="flex justify-between text-on-surface-variant">
+                    <span>Subtotal</span>
+                    <span className="text-on-surface">${ventaNota.subtotal.toLocaleString('es-CL')}</span>
+                  </div>
+                  <div className="flex justify-between text-on-surface-variant">
+                    <span>IVA (19%)</span>
+                    <span className="text-on-surface">${ventaNota.iva.toLocaleString('es-CL')}</span>
+                  </div>
+                  {ventaNota.propina && ventaNota.propina > 0 && (
+                    <div className="flex justify-between text-on-surface-variant">
+                      <span>Propina</span>
+                      <span className="text-on-surface">${ventaNota.propina.toLocaleString('es-CL')}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-outline-variant/30 pt-2 text-base font-black text-on-surface">
+                    <span>Total a cobrar</span>
+                    <span>${(ventaNota.monto + (ventaNota.propina || 0)).toLocaleString('es-CL')}</span>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between border-t border-dashed border-outline-variant/40 pt-3 text-xs text-on-surface-variant print:hidden">
+                  <p>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">person</span>
+                      Realizado por: <span className="font-bold text-on-surface">{ventaNota.creado_por || ventaNota.creado_por_id?.slice(0, 6)?.toUpperCase() || '—'}</span>
+                    </span>
+                  </p>
+                  <p>Método: {ventaNota.metodo_pago || 'No especificado'}</p>
+                </div>
+                <p className="mt-5 hidden text-center text-[11px] text-on-surface-variant print:block">
+                  Gracias por su compra. Documento no válido como factura electrónica ante el SII.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
       <ConfirmDeleteModal
         isOpen={deleteModalOpen}

@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS codigos_invitacion (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   institucion_id UUID NOT NULL REFERENCES instituciones(id) ON DELETE CASCADE,
   codigo TEXT NOT NULL UNIQUE,
-  rol TEXT NOT NULL DEFAULT 'emprendedor' CHECK (rol IN ('emprendedor', 'dueño', 'mentor', 'coordinador')),
+  rol TEXT NOT NULL DEFAULT 'emprendedor' CHECK (rol IN ('emprendedor', 'dueño', 'mentor', 'coordinador', 'vendedor', 'gestor', 'encargado_rrhh', 'empleado', 'contador_externo')),
   reporta_a UUID REFERENCES perfiles(id) ON DELETE SET NULL,
   usos_max INT NOT NULL DEFAULT 1 CHECK (usos_max >= 1),
   usos_actuales INT NOT NULL DEFAULT 0 CHECK (usos_actuales >= 0),

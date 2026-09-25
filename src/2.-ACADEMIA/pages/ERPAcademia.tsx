@@ -47,7 +47,7 @@ const getCoursesByTab = (tab: 'comercial' | 'legal') => {
   };
 };
 
-const CourseCard = ({ course }: { course: any }) => {
+const CourseCard = ({ course }: { course: any; key?: string }) => {
   const navigate = useNavigate();
   const colorMap: Record<string, { bg: string, text: string, badgeBg: string, badgeText: string, progress: string }> = {
     primary: { bg: 'bg-primary/5', text: 'text-primary', badgeBg: 'bg-primary/10', badgeText: 'text-primary', progress: 'bg-primary' },

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, type ChangeEvent } from 'react';
 import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
@@ -75,7 +75,7 @@ export default function ERPInventario() {
     link.click();
   };
 
-  const importFromCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const importFromCSV = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -205,7 +205,7 @@ export default function ERPInventario() {
   const handleApplyAjustes = () => {
     const ajustes = Object.entries(conteoFisico).map(([id, fisico]) => {
       const p = inventario.find(prod => prod.id === id);
-      const diferencia = fisico - (p?.stock || 0);
+      const diferencia = Number(fisico) - (p?.stock || 0);
       return { id, diferencia, fisico };
     }).filter(a => a.diferencia !== 0);
 
@@ -698,7 +698,7 @@ export default function ERPInventario() {
                   {Object.entries(conteoFisico).map(([id, fisico]) => {
                     const p = inventario.find(prod => prod.id === id);
                     const sistema = p?.stock || 0;
-                    const diferencia = fisico - sistema;
+                    const diferencia = Number(fisico) - sistema;
                     return (
                       <tr key={id} className="hover:bg-surface-container-low/50 transition-colors">
                         <td className="px-6 py-4 font-bold text-on-surface">{p?.nombre}</td>

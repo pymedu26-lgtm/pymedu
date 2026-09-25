@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, ChangeEvent } from 'react';
 import { Venta, TipoDocumento } from '../context/ERPContext';
 
 interface ModalSincronizacionSIIProps {
@@ -27,28 +27,22 @@ export default function ModalSincronizacionSII({ isOpen, onClose, onImport, vent
     setSyncStatus('Descargando Registro de Compras y Ventas (RCV)...');
     await new Promise(r => setTimeout(r, 2000));
     
-    // Simulated data from SII
+    // Datos de demostracion usando el mes en curso para que calcen con los filtros de reportes
+    const ahora = new Date();
+    const mesActual = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
     const mockData = [
-      { folio: '1024', fecha: '2026-05-18', cliente: 'IMPORTADORA LOREM IPSUM', monto: 154900, tipo: '33' },
-      { folio: '1025', fecha: '2026-05-19', cliente: 'CONSTRUCTORA ALPHA SPA', monto: 890000, tipo: '33' },
-      { folio: '882', fecha: '2026-05-19', cliente: 'CLIENTE PARTICULAR', monto: 12500, tipo: '39' },
+      { folio: '1024', fecha: `${mesActual}-01`, cliente: 'IMPORTADORA LOREM IPSUM', monto: 154900, tipo: '33' },
+      { folio: '1025', fecha: `${mesActual}-02`, cliente: 'CONSTRUCTORA ALPHA SPA', monto: 890000, tipo: '33' },
+      { folio: '882', fecha: `${mesActual}-03`, cliente: 'CLIENTE PARTICULAR', monto: 12500, tipo: '39' },
     ];
 
-    const parsedData = mockData.map(d => {
-      const existe = ventasExistentes.some(v => v.nota?.includes(`Folio SII: ${d.folio}`) && v.tipo_documento === mapTipoDoc(d.tipo));
-      return {
-        id: `SII-${d.folio}`,
-        fecha: d.fecha,
-        cliente: d.cliente,
-        monto: d.monto,
-        neto: Math.round(d.monto / 1.19),
-        iva: d.monto - Math.round(d.monto / 1.19),
-        exento: 0,
-        tipo_documento: mapTipoDoc(d.tipo),
-        folio: d.folio,
-        existe
-      };
-    });
+    const parsedData = mockData.map(d => buildRow({
+      fecha: d.fecha,
+      monto: d.monto,
+      neto: Math.round(d.monto / 1.19),
+      iva: d.monto - Math.round(d.monto / 1.19),
+      exento: 0,
+    }, d.folio, d.tipo, d.cliente));
 
     setPreview(parsedData);
     setLoading(false);
@@ -66,7 +60,41 @@ export default function ModalSincronizacionSII({ isOpen, onClose, onImport, vent
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Deduplicacion robusta: folio+tipo (ventas con nota) o coincidencia de monto+cliente+fecha+tipo
+  const yaExisteVenta = (cliente: string, fecha: string, monto: number, folio?: string, tipo?: string) =>
+    ventasExistentes.some(v => {
+      const tipoDoc = tipo ? mapTipoDoc(tipo) : undefined;
+      const coincidenciaFolio = !!folio && !!v.nota && v.nota.includes(`Folio SII: ${folio}`) && (!tipoDoc || v.tipo_documento === tipoDoc);
+      const coincidenciaDatos = !tipoDoc
+        || (v.monto === monto
+          && v.fecha === fecha
+          && v.cliente?.toLowerCase() === String(cliente || '').toLowerCase()
+          && v.tipo_documento === tipoDoc);
+      return coincidenciaFolio || coincidenciaDatos;
+    });
+
+  const buildRow = (d: any, folio?: string, tipo?: string, razonSocial?: string, rut?: string, conNota = true) => {
+    const tipoDocumento = mapTipoDoc(tipo || '');
+    const esNotaCredito = tipoDocumento === 'nota_credito';
+    const fecha = (d.fecha || '').split('/').reverse().join('-');
+    const cliente = razonSocial || rut || 'Cliente SII';
+    return {
+      id: `SII-${folio}`,
+      fecha: fecha || new Date().toISOString().split('T')[0],
+      cliente,
+      monto: d.monto,
+      neto: d.neto,
+      iva: d.iva,
+      exento: d.exento,
+      tipo_documento: tipoDocumento,
+      folio,
+      existe: conNota ? yaExisteVenta(cliente, fecha, d.monto, folio, tipo) : false,
+      noAuto: esNotaCredito,
+      raw: d,
+    };
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
@@ -81,60 +109,70 @@ export default function ModalSincronizacionSII({ isOpen, onClose, onImport, vent
       const text = e.target?.result as string;
       const lines = text.split(/\r?\n/);
       if (lines.length < 2) {
+        setSyncStatus('El archivo no tiene filas con datos.');
         setLoading(false);
         return;
       }
 
-      // SII CSV standard usually uses ';' as separator
-      const headers = lines[0].split(';');
-      const rows = lines.slice(1).filter(line => line.trim() !== '');
+      // Intenta ',' o ';' como separador y detecta la fila de encabezados
+      const primera = lines.find(l => l.trim() !== '') || '';
+      const separador = primera.split(';').length > primera.split(',').length ? ';' : ',';
+      const encabezadoIdx = lines.map(l => l.trim()).findIndex(l => /tipo|folio|fecha|monto|neto/i.test(l) && l.includes(separador));
+      const headIdx = encabezadoIdx >= 0 ? encabezadoIdx : 0;
+      const headers = lines[headIdx].split(separador).map(h => h.trim().replace(/^\uFEFF/, ''));
+      const rows = lines.slice(headIdx + 1).filter(line => line.trim() !== '');
 
       const parsedData = rows.map(row => {
-        const values = row.split(';');
+        const values = row.split(separador);
         const data: any = {};
         headers.forEach((header, i) => {
-          data[header.trim()] = values[i]?.trim();
+          data[header] = values[i]?.trim() ?? '';
         });
 
-        // Mapping SII columns (typical names in RCV export)
-        // Note: Field names might vary slightly depending on export type
-        const folio = data['Folio'] || data['Nro. Docto'];
-        const tipo = data['Tipo Doc'] || data['Tipo Docto'];
-        const fecha = data['Fecha Docto'] || data['Fecha'];
-        const rut = data['RUT Receptor'] || data['RUT Cliente'];
-        const razonSocial = data['Razón Social'] || data['Cliente'];
-        const neto = parseInt(data['Monto Neto'] || '0');
-        const iva = parseInt(data['Monto IVA'] || '0');
-        const exento = parseInt(data['Monto Exento'] || '0');
-        const total = parseInt(data['Monto Total'] || '0');
+        const folio = data['Folio'] || data['Nro. Docto'] || data['NroDocto'];
+        const tipo = data['Tipo Doc'] || data['Tipo Docto'] || data['TipoDocumento'] || data['Tipo'];
+        const fechaRaw = data['Fecha Docto'] || data['Fecha'] || data['FechaEmision'];
+        const rut = data['RUT Receptor'] || data['RUT Cliente'] || data['RutCliente'];
+        const razonSocial = data['Razón Social'] || data['RazonSocial'] || data['Cliente'] || data['Receptor'];
+        const neto = parseInt(String(data['Monto Neto'] || data['MontoNeto'] || '0').replace(/[^\d-]/g, '') || '0');
+        const iva = parseInt(String(data['Monto IVA'] || data['MontoIVA'] || '0').replace(/[^\d-]/g, '') || '0');
+        const exento = parseInt(String(data['Monto Exento'] || data['MontoExento'] || '0').replace(/[^\d-]/g, '') || '0');
+        const total = parseInt(String(data['Monto Total'] || data['MontoTotal'] || '0').replace(/[^\d-]/g, '') || '0') || (neto + iva + exento);
 
-        // Check if already exists (by folio and type)
-        const existe = ventasExistentes.some(v => v.nota?.includes(`Folio SII: ${folio}`) && v.tipo_documento === mapTipoDoc(tipo));
+        const tipoDoc = mapTipoDoc(String(tipo || '').trim());
+        const fecha = (fechaRaw || '').split('/').reverse().join('-');
+        const cliente = razonSocial || rut || 'Cliente SII';
 
         return {
           id: `SII-${folio}`,
-          fecha: fecha?.split('/').reverse().join('-'), // Convert DD/MM/YYYY to YYYY-MM-DD
-          cliente: razonSocial || rut || 'Cliente SII',
+          fecha: fecha || new Date().toISOString().split('T')[0],
+          cliente,
           monto: total,
           neto,
           iva,
           exento,
-          tipo_documento: mapTipoDoc(tipo),
+          tipo_documento: tipoDoc,
           folio,
-          existe,
-          raw: data
+          existe: yaExisteVenta(cliente, fecha, total, String(folio ?? ''), String(tipo ?? '').trim()),
+          noAuto: tipoDoc === 'nota_credito',
+          raw: data,
         };
       });
 
       setPreview(parsedData);
+      setSyncStatus(parsedData.length === 0 ? 'No se encontraron registros válidos en el archivo.' : null);
       setLoading(false);
     };
-    reader.readAsText(file, 'ISO-8859-1'); // SII uses ISO-8859-1 for special characters like Ñ
+    reader.onerror = () => {
+      setSyncStatus('No se pudo leer el archivo.');
+      setLoading(false);
+    };
+    reader.readAsText(file, 'ISO-8859-1'); // SII usa ISO-8859-1 (tildes y Ñ)
   };
 
   const handleConfirm = () => {
     const toImport = preview
-      .filter(p => !p.existe)
+      .filter(p => !p.existe && !p.noAuto)
       .map(p => ({
         fecha: p.fecha,
         cliente: p.cliente,
@@ -259,7 +297,7 @@ export default function ModalSincronizacionSII({ isOpen, onClose, onImport, vent
                     <p className="text-sm font-bold text-slate-800">
                       {activeMode === 'auto' ? 'Datos obtenidos desde SII' : file?.name}
                     </p>
-                    <p className="text-xs text-slate-500">{preview.length} registros encontrados</p>
+                    <p className="text-xs text-slate-500">{preview.length} registros encontrados · {preview.filter(p => !p.existe && !p.noAuto).length} por importar</p>
                   </div>
                 </div>
                 <button 
@@ -269,6 +307,14 @@ export default function ModalSincronizacionSII({ isOpen, onClose, onImport, vent
                   {activeMode === 'auto' ? 'Reiniciar' : 'Cambiar archivo'}
                 </button>
               </div>
+              {preview.some(p => p.noAuto) && (
+                <div className="px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                  Las notas de crédito (tipo 61) no se autoimportan: regístralas manualmente desde el botón "Nota Crédito" en el módulo de Ventas para respetar el crédito de IVA en el F29.
+                </div>
+              )}
+              {syncStatus && (
+                <div className="px-4 py-3 rounded-2xl bg-slate-100 text-xs font-semibold text-slate-600">{syncStatus}</div>
+              )}
 
               <div className="border border-outline-variant/30 rounded-2xl overflow-hidden shadow-sm">
                 <table className="w-full text-sm text-left">
@@ -289,7 +335,11 @@ export default function ModalSincronizacionSII({ isOpen, onClose, onImport, vent
                         <td className="px-4 py-3 truncate max-w-[200px] font-medium" title={row.cliente}>{row.cliente}</td>
                         <td className="px-4 py-3 text-right font-black text-slate-800">${row.monto.toLocaleString('es-CL')}</td>
                         <td className="px-4 py-3 text-center">
-                          {row.existe ? (
+                          {row.noAuto ? (
+                            <span className="inline-flex items-center gap-1 text-[9px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase">
+                              <span className="material-symbols-outlined text-[10px]">info</span> Gestión manual
+                            </span>
+                          ) : row.existe ? (
                             <span className="inline-flex items-center gap-1 text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase">
                               <span className="material-symbols-outlined text-[10px]">check_circle</span> Ya existe
                             </span>
@@ -314,11 +364,11 @@ export default function ModalSincronizacionSII({ isOpen, onClose, onImport, vent
           </button>
           <button 
             onClick={handleConfirm}
-            disabled={!preview.some(p => !p.existe)}
+            disabled={!preview.some(p => !p.existe && !p.noAuto)}
             className="px-6 py-2 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-sm">sync</span>
-            Importar {preview.filter(p => !p.existe).length} ventas
+            Importar {preview.filter(p => !p.existe && !p.noAuto).length} ventas
           </button>
         </div>
       </div>

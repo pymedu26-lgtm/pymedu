@@ -1,19 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api, setToken } from '../lib/api';
+import { ROL_PUEDE_HACER, type Rol } from '../lib/roles';
 
-export type Rol =
-  | 'superadmin'
-  | 'admin_institucional'
-  | 'coordinador'
-  | 'mentor'
-  | 'emprendedor'
-  | 'dueño'
-  | 'vendedor'
-  | 'gestor'
-  | 'encargado_rrhh'
-  | 'empleado'
-  | 'contador_externo'
-  | 'demo';
+export type { Rol };
 
 export interface Perfil {
   id: string;
@@ -146,45 +135,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       'ver_remuneraciones': perfil.puede_ver_remuneraciones ?? true,
     } as Record<string, boolean | undefined>;
 
-    switch (perfil.rol) {
-      case 'coordinador':
-        return ['ver_mentores', 'ver_emprendedores', 'gestionar_programas'].includes(permiso);
-      case 'mentor':
-        return ['ver_mis_emprendedores', 'editar_seguimiento', 'ver_academia'].includes(permiso);
-      case 'emprendedor':
-      case 'dueño':
-        // El dueño del negocio siempre puede registrar ventas y gastos.
-        if (permiso === 'crear_ventas' || permiso === 'crear_gastos') return true;
-        if (typeof flags[permiso] === 'boolean') return flags[permiso];
-        return [
-          'ver_mi_perfil', 'editar_mi_negocio', 'ver_academia',
-          'ver_inventario', 'ver_clientes', 'ver_proveedores',
-          'ver_promociones', 'ver_equipo', 'ver_organigrama',
-          'ver_documentos', 'ver_mercados_publicos', 'ver_mentorias',
-        ].includes(permiso);
-      case 'vendedor':
-        return ['crear_ventas', 'ver_clientes', 'ver_mi_perfil'].includes(permiso);
-      case 'gestor':
-        return [
-          'crear_ventas', 'crear_gastos', 'ver_inventario', 'ver_caja',
-          'ver_clientes', 'ver_proveedores', 'ver_promociones', 'ver_reportes',
-          'ver_mi_perfil', 'ver_academia',
-        ].includes(permiso);
-      case 'encargado_rrhh':
-        return [
-          'ver_remuneraciones', 'editar_remuneraciones', 'ver_empleados',
-          'ver_equipo', 'ver_organigrama', 'ver_documentos', 'ver_mi_perfil',
-        ].includes(permiso);
-      case 'empleado':
-        return ['ver_mi_perfil', 'ver_remuneraciones', 'ver_academia'].includes(permiso);
-      case 'contador_externo':
-        return [
-          'ver_caja', 'ver_reportes', 'ver_reportes_fiscales', 'ver_contabilidad',
-          'ver_clientes', 'ver_proveedores', 'ver_inventario', 'ver_mi_perfil',
-        ].includes(permiso);
-      default:
-        return false;
+    if ((perfil.rol === 'emprendedor' || perfil.rol === 'dueño') && typeof flags[permiso] === 'boolean') {
+      return flags[permiso];
     }
+
+    return (ROL_PUEDE_HACER[perfil.rol] ?? []).includes(permiso);
   };
 
   return (

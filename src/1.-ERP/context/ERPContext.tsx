@@ -17,6 +17,9 @@ import {
   previewSaleImpact,
   SaleImpactPreview,
   ConfiguracionCumplimiento,
+  normalizeDocumentType,
+  calculateSaleDocumentAmounts,
+  periodoTributarioFromDate,
 } from '../services/documentCompliance';
 
 export type {
@@ -37,12 +40,13 @@ export type TipoDocumento = DocumentType | 'boleta' | 'factura' | 'nota_venta';
 export interface VentaProducto {
   productoId: string;
   productoNombre: string;
+  /** true = producto/servicio del negocio o ítem libre NO inventariable (no toca stock). Falso: id inexistente = venta con texto libre. */
+  esInventariable?: boolean;
   cantidad: number;
   precioBase: number;
   costoUnitario: number;
   descuentoTipo?: 'porcentaje' | 'monto' | 'ninguno';
   descuentoValor?: number;
-  descuentoMotivo?: string;
   subtotal: number;
   iva: number;
   total: number;
@@ -57,7 +61,16 @@ export interface Venta {
   subtotal: number;
   iva: number;
   monto: number;
+  monto_neto?: number;
   margenEstimado?: number;
+  /** Propina registrada como campo separado: no infla IVA ni documento tributario,
+   *  se suma al total a cobrar (Caja) y queda trazada como propina. */
+  propina?: number;
+  /** Quien creo la venta (multi-cuenta PYME: el vendedor registra, el admin/dueño ve todo). */
+  creado_por_id?: string;
+  creado_por?: string;
+  /** Negocio (PYME) al que pertenece la venta. */
+  negocio_id?: string;
   estado: EstadoPago;
   tipo_documento?: TipoDocumento;
   documento_id?: string;
@@ -264,7 +277,7 @@ interface ERPContextType {
 const ERPContext = createContext<ERPContextType | undefined>(undefined);
 
 export function ERPProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, perfil } = useAuth();
 
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [gastos, setGastos] = useState<Gasto[]>([]);
@@ -560,12 +573,18 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       saldo_pendiente: saldoPendiente,
       iva: documento.iva,
       subtotal: documento.neto || documento.exento || venta.subtotal,
+      propina: venta.propina ?? 0,
+      creado_por_id: user?.id ?? venta.creado_por_id,
+      creado_por: perfil?.nombre_completo || (user?.email ?? venta.creado_por ?? 'Sistema'),
+      negocio_id: perfil?.institucion_id ?? venta.negocio_id,
     };
     setVentas(prev => [newVenta, ...prev]);
     setDocumentosTributarios(prev => [documento, ...prev]);
     setIntegracionEventos(prev => [evento, ...prev]);
 
     venta.productos?.forEach(vp => {
+      // Venta con texto libre (no inventariable): no toca stock ni inventario.
+      if (vp.esInventariable === false || inventario.some(p => p.id === vp.productoId) === false) return;
       setInventario(prev => prev.map(p => {
         if (p.id === vp.productoId && p.tipo === 'producto') {
           return { ...p, stock: Math.max(0, p.stock - (vp.cantidad || 0)) };
@@ -595,22 +614,174 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    const montoPagadoAhora = venta.monto - saldoPendiente;
+    const esNotaCredito = normalizeDocumentType(documento.tipoDocumento) === 'nota_credito';
+    const montoPagadoAhora = esNotaCredito ? 0 : venta.monto - saldoPendiente;
     if (montoPagadoAhora > 0) {
       setMovimientos(prev => [{
         id: `M-${String(prev.length + 1).padStart(3, '0')}`, fecha: venta.fecha, tipo: 'Ingreso',
         concepto: `Venta — ${venta.cliente}`, monto: montoPagadoAhora, saldo: 0,
-        metodo_pago: venta.metodo_pago,
+        metodo_pago: venta.metodo_pago, referencia_id: newId,
+      }, ...prev]);
+    }
+    // Propina (10% opcional) como campo separado: ingreso propio en Caja, no infla IVA ni stock.
+    if (venta.propina && venta.propina > 0) {
+      setMovimientos(prev => [{
+        id: `M-${String(prev.length + 1).padStart(3, '0')}`, fecha: venta.fecha, tipo: 'Ingreso',
+        concepto: `Propina — ${venta.cliente || 'Cliente General'}`, monto: venta.propina, saldo: 0,
+        metodo_pago: venta.metodo_pago ?? 'efectivo', referencia_id: newId,
       }, ...prev]);
     }
   };
 
   const deleteVenta = (id: string) => {
+    const venta = ventas.find(v => v.id === id);
+    if (!venta) return;
+
+    // 1) Devolver stock de los productos vendidos
+    setInventario(prev => prev.map(p => {
+      if (p.tipo !== 'producto') return p;
+      const devolver = (venta.productos ?? [])
+        .filter(vp => vp.productoId === p.id)
+        .reduce((acc, vp) => acc + (vp.cantidad || 0), 0);
+      return devolver > 0 ? { ...p, stock: p.stock + devolver } : p;
+    }));
+
+    // 2) Quitar movimientos de caja vinculados (ingreso de la venta + cobros)
+    setMovimientos(prev => prev.filter(m => !(m.referencia_id === id)));
+
+    // 3) Quitar abonos (cobros) asociados a la venta
+    setAbonos(prev => prev.filter(a => !(a.referencia_id === id)));
+
+    // 4) Quitar documento tributario y sus eventos de integracion
+    const documentoId = venta.documento_id;
+    setDocumentosTributarios(prev => prev.filter(d => (documentoId ? d.id !== documentoId : true) && d.ventaId !== id));
+    setIntegracionEventos(prev => prev.filter(e =>
+      documentoId && e.entidadTipo === 'documento_tributario' ? e.entidadId !== documentoId : true
+    ));
+
+    // 5) Quitar la salida de inventario registrada por la venta
+    setMovimientosInventario(prev => prev.filter(m => !(m.origenTipo === 'venta' && m.origenId === id)));
+
+    // 6) Ajustar cliente (menos ventas y menos deuda)
+    if (venta.cliente) {
+      const base = venta.saldo_base ?? venta.saldo_pendiente ?? 0;
+      setClientes(prev => prev.map(c =>
+        c.nombre.toLowerCase() === venta.cliente.toLowerCase()
+          ? { ...c, ventas: Math.max(0, c.ventas - 1), deuda: Math.max(0, c.deuda - base) }
+          : c
+      ));
+    }
+
     setVentas(prev => prev.filter(v => v.id !== id));
   };
 
   const updateVenta = (id: string, p: Partial<Venta>) => {
-    setVentas(prev => prev.map(v => v.id === id ? { ...v, ...p } : v));
+    const anterior = ventas.find(v => v.id === id);
+    if (!anterior) return;
+
+    const productosViejos = anterior.productos ?? [];
+    const productosNuevos = p.productos ?? anterior.productos ?? [];
+    const nombreNuevo = p.cliente ?? anterior.cliente;
+    const fechaNueva = p.fecha ?? anterior.fecha;
+    const totalNuevo = p.monto ?? anterior.monto;
+    const baseNueva = p.saldo_base ?? p.saldo_pendiente ?? (anterior.saldo_base ?? anterior.saldo_pendiente ?? 0);
+
+    // 1) Stock: restaurar la version anterior y descontar la nueva (delta por producto)
+    const idsProducto = new Set([...productosViejos.map(x => x.productoId), ...productosNuevos.map(x => x.productoId)]);
+    setInventario(prev => prev.map(prod => {
+      if (prod.tipo !== 'producto' || !idsProducto.has(prod.id)) return prod;
+      const viejo = productosViejos.filter(pp => pp.productoId === prod.id).reduce((a, pp) => a + (pp.cantidad || 0), 0);
+      const nuevo = productosNuevos.filter(pp => pp.productoId === prod.id).reduce((a, pp) => a + (pp.cantidad || 0), 0);
+      return { ...prod, stock: Math.max(0, prod.stock - (nuevo - viejo)) };
+    }));
+
+    // 2) Movimientos de inventario: reemplazar las salidas de la venta
+    setMovimientosInventario(prev => {
+      const sinViejos = prev.filter(m => !(m.origenTipo === 'venta' && m.origenId === id));
+      const nuevasSalidas = productosNuevos.map(pp => ({
+        id: safeId('MI'),
+        productoId: pp.productoId,
+        tipo: 'salida' as const,
+        cantidad: pp.cantidad,
+        fecha: new Date().toISOString(),
+        motivo: `Venta #${id.split('-')[0]}`,
+        origenTipo: 'venta' as const,
+        origenId: id,
+      }));
+      return [...nuevasSalidas, ...sinViejos];
+    });
+
+    // 3) Caja: eliminar el ingreso anterior y registrar el nuevo pago efectivo
+    setMovimientos(prev => {
+      const sinVienta = prev.filter(m => !(m.tipo === 'Ingreso' && m.referencia_id === id));
+      const pagoAhora = Math.max(0, totalNuevo - baseNueva);
+      if (pagoAhora <= 0) return sinVienta;
+      return [{
+        id: `M-${String(prev.length + 1).padStart(3, '0')}`,
+        fecha: fechaNueva,
+        tipo: 'Ingreso',
+        concepto: `Venta — ${nombreNuevo}`,
+        monto: pagoAhora,
+        saldo: 0,
+        metodo_pago: p.metodo_pago ?? anterior.metodo_pago,
+        referencia_id: id,
+      }, ...sinVienta];
+    });
+
+    // 4) Documento tributario vinculado: recalcular montos/periodo/estado
+    const tipoDocumento = normalizeDocumentType((p.tipo_documento ?? anterior.tipo_documento ?? 'boleta_electronica') as DocumentType);
+    setDocumentosTributarios(prev => prev.map(doc => {
+      if (doc.ventaId !== id) return doc;
+      const montos = calculateSaleDocumentAmounts({
+        saleId: id,
+        fecha: fechaNueva,
+        cliente: nombreNuevo,
+        clienteId: p.cliente_id ?? anterior.cliente_id,
+        subtotal: p.subtotal ?? anterior.subtotal ?? 0,
+        iva: p.iva ?? anterior.iva ?? 0,
+        total: totalNuevo,
+        tipoDocumento,
+        modoIntegracion: p.modo_integracion ?? anterior.modo_integracion ?? 'sandbox',
+      });
+      const estado = p.estado_documento ?? doc.estado;
+      return {
+        ...doc,
+        tipoDocumento,
+        neto: montos.neto,
+        iva: montos.iva,
+        exento: montos.exento,
+        total: montos.total,
+        periodoTributario: periodoTributarioFromDate(fechaNueva),
+        clienteId: p.cliente_id ?? anterior.cliente_id,
+        estado: p.estado_documento
+          ? estado
+          : p.modo_integracion === 'manual_controlled'
+            ? 'registrado_externamente'
+            : (p.estado === 'Pagado' && doc.estado === 'pendiente_emision'
+              ? 'emitido_interno'
+              : doc.estado),
+      };
+    }));
+
+    // 5) Cliente: ajustar deuda por el cambio de saldo base
+    setClientes(prev => prev.map(c => {
+      const coincideViejo = anterior.cliente && c.nombre.toLowerCase() === anterior.cliente.toLowerCase();
+      if (!coincideViejo) return c;
+      const baseVieja = anterior.saldo_base ?? anterior.saldo_pendiente ?? 0;
+      return { ...c, deuda: Math.max(0, c.deuda - baseVieja + baseNueva) };
+    }));
+
+    setVentas(prev => prev.map(v => v.id === id ? {
+      ...v,
+      ...p,
+      saldo_pendiente: baseNueva,
+      subtotal: p.subtotal ?? anterior.subtotal,
+      iva: p.iva ?? anterior.iva,
+      tipo_documento: tipoDocumento,
+      periodo_tributario: periodoTributarioFromDate(fechaNueva),
+      estado_documento: p.estado_documento ?? anterior.estado_documento,
+      modo_integracion: p.modo_integracion ?? anterior.modo_integracion,
+    } : v));
   };
 
   // ══ addGasto ════════════════════════════════════
@@ -667,16 +838,75 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       setMovimientos(prev => [{
         id: `M-${String(prev.length + 1).padStart(3, '0')}`, fecha: gasto.fecha, tipo: 'Egreso',
         concepto: `Gasto ${gasto.proveedor}`, monto: gasto.monto, saldo: 0, metodo_pago: gasto.metodo_pago,
+        referencia_id: newId,
       }, ...prev]);
     }
   };
 
   const deleteGasto = (id: string) => {
+    const gasto = gastos.find(g => g.id === id);
+    if (!gasto) return;
+
+    setMovimientos(prev => prev.filter(m => !(m.referencia_id === id)));
+    setAbonos(prev => prev.filter(a => !(a.referencia_id === id)));
+    const documentoId = gasto.documento_id;
+    setDocumentosTributarios(prev => prev.filter(d => (documentoId ? d.id !== documentoId : true) && d.gastoId !== id));
+
+    if (gasto.proveedor) {
+      const base = gasto.saldo_base ?? gasto.saldo_pendiente ?? 0;
+      setProveedores(prev => prev.map(pr =>
+        pr.nombre.toLowerCase() === gasto.proveedor.toLowerCase()
+          ? { ...pr, deuda: Math.max(0, pr.deuda - base) }
+          : pr
+      ));
+    }
     setGastos(prev => prev.filter(g => g.id !== id));
   };
 
   const updateGasto = (id: string, p: Partial<Gasto>) => {
-    setGastos(prev => prev.map(g => g.id === id ? { ...g, ...p } : g));
+    const anterior = gastos.find(g => g.id === id);
+    if (!anterior) return;
+
+    const totalNuevo = p.monto ?? anterior.monto;
+    const fechaNueva = p.fecha ?? anterior.fecha;
+    const proveedorNuevo = p.proveedor ?? anterior.proveedor;
+
+    // Base final: si queda "Por Pagar" se debe el total; si "Pagado" ya no se debe nada.
+    const baseNueva = p.estado === 'Pagado'
+      ? 0
+      : (p.estado === 'Por Pagar'
+        ? totalNuevo
+        : (p.saldo_base ?? p.saldo_pendiente ?? (anterior.saldo_base ?? anterior.saldo_pendiente ?? 0)));
+
+    setMovimientos(prev => {
+      const sinGasto = prev.filter(m => !(m.tipo === 'Egreso' && m.referencia_id === id));
+      const pagoAhora = p.estado === 'Por Pagar'
+        ? 0
+        : Math.max(0, totalNuevo - baseNueva);
+      if (pagoAhora <= 0) return sinGasto;
+      return [{
+        id: `M-${String(prev.length + 1).padStart(3, '0')}`,
+        fecha: fechaNueva,
+        tipo: 'Egreso',
+        concepto: `Gasto ${proveedorNuevo}`,
+        monto: pagoAhora,
+        saldo: 0,
+        metodo_pago: p.metodo_pago ?? anterior.metodo_pago,
+        referencia_id: id,
+      }, ...sinGasto];
+    });
+
+    setProveedores(prev => prev.map(pr => {
+      if (!anterior.proveedor || pr.nombre.toLowerCase() !== anterior.proveedor.toLowerCase()) return pr;
+      const baseVieja = anterior.saldo_base ?? anterior.saldo_pendiente ?? 0;
+      return { ...pr, deuda: Math.max(0, pr.deuda - baseVieja + baseNueva) };
+    }));
+
+    setGastos(prev => prev.map(g => g.id === id ? {
+      ...g, ...p,
+      saldo_base: baseNueva > 0 ? baseNueva : undefined,
+      saldo_pendiente: baseNueva > 0 ? baseNueva : undefined,
+    } : g));
   };
 
   // ══ CRUD — Clientes ════════════════════════════

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, ChangeEvent } from 'react';
 import { Gasto } from '../context/ERPContext';
 
 interface ModalSincronizacionSIIComprasProps {
@@ -55,7 +55,7 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
     setSyncStatus(null);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
