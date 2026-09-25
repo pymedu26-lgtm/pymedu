@@ -23,11 +23,6 @@ export default function ERPVentas() {
   const [avisoStock, setAvisoStock] = useState('');
   const [activeTab, setActiveTab] = useState<'lista' | 'analisis'>('lista');
 
-  /** Venta con texto libre (no inventariable): ítem escrito a mano, no toca stock. */
-  const [modoItemLibre, setModoItemLibre] = useState(false);
-  const [itemLibreActual, setItemLibreActual] = useState({ nombre: '', precio: '' });
-  const itemLibreOk = itemLibreActual.nombre.trim().length > 0 
-    && Number(itemLibreActual.precio) > 0;
   /** Propina 10% opcional: campo separado (Caja), no infla IVA ni documento tributario. */
   const [aplicarPropina, setAplicarPropina] = useState(false);
   /** Venta seleccionada en la tabla → abre Nota de Venta formato Chile (imprimir/PDF). */
@@ -59,8 +54,12 @@ export default function ERPVentas() {
   });
 
   const [productoActual, setProductoActual] = useState({
+    esInventario: true,
     productoId: '',
+    nombre: '',
+    categoria: '',
     cantidad: 1,
+    precio: 0,
     descuentoTipo: 'ninguno' as 'porcentaje' | 'monto' | 'ninguno',
     descuentoValor: 0,
     descuentoMotivo: ''
@@ -121,85 +120,95 @@ const stockInsuficiente = productoSeleccionado
       && (cantidadEnVenta(productoActual.productoId) + (productoActual.cantidad || 0)) > stockDisponible
   : false;
 
-  const construirItemVenta = (
-    producto: Producto,
+  /** Calcula neto e IVA (impuestos Chile, 19%) de un ítem según si el precio incluye IVA. */
+  const calcularTotalesItem = (
+    precioBase: number,
     cantidad: number,
-    descuentoTipo: 'porcentaje' | 'monto' | 'ninguno' = 'ninguno',
-    descuentoValor = 0,
-    descuentoMotivo = ''
-  ): VentaProducto => {
-    const subtotalBruto = producto.precio * cantidad;
-
+    descuentoTipo: 'porcentaje' | 'monto' | 'ninguno',
+    descuentoValor: number,
+    incluyeIva: boolean
+  ) => {
+    const bruto = precioBase * cantidad;
     let descuento = 0;
-    if (descuentoTipo === 'porcentaje') {
-      descuento = subtotalBruto * (descuentoValor / 100);
-    } else if (descuentoTipo === 'monto') {
-      descuento = descuentoValor;
-    }
-
-    const subtotalConDescuento = Math.max(0, subtotalBruto - descuento);
-
-    let iva = 0;
-    let total = subtotalConDescuento;
-    let subtotalNeto = subtotalConDescuento;
-
-    if (producto.incluyeIva) {
-      subtotalNeto = Math.round(subtotalConDescuento / 1.19);
-      iva = subtotalConDescuento - subtotalNeto;
-      total = subtotalConDescuento;
+    if (descuentoTipo === 'porcentaje') descuento = bruto * (descuentoValor / 100);
+    else if (descuentoTipo === 'monto') descuento = descuentoValor;
+    const base = Math.max(0, bruto - descuento);
+    let subtotal = base, iva = 0, total = base;
+    if (incluyeIva) {
+      subtotal = Math.round(base / 1.19);
+      iva = base - subtotal;
+      total = base;
     } else {
-      iva = Math.round(subtotalConDescuento * 0.19);
-      total = subtotalConDescuento + iva;
-      subtotalNeto = subtotalConDescuento;
+      subtotal = base;
+      iva = Math.round(base * 0.19);
+      total = base + iva;
     }
+    return { subtotal, iva, total };
+  };
+
+  /** Construye el ítem de venta desde la ficha: producto del inventario (autocompletado) o
+   *  texto libre (`TEXTO-LIBRE-*`, no toca stock). El precio/categoría escritos se usan tal cual. */
+  const construirItemVenta = (): VentaProducto | null => {
+    const nombre = productoActual.nombre.trim();
+    const precio = Number(productoActual.precio) || 0;
+    const cantidad = Number(productoActual.cantidad) || 1;
+    if (!nombre || precio <= 0) return null;
+
+    const esInventario = productoActual.esInventario && !!productoSeleccionado;
+    const incluyeIva = esInventario ? !!productoSeleccionado?.incluyeIva : true;
+    const aplicaDescuento = esInventario && productoActual.descuentoTipo !== 'ninguno';
+    const totales = calcularTotalesItem(
+      precio,
+      cantidad,
+      aplicaDescuento ? productoActual.descuentoTipo : 'ninguno',
+      aplicaDescuento ? productoActual.descuentoValor : 0,
+      incluyeIva
+    );
 
     return {
-      productoId: producto.id,
-      productoNombre: producto.nombre,
+      productoId: esInventario ? productoSeleccionado!.id : `TEXTO-LIBRE-${crypto.randomUUID().slice(0, 8)}`,
+      productoNombre: nombre,
+      esInventariable: esInventario,
       cantidad,
-      precioBase: producto.precio,
-      costoUnitario: producto.costo,
-      descuentoTipo,
-      descuentoValor,
-      subtotal: subtotalNeto,
-      iva,
-      total,
+      precioBase: precio,
+      costoUnitario: esInventario ? (productoSeleccionado?.costo ?? 0) : 0,
+      descuentoTipo: 'ninguno',
+      descuentoValor: 0,
+      subtotal: totales.subtotal,
+      iva: totales.iva,
+      total: totales.total,
     };
   };
 
-  const handleAddProducto = () => {
-    if (!productoSeleccionado || stockInsuficiente || productoActual.cantidad < 1) return;
-
-    const item = construirItemVenta(
-      productoSeleccionado,
-      productoActual.cantidad,
-      productoActual.descuentoTipo,
-      productoActual.descuentoValor,
-      productoActual.descuentoMotivo
-    );
+  const handleAgregarProducto = () => {
+    const item = construirItemVenta();
+    if (!item) return;
 
     setNuevaVenta(prev => {
       const prods = prev.productos || [];
-      const idx = prods.findIndex(p => p.productoId === item.productoId);
+      const idx = prods.findIndex(p =>
+        (p.esInventariable ?? false) === (item.esInventariable ?? false) &&
+        p.productoId === item.productoId
+      );
       if (idx >= 0) {
-        // Mismo producto ya en la venta: sumar cantidad y recalcular con el descuento vigente
         const actual = prods[idx];
-        const usarDescuento = productoActual.descuentoTipo === 'ninguno'
-          ? (actual.descuentoTipo ?? 'ninguno')
-          : productoActual.descuentoTipo;
-        const usarValor = usarDescuento === 'ninguno' ? 0 : productoActual.descuentoValor;
-        const usarMotivo = usarDescuento === 'ninguno' ? (actual.descuentoMotivo || '') : productoActual.descuentoMotivo;
-        const combinado = construirItemVenta(productoSeleccionado, actual.cantidad + item.cantidad, usarDescuento, usarValor, usarMotivo);
+        const cantidadTotal = actual.cantidad + item.cantidad;
+        const incluyeIva = item.total === item.precioBase * item.cantidad;
+        const totales = calcularTotalesItem(item.precioBase, cantidadTotal, 'ninguno', 0, incluyeIva);
         const newProds = prods.slice();
-        newProds[idx] = combinado;
+        newProds[idx] = { ...actual, cantidad: cantidadTotal, subtotal: totales.subtotal, iva: totales.iva, total: totales.total };
         return { ...prev, productos: newProds };
       }
       return { ...prev, productos: [...prods, item] };
     });
 
     setProductoActual({
+      esInventario: true,
       productoId: '',
+      nombre: '',
+      categoria: '',
       cantidad: 1,
+      precio: 0,
       descuentoTipo: 'ninguno',
       descuentoValor: 0,
       descuentoMotivo: ''
@@ -214,30 +223,21 @@ const stockInsuficiente = productoSeleccionado
     });
   };
 
-  /** Agregar ítem de texto libre (no inventariable): se escribe a mano, id inexistente en
-   *  inventario (`TEXTO-LIBRE-*`) → el contexto NO descuenta stock ni crea salida de inventario. */
-  const handleAgregarItemLibre = () => {
-    if (!itemLibreOk) return;
-    const precio = Number(itemLibreActual.precio || 0);
-    setNuevaVenta(prev => ({
-      ...prev,
-      productos: [...(prev.productos || []), {
-        productoId: `TEXTO-LIBRE-${crypto.randomUUID().slice(0, 8)}`,
-        productoNombre: itemLibreActual.nombre.trim(),
-        cantidad: 1,
-        precioBase: precio,
-        costoUnitario: 0,
-        descuentoTipo: 'ninguno' as const,
-        descuentoValor: 0,
-        subtotal: precio,
-        iva: 0,
-        total: precio,
-        esInventariable: false,
-      }],
-    }));
-    setItemLibreActual({ nombre: '', precio: '' });
-    setModoItemLibre(false);
-  };
+  /** Totales de la ficha actual (antes de agregar): para mostrar neto/IVA/total del ítem. */
+  const fichaIncluyeIva = productoActual.esInventario
+    ? (productoSeleccionado?.incluyeIva ?? true)
+    : true;
+  const fichaTotales = calcularTotalesItem(
+    Number(productoActual.precio) || 0,
+    Number(productoActual.cantidad) || 0,
+    productoActual.esInventario && productoActual.descuentoTipo !== 'ninguno' ? productoActual.descuentoTipo : 'ninguno',
+    productoActual.esInventario && productoActual.descuentoTipo !== 'ninguno' ? productoActual.descuentoValor : 0,
+    fichaIncluyeIva
+  );
+  const fichaValida = productoActual.nombre.trim().length > 0
+    && Number(productoActual.precio) > 0
+    && Number(productoActual.cantidad) >= 1
+    && !stockInsuficiente;
 
   const totalesVenta = useMemo(() => {
     const prods = nuevaVenta.productos || [];
@@ -775,8 +775,8 @@ const stockInsuficiente = productoSeleccionado
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto flex-grow space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div className="p-6 overflow-y-auto flex-grow space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cliente</label>
                   <select
@@ -801,7 +801,7 @@ const stockInsuficiente = productoSeleccionado
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha de la venta</label>
                   <input 
                     type="date" 
                     value={nuevaVenta.fecha}
@@ -809,85 +809,82 @@ const stockInsuficiente = productoSeleccionado
                     className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Metodo de pago</label>
+                  <select
+                    value={nuevaVenta.metodo_pago}
+                    onChange={(e) => setNuevaVenta({ ...nuevaVenta, metodo_pago: e.target.value as Venta['metodo_pago'] })}
+                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="debito">Débito</option>
+                    <option value="credito">Crédito</option>
+                    <option value="mixto">Mixto</option>
+                    <option value="cheque">Cheque</option>
+                  </select>
+                </div>
               </div>
 
               <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/30 space-y-4">
                 <div className="flex justify-between items-center">
                   <h4 className="text-sm font-bold text-on-surface flex items-center gap-2">
                     <span className="material-symbols-outlined text-primary">add_shopping_cart</span>
-                    Agregar Producto
+                    Producto o servicio
                   </h4>
-                  <button 
-                    onClick={() => setModoItemLibre(m => !m)}
-                    className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black transition-all border-2",
-                      modoItemLibre 
-                        ? "bg-tertiary text-white border-tertiary shadow-md" 
-                        : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/50 hover:border-tertiary/50"
-                    )}
-                  >
-                    <span className="material-symbols-outlined text-sm">edit_note</span>
-                    {modoItemLibre ? 'MEMORIA: DETALLE LIBRE' : 'MEMORIA / TEXTO LIBRE'}
-                  </button>
+                  <label className="flex items-center gap-2 text-xs font-black text-on-surface-variant cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={productoActual.esInventario}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setProductoActual((prev) => ({
+                          ...prev,
+                          esInventario: on,
+                          productoId: on ? prev.productoId : '',
+                        }));
+                      }}
+                      className="accent-primary w-4 h-4"
+                    />
+                    Es producto del inventario
+                  </label>
                 </div>
-                
-                {modoItemLibre && (
-                <div className="bg-tertiary/5 p-4 rounded-xl border border-tertiary/25 space-y-3 animate-in fade-in">
-                  <p className="text-[10px] font-black text-tertiary uppercase tracking-widest flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm">edit_note</span>
-                    Item libre / no inventariable (no descuenta stock)
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Producto / Servicio (texto libre)</label>
-                      <input
-                        type="text"
-                        value={itemLibreActual.nombre}
-                        onChange={(e) => setItemLibreActual({ ...itemLibreActual, nombre: e.target.value })}
-                        placeholder="Ej: Servicio de reparacion, flete, hora de taller..."
-                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio ($)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={itemLibreActual.precio}
-                        onChange={(e) => setItemLibreActual({ ...itemLibreActual, precio: e.target.value })}
-                        placeholder="$0"
-                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleAgregarItemLibre}
-                      disabled={!itemLibreOk}
-                      className="px-4 py-2 bg-tertiary text-white rounded-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      <span className="material-symbols-outlined text-sm">add</span>
-                      Agregar item libre
-                    </button>
-                  </div>
-                </div>
-                )}
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Producto / Servicio</label>
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre del producto o servicio</label>
+                  {productoActual.esInventario ? (
                     <select 
                       value={productoActual.productoId}
-                      onChange={(e) => setProductoActual({...productoActual, productoId: e.target.value})}
+                      onChange={(e) => {
+                        const sel = inventario.find(x => x.id === e.target.value);
+                        setProductoActual((prev) => ({
+                          ...prev,
+                          productoId: e.target.value,
+                          nombre: sel?.nombre ?? '',
+                          categoria: sel?.categoria ?? '',
+                          precio: sel?.precio ?? 0,
+                          cantidad: 1,
+                        }));
+                      }}
                       className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                     >
-                      <option value="">Seleccionar...</option>
+                      <option value="">Seleccionar de inventario...</option>
                       {inventario.filter(p => p.estado === 'activo').map(p => (
-                        <option key={p.id} value={p.id}>{p.nombre} - ${p.precio.toLocaleString('es-CL')}</option>
+                        <option key={p.id} value={p.id}>{p.nombre} - ${p.precio.toLocaleString('es-CL')}{p.categoria ? ` (${p.categoria})` : ''}</option>
                       ))}
                     </select>
-                  </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={productoActual.nombre}
+                      onChange={(e) => setProductoActual({ ...productoActual, nombre: e.target.value })}
+                      placeholder="Ej: Servicio de reparacion, flete, hora de taller, articulo sin inventario..."
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                    />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad</label>
                     <input 
@@ -903,53 +900,46 @@ const stockInsuficiente = productoSeleccionado
                       </p>
                     )}
                   </div>
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
+                    <input 
+                      type="text"
+                      value={productoActual.categoria}
+                      onChange={(e) => setProductoActual({...productoActual, categoria: e.target.value})}
+                      placeholder="Ej: Alimentacion, Servicio..."
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio unitario ($)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={productoActual.precio || ''}
+                      onChange={(e) => setProductoActual({...productoActual, precio: Number(e.target.value)})}
+                      placeholder="$0"
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
+                    />
+                  </div>
                 </div>
 
-                {productoSeleccionado && (
-                  <div className="grid grid-cols-3 gap-4 pt-2 border-t border-outline-variant/20">
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Descuento</label>
-                      <select 
-                        value={productoActual.descuentoTipo}
-                        onChange={(e) => setProductoActual({...productoActual, descuentoTipo: e.target.value as 'porcentaje' | 'monto' | 'ninguno', descuentoValor: 0})}
-                        className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                      >
-                        <option value="ninguno">Ninguno</option>
-                        <option value="porcentaje">Porcentaje (%)</option>
-                        <option value="monto">Monto Fijo ($)</option>
-                      </select>
-                    </div>
-                    {productoActual.descuentoTipo !== 'ninguno' && (
-                      <>
-                        <div>
-                          <label className="block text-xs text-on-surface-variant mb-1">Valor</label>
-                          <input 
-                            type="number" 
-                            value={productoActual.descuentoValor || ''}
-                            onChange={(e) => setProductoActual({...productoActual, descuentoValor: Number(e.target.value)})}
-                            className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-on-surface-variant mb-1">Motivo</label>
-                          <input 
-                            type="text" 
-                            value={productoActual.descuentoMotivo}
-                            onChange={(e) => setProductoActual({...productoActual, descuentoMotivo: e.target.value})}
-                            className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
-                            placeholder="Ej: Promo"
-                          />
-                        </div>
-                      </>
-                    )}
+                <div className="rounded-xl bg-primary/5 border border-primary/15 px-4 py-3 grid grid-cols-2 lg:grid-cols-4 items-center gap-4">
+                  <div className="text-center">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/70">Neto</p>
+                    <p className="text-base font-bold text-on-surface">${fichaTotales.subtotal.toLocaleString('es-CL')}</p>
                   </div>
-                )}
-
-                <div className="flex justify-end pt-2">
+                  <div className="text-center">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/70">IVA 19% (Chile)</p>
+                    <p className="text-base font-bold text-primary">${fichaTotales.iva.toLocaleString('es-CL')}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/70">Total ficha</p>
+                    <p className="text-base font-extrabold text-on-surface">${fichaTotales.total.toLocaleString('es-CL')}</p>
+                  </div>
                   <button 
-                    onClick={handleAddProducto}
-                    disabled={!productoSeleccionado || stockInsuficiente || productoActual.cantidad < 1}
-                    className="px-4 py-2 bg-primary/10 text-primary rounded-lg font-bold text-sm hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    onClick={handleAgregarProducto}
+                    disabled={!fichaValida}
+                    className="px-4 py-2 bg-primary text-white rounded-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-outlined text-sm">add</span>
                     Agregar a la venta
@@ -975,7 +965,7 @@ const stockInsuficiente = productoSeleccionado
                           <tr key={idx} className="bg-surface-container-lowest">
                             <td className="px-4 py-2">
                               <span className="font-medium text-on-surface">{prod.productoNombre}</span>
-                              {prod.descuentoMotivo && <span className="block text-[10px] text-on-surface-variant/60">Desc: {prod.descuentoMotivo}</span>}
+                              {prod.esInventariable === false && <span className="block text-[10px] text-on-surface-variant/60">Item libre / no inventariable</span>}
                             </td>
                             <td className="px-4 py-2 text-right">{prod.cantidad}</td>
                             <td className="px-4 py-2 text-right font-bold text-on-surface">${prod.total.toLocaleString('es-CL')}</td>
@@ -993,125 +983,86 @@ const stockInsuficiente = productoSeleccionado
               )}
 
               {nuevaVenta.productos && nuevaVenta.productos.length > 0 && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                    <div>
-                      <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Documento</label>
-                      <select
-                        value={tipoDocumentoNormalizado}
-                        onChange={(e) => setNuevaVenta({ ...nuevaVenta, tipo_documento: e.target.value as Venta['tipo_documento'] })}
-                        className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                      >
-                        {Object.entries(DOCUMENT_LABELS).filter(([value]) => value !== 'nota_credito').map(([value, label]) => (
-                          <option key={value} value={value}>{label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Pago recibido</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                  <div>
+                    <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Documento</label>
+                    <select
+                      value={tipoDocumentoNormalizado}
+                      onChange={(e) => setNuevaVenta({ ...nuevaVenta, tipo_documento: e.target.value as Venta['tipo_documento'] })}
+                      className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                    >
+                      {Object.entries(DOCUMENT_LABELS).filter(([value]) => value !== 'nota_credito').map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Pago recibido</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={totalesVenta.total}
+                      value={montoPagado}
+                      onChange={(e) => {
+                        setMontoPagado(e.target.value);
+                        const saldo = Math.max(0, totalesVenta.total - Number(e.target.value || 0));
+                        setNuevaVenta({ ...nuevaVenta, estado: saldo > 0 ? 'Pendiente' : 'Pagado' });
+                      }}
+                      className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                      placeholder="$0"
+                    />
+                  </div>
+                  {impactoVenta.saldoPendiente > 0 && (
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Fecha compromiso de pago</label>
                       <input
-                        type="number"
-                        min="0"
-                        max={totalesVenta.total}
-                        value={montoPagado}
-                        onChange={(e) => {
-                          setMontoPagado(e.target.value);
-                          const saldo = Math.max(0, totalesVenta.total - Number(e.target.value || 0));
-                          setNuevaVenta({ ...nuevaVenta, estado: saldo > 0 ? 'Pendiente' : 'Pagado' });
-                        }}
+                        type="date"
+                        value={nuevaVenta.fecha_vencimiento || ''}
+                        onChange={(e) => setNuevaVenta({ ...nuevaVenta, fecha_vencimiento: e.target.value })}
                         className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                        placeholder="$0"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Metodo de pago</label>
-                      <select
-                        value={nuevaVenta.metodo_pago}
-                        onChange={(e) => setNuevaVenta({ ...nuevaVenta, metodo_pago: e.target.value as Venta['metodo_pago'] })}
-                        className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                      >
-                        <option value="efectivo">Efectivo</option>
-                        <option value="transferencia">Transferencia</option>
-                        <option value="debito">Débito</option>
-                        <option value="credito">Crédito</option>
-                        <option value="mixto">Mixto</option>
-                        <option value="cheque">Cheque</option>
-                      </select>
-                    </div>
-                    {impactoVenta.saldoPendiente > 0 && (
-                      <div className="md:col-span-3">
-                        <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Fecha compromiso de pago</label>
-                        <input
-                          type="date"
-                          value={nuevaVenta.fecha_vencimiento || ''}
-                          onChange={(e) => setNuevaVenta({ ...nuevaVenta, fecha_vencimiento: e.target.value })}
-                          className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                <div className="flex items-center justify-between gap-4 rounded-2xl border border-tertiary/25 bg-tertiary/5 p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary text-xl">restaurant</span>
-                    <div>
-                      <button 
-                        type="button" 
-                        onClick={() => setAplicarPropina(!aplicarPropina)}
-                        className={cn(
-                          "flex items-center gap-2 text-sm font-black uppercase tracking-wide transition-all",
-                          aplicarPropina ? "text-tertiary" : "text-on-surface-variant"
-                        )}
-                      >
-                        <span className={`material-symbols-outlined ${aplicarPropina ? 'text-tertiary' : ''}`}>{aplicarPropina ? 'toggle_on' : 'toggle_off'}</span>
-                        Propina 10% (opcional)
-                      </button>
-                      <p className="text-[10px] text-on-surface-variant/70 mt-0.5">Campo separado: no infla IVA ni documento; se registra en Caja como propina.</p>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/70 font-bold">Propina</p>
-                    <p className="text-lg font-black text-tertiary">${propinaCalculada.toLocaleString('es-CL')}</p>
-                  </div>
-                </div>
-
-                  <div className="rounded-2xl bg-inverse-surface p-4 text-inverse-on-surface">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-primary-container font-black">Impacto antes de guardar</p>
-                    <div className="mt-3 space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">Documento</span><span className="font-bold">{DOCUMENT_LABELS[impactoVenta.documento]}</span></div>
-                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">IVA debito</span><span className="font-bold">${impactoVenta.ivaDebito.toLocaleString('es-CL')}</span></div>
-                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">Caja ahora</span><span className="font-bold">${impactoVenta.impactoCaja.toLocaleString('es-CL')}</span></div>
-                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">Por cobrar</span><span className="font-bold">${impactoVenta.impactoCxC.toLocaleString('es-CL')}</span></div>
-                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">Stock</span><span className="font-bold">{impactoVenta.impactoStock.length} item(s)</span></div>
-                    </div>
-                    <p className="mt-3 rounded-xl bg-white/10 p-3 text-xs leading-5 text-inverse-on-surface/75">{impactoVenta.mensajeIntegracion}</p>
-                  </div>
+                  )}
                 </div>
               )}
 
               {nuevaVenta.productos && nuevaVenta.productos.length > 0 && (
-                <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-on-surface-variant">Neto documento:</span>
-                    <span className="font-bold text-on-surface">${impactoVenta.neto.toLocaleString('es-CL')}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-on-surface-variant">IVA debito:</span>
-                    <span className="font-bold text-on-surface">${impactoVenta.ivaDebito.toLocaleString('es-CL')}</span>
-                  </div>
-                  {impactoVenta.exento > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-on-surface-variant">Exento/no afecto:</span>
-                      <span className="font-bold text-on-surface">${impactoVenta.exento.toLocaleString('es-CL')}</span>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between gap-4 rounded-2xl border border-tertiary/25 bg-tertiary/5 p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary text-xl">restaurant</span>
+                      <div>
+                        <button 
+                          type="button" 
+                          onClick={() => setAplicarPropina(!aplicarPropina)}
+                          className={cn(
+                            "flex items-center gap-2 text-sm font-black uppercase tracking-wide transition-all",
+                            aplicarPropina ? "text-tertiary" : "text-on-surface-variant"
+                          )}
+                        >
+                          <span className={`material-symbols-outlined ${aplicarPropina ? 'text-tertiary' : ''}`}>{aplicarPropina ? 'toggle_on' : 'toggle_off'}</span>
+                          Propina 10% (opcional)
+                        </button>
+                        <p className="text-[10px] text-on-surface-variant/70 mt-0.5">Campo separado: no infla IVA ni documento; se registra en Caja como propina.</p>
+                      </div>
                     </div>
-                  )}
-                  <div className="flex justify-between text-sm">
-                    <span className="text-on-surface-variant">Saldo pendiente:</span>
-                    <span className="font-bold text-on-surface">${impactoVenta.saldoPendiente.toLocaleString('es-CL')}</span>
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/70 font-bold">Propina</p>
+                      <p className="text-lg font-black text-tertiary">${propinaCalculada.toLocaleString('es-CL')}</p>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-lg pt-2 border-t border-primary/20">
-                    <span className="font-bold text-primary">Total Final:</span>
-                    <span className="font-extrabold text-primary">${totalesVenta.total.toLocaleString('es-CL')}</span>
+
+                  <div className="rounded-2xl bg-inverse-surface p-4 text-inverse-on-surface space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-inverse-on-surface/60">Neto documento</span><span className="font-bold">${impactoVenta.neto.toLocaleString('es-CL')}</span></div>
+                    <div className="flex justify-between"><span className="text-inverse-on-surface/60">IVA debito (Chile)</span><span className="font-bold">${impactoVenta.ivaDebito.toLocaleString('es-CL')}</span></div>
+                    {impactoVenta.exento > 0 && (
+                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">Exento / no afecto</span><span className="font-bold">${impactoVenta.exento.toLocaleString('es-CL')}</span></div>
+                    )}
+                    <div className="flex justify-between"><span className="text-inverse-on-surface/60">Saldo pendiente</span><span className="font-bold">${impactoVenta.saldoPendiente.toLocaleString('es-CL')}</span></div>
+                    <div className="flex justify-between text-lg pt-2 border-t border-inverse-on-surface/20">
+                      <span className="font-bold">Total Final:</span>
+                      <span className="font-extrabold">${totalesVenta.total.toLocaleString('es-CL')}</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1124,7 +1075,7 @@ const stockInsuficiente = productoSeleccionado
                 </p>
               </div>
             </div>
-            
+
             {avisoStock && (
               <div className="px-6 py-3 bg-error/10 text-error text-sm font-semibold flex items-center gap-2">
                 <span>⚠</span>{avisoStock}
