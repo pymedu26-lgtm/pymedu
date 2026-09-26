@@ -11,7 +11,7 @@ export interface OpcionDesplegable {
 /** Periodos de filtro estandar del ERP; las paginas que tengan rango manual agregan el suyo. */
 export const OPCIONES_PERIODO: OpcionDesplegable[] = [
   { valor: 'este_mes', etiqueta: 'Este Mes', icono: 'calendar_today' },
-  { valor: 'mes_anterior', etiqueta: 'Mes Anterior', icono: 'event_previous' },
+  { valor: 'mes_anterior', etiqueta: 'Mes Anterior', icono: 'history' },
   { valor: 'este_anio', etiqueta: 'Este Año', icono: 'date_range' },
   { valor: 'todos', etiqueta: 'Todo el Historial', icono: 'all_inclusive' }
 ];
