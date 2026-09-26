@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useERP, Gasto, MetodoPago } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ModalSincronizacionSIICompras from '../components/ModalSincronizacionSIICompras';
+import SelectorDesplegable, { OPCIONES_PERIODO } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
 
 const CATEGORIAS_GASTO = ['Insumos/Mercaderia','Servicios Basicos','Arriendo','Sueldos','Publicidad','Tecnologia','Transporte','Capacitacion','Mantencion','IVA/Impuestos','Otros'];
@@ -183,19 +184,13 @@ export default function ERPGastos() {
 
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 bg-surface-container-lowest px-4 py-2 rounded-xl border border-outline-variant/50 shadow-sm">
-            <span className="material-symbols-outlined text-outline text-sm">calendar_month</span>
-            <select 
-              value={periodoSeleccionado}
-              onChange={(e) => setPeriodoSeleccionado(e.target.value)}
-              className="text-xs font-bold text-on-surface-variant bg-transparent outline-none cursor-pointer uppercase tracking-wider"
-            >
-              <option value="este_mes">Este Mes</option>
-              <option value="mes_anterior">Mes Anterior</option>
-              <option value="este_anio">Este Año</option>
-              <option value="todos">Todo el Historial</option>
-            </select>
-          </div>
+          <SelectorDesplegable
+            icono="calendar_month"
+            valor={periodoSeleccionado}
+            onChange={setPeriodoSeleccionado}
+            opciones={OPCIONES_PERIODO}
+            hint={periodoSeleccionado === 'todos' ? null : `${filtrosPeriodo.fechaInicio} → ${filtrosPeriodo.fechaFin}`}
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

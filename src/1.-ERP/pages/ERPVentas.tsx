@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import SelectorDesplegable, { OPCIONES_PERIODO } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta } from '../services/pdfNotaVenta';
@@ -12,6 +13,12 @@ import {
 
 /** El lector de Excel pesa ~400 KB: se descarga solo al abrir la carga masiva, no con la pagina. */
 const ModalCargaMasivaVentas = lazy(() => import('../components/ModalCargaMasivaVentas'));
+
+/** Ventas suma el rango manual, que se setea desde los inputs Desde/Hasta. */
+const OPCIONES_PERIODO_VENTAS = [
+  ...OPCIONES_PERIODO,
+  { valor: 'personalizado', etiqueta: 'Rango Personalizado', icono: 'tune' }
+];
 
 export default function ERPVentas() {
   const { user: userAuth, perfil } = useAuth();
@@ -483,6 +490,7 @@ const stockInsuficiente = productoSeleccionado
   };
 
   const limpiarFiltros = () => {
+    setPeriodoSeleccionado('todos');
     setFiltros({
       fechaInicio: '',
       fechaFin: '',
@@ -521,20 +529,13 @@ const stockInsuficiente = productoSeleccionado
       {/* Summary Section */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 bg-surface-container-lowest px-4 py-2 rounded-xl border border-outline-variant/50 shadow-sm">
-            <span className="material-symbols-outlined text-outline text-sm">calendar_month</span>
-            <select 
-              value={periodoSeleccionado}
-              onChange={(e) => setPeriodoSeleccionado(e.target.value)}
-              className="text-xs font-bold text-on-surface-variant bg-transparent outline-none cursor-pointer uppercase tracking-wider"
-            >
-              <option value="este_mes">Este Mes</option>
-              <option value="mes_anterior">Mes Anterior</option>
-              <option value="este_anio">Este Año</option>
-              <option value="todos">Todo el Historial</option>
-              <option value="personalizado">Rango Personalizado</option>
-            </select>
-          </div>
+          <SelectorDesplegable
+            icono="calendar_month"
+            valor={periodoSeleccionado}
+            onChange={setPeriodoSeleccionado}
+            opciones={OPCIONES_PERIODO_VENTAS}
+            hint={periodoSeleccionado === 'todos' ? null : `${filtros.fechaInicio} → ${filtros.fechaFin}`}
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
