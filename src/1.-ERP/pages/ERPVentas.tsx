@@ -3,6 +3,7 @@ import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
+import { abrirPdfNotaVenta } from '../services/pdfNotaVenta';
 import { cn } from '@/lib/utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -13,7 +14,7 @@ import {
 const ModalCargaMasivaVentas = lazy(() => import('../components/ModalCargaMasivaVentas'));
 
 export default function ERPVentas() {
-  const { user: userAuth } = useAuth();
+  const { user: userAuth, perfil } = useAuth();
   const {
     ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto
   } = useERP();
@@ -30,6 +31,8 @@ export default function ERPVentas() {
   const [aplicarPropina, setAplicarPropina] = useState(false);
   /** Venta seleccionada en la tabla → abre Nota de Venta formato Chile (imprimir/PDF). */
   const [ventaNota, setVentaNota] = useState<Venta | null>(null);
+  /** Generando el PDF: deshabilita el botón para no abrir varias pestañas. */
+  const [generandoPdf, setGenerandoPdf] = useState(false);
 
   const [filtros, setFiltros] = useState({
     fechaInicio: '',
@@ -97,6 +100,27 @@ export default function ERPVentas() {
     (nuevaVenta.productos || [])
       .filter(p => p.productoId === productoId)
       .reduce((acc, p) => acc + (p.cantidad || 0), 0);
+
+  /** Genera el PDF de la nota y lo abre en una pestaña nueva para previsualizar y descargar. */
+  const handleVerPdf = async () => {
+    if (!ventaNota || generandoPdf) return;
+    setGenerandoPdf(true);
+    try {
+      await abrirPdfNotaVenta(ventaNota, {
+        nombre: perfil?.negocio_nombre,
+        rut: perfil?.negocio_rut,
+        giro: perfil?.negocio_rubro,
+        direccion: perfil?.negocio_direccion,
+        comuna: perfil?.negocio_comuna,
+        logoUrl: perfil?.logo_url,
+      });
+    } catch (e) {
+      console.error('No se pudo generar el PDF de la venta', e);
+      alert('No se pudo generar el PDF. Intenta de nuevo.');
+    } finally {
+      setGenerandoPdf(false);
+    }
+  };
 
 const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefined;
 
@@ -1106,12 +1130,15 @@ const stockInsuficiente = productoSeleccionado
                 </h3>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => window.print()}
-                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-on-primary transition-colors hover:bg-primary-dark"
-                    title="Imprimir / Guardar PDF"
+                    onClick={handleVerPdf}
+                    disabled={generandoPdf}
+                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-on-primary transition-colors hover:bg-primary-dark disabled:opacity-60 disabled:cursor-wait"
+                    title="Abrir PDF en una pestaña nueva"
                   >
-                    <span className="material-symbols-outlined text-base">print</span>
-                    Imprimir / PDF
+                    <span className="material-symbols-outlined text-base">
+                      {generandoPdf ? 'hourglass_top' : 'picture_as_pdf'}
+                    </span>
+                    {generandoPdf ? 'Generando PDF...' : 'Ver / Descargar PDF'}
                   </button>
                   <button
                     onClick={() => setVentaNota(null)}
