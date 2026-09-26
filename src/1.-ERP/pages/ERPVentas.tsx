@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import TarjetasResumen from '../components/TarjetasResumen';
 import SelectorDesplegable, { OPCIONES_PERIODO } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
@@ -540,32 +541,16 @@ const stockInsuficiente = productoSeleccionado
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-primary/5 p-6 rounded-2xl shadow-sm border border-primary/20">
-            <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total de Ventas</p>
-            <h3 className="text-3xl font-black text-primary">${totalVentas.toLocaleString('es-CL')}</h3>
-            <p className="text-[10px] text-primary/60 mt-2 font-bold uppercase">
-              {periodoSeleccionado === 'personalizado' && rangoDisponible
-                ? `Del ${formatFecha(rangoDisponible.min)} al ${formatFecha(rangoDisponible.max)}`
-                : 'En el periodo seleccionado'}
-            </p>
-          </div>
-          <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-            <p className="text-on-surface-variant text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total de Gastos (Costos)</p>
-            <h3 className="text-3xl font-extrabold text-error">${totalGastos.toLocaleString('es-CL')}</h3>
-            <p className="text-[10px] text-on-surface-variant/60 mt-2 font-bold uppercase tracking-tight">Egresos registrados en el periodo</p>
-          </div>
-          <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-            <p className="text-on-surface-variant text-[10px] font-black uppercase tracking-[0.2em] mb-1">Meta de Ventas al 35%</p>
-            <h3 className={`text-3xl font-extrabold ${enNumerosVerdes ? 'text-emerald-600' : 'text-secondary'}`}>${Math.round(metaVenta).toLocaleString('es-CL')}</h3>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                <div className={`h-full transition-all duration-500 ${enNumerosVerdes ? 'bg-emerald-500' : 'bg-secondary'}`} style={{ width: `${Math.min(100, porcentajeMeta)}%` }} />
-              </div>
-              <span className={`text-[10px] font-black ${enNumerosVerdes ? 'text-emerald-600' : 'text-secondary'}`}>{porcentajeMeta}%</span>
-            </div>
-          </div>
-        </div>
+        <TarjetasResumen
+          totalVentas={totalVentas}
+          totalGastos={totalGastos}
+          meta={metaVenta}
+          porcentajeMeta={porcentajeMeta}
+          enNumerosVerdes={enNumerosVerdes}
+          etiquetaPeriodo={periodoSeleccionado === 'personalizado' && rangoDisponible
+            ? `Del ${formatFecha(rangoDisponible.min)} al ${formatFecha(rangoDisponible.max)}`
+            : 'En el periodo seleccionado'}
+        />
       </div>
 
       {/* Charts Section */}
