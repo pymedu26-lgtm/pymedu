@@ -321,30 +321,30 @@ name: 'Mi institución',
       <aside
         className={cn(
           'sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-slate-900/20 transition-all duration-300',
-          sidebarOpen ? 'w-[300px]' : 'w-[72px]'
+          sidebarOpen ? 'w-[248px]' : 'w-[64px]'
         )}
       >
-        <div className="flex items-center gap-3 border-b border-white/10 px-4 py-5 shrink-0">
+        <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-3.5 shrink-0">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20"
           >
-            <span className="material-symbols-outlined text-xl text-white">
+            <span className="material-symbols-outlined text-lg text-white">
               {sidebarOpen ? 'menu_open' : 'menu'}
             </span>
           </button>
 
           {sidebarOpen && (
             <div className="min-w-0">
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.28em] text-indigo-200/60">
+              <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-indigo-200/60">
                 ERP local
               </p>
-              <h1 className="truncate text-xl font-black leading-none tracking-tight text-white">
+              <h1 className="truncate text-lg font-black leading-none tracking-tight text-white">
                 PymEdu
               </h1>
               <span
                 className={cn(
-                  'mt-0.5 inline-block rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest',
+                  'mt-0.5 inline-block rounded-full px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-widest',
                   membresiaConfig.cls
                 )}
               >
@@ -357,7 +357,7 @@ name: 'Mi institución',
         <nav
           className={cn(
             'flex-1',
-            sidebarOpen ? 'hide-scrollbar overflow-y-auto px-3 py-4' : 'px-2 py-4'
+            sidebarOpen ? 'hide-scrollbar overflow-y-auto px-2.5 py-3' : 'px-2 py-3'
           )}
         >
 {navGroups.map((group) => {
@@ -374,9 +374,9 @@ name: 'Mi institución',
               <section
                 key={group.key}
                 className={cn(
-                  'relative mb-3 transition-all duration-200',
+                  'relative mb-2.5 transition-all duration-200',
                   sidebarOpen
-                    ? 'rounded-3xl border border-white/10 bg-white/[0.04] p-3 shadow-inner shadow-slate-950/10'
+                    ? 'rounded-2xl border border-white/10 bg-white/[0.04] p-2.5 shadow-inner shadow-slate-950/10'
                     : 'flex w-full justify-center'
                 )}
               >
@@ -384,14 +384,14 @@ name: 'Mi institución',
                   onClick={() => toggleGroup(group.key)}
                   className={cn(
                     'flex items-center transition-all duration-150 outline-none',
-                    sidebarOpen ? 'w-full justify-between gap-3' : 'h-12 w-12 justify-center rounded-2xl hover:bg-white/10'
+                    sidebarOpen ? 'w-full justify-between gap-2' : 'h-11 w-11 justify-center rounded-2xl hover:bg-white/10'
                   )}
                 >
-                  <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
                     <span
                       className={cn(
                         'material-symbols-outlined shrink-0',
-                        sidebarOpen ? 'text-lg text-white/90' : 'text-2xl text-white/80'
+                        sidebarOpen ? 'text-[17px] text-white/90' : 'text-xl text-white/80'
                       )}
                       style={{ fontVariationSettings: isOpen ? "'FILL' 1" : "'FILL' 0" }}
                     >
@@ -400,10 +400,10 @@ name: 'Mi institución',
 
                     {sidebarOpen && (
                       <div className="min-w-0 text-left">
-                        <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-indigo-200/55">
+                        <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-indigo-200/55">
                           {group.label}
                         </p>
-                        <p className="text-sm font-semibold text-white/95">
+                        <p className="text-[13px] font-semibold text-white/95">
                           {visibleItems.length} módulo{visibleItems.length > 1 ? 's' : ''}
                         </p>
                       </div>
@@ -428,15 +428,15 @@ name: 'Mi institución',
                   <>
                     {!sidebarOpen && (
                       <div
-                        className="fixed inset-0 left-[72px] z-[40] bg-black/10 backdrop-blur-[2px]"
+                        className="fixed inset-0 left-[64px] z-[40] bg-black/10 backdrop-blur-[2px]"
                         onClick={() => toggleGroup(group.key)}
                       />
                     )}
                     <div
                       className={cn(
                         sidebarOpen
-                          ? 'mt-3 space-y-2'
-                          : 'fixed left-[72px] top-0 bottom-0 z-[70] w-80 space-y-2 bg-primary-container p-4 shadow-2xl border-l border-white/10 overflow-y-auto hide-scrollbar'
+                          ? 'mt-2.5 space-y-1.5'
+                          : 'fixed left-[64px] top-0 bottom-0 z-[70] w-72 space-y-2 bg-primary-container p-4 shadow-2xl border-l border-white/10 overflow-y-auto hide-scrollbar'
                       )}
                     >
                       {!sidebarOpen && (
@@ -462,7 +462,7 @@ name: 'Mi institución',
                             to={item.lock ? '#' : item.path}
                             onClick={(e) => { if (item.lock) e.preventDefault(); }}
                             className={cn(
-                              'group flex items-center gap-4 transition-all duration-150 rounded-2xl border px-4 py-4',
+                              'group flex items-center gap-3 transition-all duration-150 rounded-2xl border px-3 py-2.5',
                               active
                                 ? 'border-white/20 bg-white/[0.15] text-white'
                                 : 'border-transparent text-indigo-100/75 hover:border-white/10 hover:bg-white/[0.1] hover:text-white',
@@ -471,14 +471,14 @@ name: 'Mi institución',
                           >
                             <span
                               className={cn(
-                                'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-all duration-200',
+                                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
                                 active
                                   ? 'bg-primary text-white'
                                   : 'bg-white/10 text-indigo-100/70 group-hover:bg-white/15'
                               )}
                             >
                               <span
-                                className="material-symbols-outlined text-2xl"
+                                className="material-symbols-outlined text-xl"
                                 style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}
                               >
                                 {item.icon}
@@ -487,7 +487,7 @@ name: 'Mi institución',
 
 <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className={cn('truncate text-sm font-bold', item.lock && 'text-indigo-100/70')}>{item.name}</span>
+                                <span className={cn('truncate text-[13px] font-bold', item.lock && 'text-indigo-100/70')}>{item.name}</span>
                                 {item.lock && (
                                   <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white/80">
                                     <span className="material-symbols-outlined text-[10px]">lock</span> Próximamente
@@ -508,7 +508,7 @@ name: 'Mi institución',
                                   </span>
                                 )}
                               </div>
-                              <p className={cn('mt-1 text-xs leading-5 text-indigo-100/60', item.lock && 'text-indigo-100/40')}>
+                              <p className={cn('mt-0.5 text-[11px] leading-4 text-indigo-100/60', item.lock && 'text-indigo-100/40')}>
                                 {item.hint}
                               </p>
                             </div>

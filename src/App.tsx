@@ -119,27 +119,27 @@ function RoleNavSidebar() {
   };
 
   return (
-    <aside className={`sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-slate-900/20 transition-all duration-300 ${collapsed ? 'w-[72px]' : 'w-[260px]'}`}>
-      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-5 shrink-0">
+    <aside className={`sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-slate-900/20 transition-all duration-300 ${collapsed ? 'w-[64px]' : 'w-[216px]'}`}>
+      <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-3.5 shrink-0">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20"
         >
-          <span className="material-symbols-outlined text-xl text-white">
+          <span className="material-symbols-outlined text-lg text-white">
             {collapsed ? 'menu' : 'menu_open'}
           </span>
         </button>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.28em] text-indigo-200/60">PymEdu</p>
-            <h1 className="text-lg font-black leading-none tracking-tight text-white capitalize truncate">
+            <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-indigo-200/60">PymEdu</p>
+            <h1 className="text-base font-black leading-none tracking-tight text-white capitalize truncate">
               {perfil?.rol?.replace('_', ' ')}
             </h1>
           </div>
         )}
       </div>
 
-      <nav className={`flex-1 py-4 space-y-2 ${collapsed ? 'px-2' : 'px-3'}`}>
+      <nav className={`flex-1 py-3 space-y-1.5 ${collapsed ? 'px-2' : 'px-2.5'}`}>
         {items.map((item) => {
           const active = location.pathname.startsWith(item.path.split('/').slice(0, 3).join('/'));
           return (
@@ -147,30 +147,30 @@ function RoleNavSidebar() {
               key={item.path}
               to={item.path}
               title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-3 rounded-xl transition-all ${
-                collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'
-              } text-sm font-bold ${
+              className={`flex items-center gap-2.5 rounded-xl transition-all ${
+                collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
+              } text-[13px] font-bold ${
                 active
                   ? 'bg-white/15 text-white border border-white/20'
                   : 'text-indigo-100/70 hover:bg-white/10 hover:text-white border border-transparent'
               }`}
             >
-              <span className="material-symbols-outlined text-xl shrink-0">{item.icon}</span>
+              <span className="material-symbols-outlined text-lg shrink-0">{item.icon}</span>
               {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      <div className={`border-t border-white/10 py-4 shrink-0 ${collapsed ? 'px-2' : 'px-3'}`}>
+      <div className={`border-t border-white/10 py-3 shrink-0 ${collapsed ? 'px-2' : 'px-2.5'}`}>
         <button
           onClick={handleLogout}
           title={collapsed ? 'Cerrar sesion' : undefined}
-          className={`flex w-full items-center gap-3 rounded-xl text-sm font-bold text-indigo-100/60 hover:bg-white/10 hover:text-white transition-all ${
-            collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'
+          className={`flex w-full items-center gap-2.5 rounded-xl text-[13px] font-bold text-indigo-100/60 hover:bg-white/10 hover:text-white transition-all ${
+            collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
           }`}
         >
-          <span className="material-symbols-outlined text-xl shrink-0">logout</span>
+          <span className="material-symbols-outlined text-lg shrink-0">logout</span>
           {!collapsed && <span>Cerrar sesion</span>}
         </button>
       </div>
