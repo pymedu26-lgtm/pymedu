@@ -5,7 +5,7 @@ import SelectorDesplegable, { OPCIONES_PERIODO } from '../../components/Selector
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta } from '../services/pdfNotaVenta';
-import { cn } from '@/lib/utils';
+import { cn, formatFecha } from '@/lib/utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend, LineChart, Line 
@@ -13,12 +13,6 @@ import {
 
 /** El lector de Excel pesa ~400 KB: se descarga solo al abrir la carga masiva, no con la pagina. */
 const ModalCargaMasivaVentas = lazy(() => import('../components/ModalCargaMasivaVentas'));
-
-/** Ventas suma el rango manual, que se setea desde los inputs Desde/Hasta. */
-const OPCIONES_PERIODO_VENTAS = [
-  ...OPCIONES_PERIODO,
-  { valor: 'personalizado', etiqueta: 'Rango Personalizado', icono: 'tune' }
-];
 
 export default function ERPVentas() {
   const { user: userAuth, perfil } = useAuth();
@@ -308,34 +302,41 @@ const stockInsuficiente = productoSeleccionado
 
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState('este_mes');
 
-  useEffect(() => {
+  /** Rango de mes natural, en ISO 'YYYY-MM-DD', para reutilizar fuera del efecto. */
+  const rangoMes = (offset: number) => {
     const hoy = new Date();
-    let inicio = '';
-    let fin = '';
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
+    return { inicio, fin };
+  };
 
-    switch (periodoSeleccionado) {
-      case 'este_mes':
-        inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
-        fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
-        break;
-      case 'mes_anterior':
-        inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).toISOString().split('T')[0];
-        fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0).toISOString().split('T')[0];
-        break;
-      case 'este_anio':
-        inicio = `${hoy.getFullYear()}-01-01`;
-        fin = `${hoy.getFullYear()}-12-31`;
-        break;
-      case 'todos':
-        inicio = '';
-        fin = '';
-        break;
-    }
+  useEffect(() => {
+    if (periodoSeleccionado === 'personalizado') return;
 
-    if (periodoSeleccionado !== 'personalizado') {
-      setFiltros(prev => ({ ...prev, fechaInicio: inicio, fechaFin: fin }));
-    }
+    const { inicio, fin } = periodoSeleccionado === 'mes_anterior' ? rangoMes(-1) : rangoMes(0);
+    setFiltros(prev => ({ ...prev, fechaInicio: inicio, fechaFin: fin }));
   }, [periodoSeleccionado]);
+
+  /** Rango real de datos disponibles: acota hasta donde el usuario puede navegar. */
+  const rangoDisponible = useMemo(() => {
+    const fechas = ventas.map(v => v.fecha).filter(Boolean).sort();
+    if (fechas.length === 0) return null;
+    return { min: fechas[0], max: fechas[fechas.length - 1] };
+  }, [ventas]);
+
+  /** Al elegir el rango manual arranca con todo el historial disponible a la vista. */
+  const elegirPeriodo = (valor: string) => {
+    setPeriodoSeleccionado(valor);
+    if (valor === 'personalizado' && rangoDisponible) {
+      setFiltros(prev => ({ ...prev, fechaInicio: rangoDisponible.min, fechaFin: rangoDisponible.max }));
+    }
+  };
+
+  const etiquetaRango = periodoSeleccionado === 'personalizado'
+    ? rangoDisponible
+      ? `máx. ${formatFecha(rangoDisponible.min)} → ${formatFecha(rangoDisponible.max)}`
+      : 'sin ventas registradas'
+    : `${formatFecha(filtros.fechaInicio)} → ${formatFecha(filtros.fechaFin)}`;
 
   const ventasFiltradas = useMemo(() => {
     return ventas.filter(v => {
@@ -490,15 +491,16 @@ const stockInsuficiente = productoSeleccionado
   };
 
   const limpiarFiltros = () => {
-    setPeriodoSeleccionado('todos');
+    const { inicio, fin } = rangoMes(0);
     setFiltros({
-      fechaInicio: '',
-      fechaFin: '',
+      fechaInicio: inicio,
+      fechaFin: fin,
       estado: 'Todos',
       cliente: '',
       montoMin: '',
       montoMax: ''
     });
+    setPeriodoSeleccionado('este_mes');
   };
 
   return (
@@ -532,9 +534,9 @@ const stockInsuficiente = productoSeleccionado
           <SelectorDesplegable
             icono="calendar_month"
             valor={periodoSeleccionado}
-            onChange={setPeriodoSeleccionado}
-            opciones={OPCIONES_PERIODO_VENTAS}
-            hint={periodoSeleccionado === 'todos' ? null : `${filtros.fechaInicio} → ${filtros.fechaFin}`}
+            onChange={elegirPeriodo}
+            opciones={OPCIONES_PERIODO}
+            hint={etiquetaRango}
           />
         </div>
 
@@ -543,7 +545,9 @@ const stockInsuficiente = productoSeleccionado
             <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total de Ventas</p>
             <h3 className="text-3xl font-black text-primary">${totalVentas.toLocaleString('es-CL')}</h3>
             <p className="text-[10px] text-primary/60 mt-2 font-bold uppercase">
-              {periodoSeleccionado === 'todos' ? 'Acumulado historico' : 'En el periodo seleccionado'}
+              {periodoSeleccionado === 'personalizado' && rangoDisponible
+                ? `Del ${formatFecha(rangoDisponible.min)} al ${formatFecha(rangoDisponible.max)}`
+                : 'En el periodo seleccionado'}
             </p>
           </div>
           <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
@@ -639,6 +643,8 @@ const stockInsuficiente = productoSeleccionado
             <input 
               type="date" 
               value={filtros.fechaInicio} 
+              min={rangoDisponible?.min}
+              max={filtros.fechaFin || rangoDisponible?.max}
               onChange={e => {
                 setFiltros({...filtros, fechaInicio: e.target.value});
                 setPeriodoSeleccionado('personalizado');
@@ -651,6 +657,8 @@ const stockInsuficiente = productoSeleccionado
             <input 
               type="date" 
               value={filtros.fechaFin} 
+              min={filtros.fechaInicio || rangoDisponible?.min}
+              max={rangoDisponible?.max}
               onChange={e => {
                 setFiltros({...filtros, fechaFin: e.target.value});
                 setPeriodoSeleccionado('personalizado');

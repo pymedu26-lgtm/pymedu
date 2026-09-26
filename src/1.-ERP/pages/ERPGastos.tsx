@@ -42,32 +42,41 @@ export default function ERPGastos() {
     fechaFin: ''
   });
 
-  useEffect(() => {
+  /** Rango de mes natural, en ISO 'YYYY-MM-DD', para reutilizar fuera del efecto. */
+  const rangoMes = (offset: number) => {
     const hoy = new Date();
-    let inicio = '';
-    let fin = '';
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
+    return { inicio, fin };
+  };
 
-    switch (periodoSeleccionado) {
-      case 'este_mes':
-        inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
-        fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
-        break;
-      case 'mes_anterior':
-        inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).toISOString().split('T')[0];
-        fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0).toISOString().split('T')[0];
-        break;
-      case 'este_anio':
-        inicio = `${hoy.getFullYear()}-01-01`;
-        fin = `${hoy.getFullYear()}-12-31`;
-        break;
-      case 'todos':
-        inicio = '';
-        fin = '';
-        break;
-    }
+  useEffect(() => {
+    if (periodoSeleccionado === 'personalizado') return;
 
+    const { inicio, fin } = periodoSeleccionado === 'mes_anterior' ? rangoMes(-1) : rangoMes(0);
     setFiltrosPeriodo({ fechaInicio: inicio, fechaFin: fin });
   }, [periodoSeleccionado]);
+
+  /** Rango real de datos disponibles: acota hasta donde el usuario puede navegar. */
+  const rangoDisponible = useMemo(() => {
+    const fechas = gastos.map(g => g.fecha).filter(Boolean).sort();
+    if (fechas.length === 0) return null;
+    return { min: fechas[0], max: fechas[fechas.length - 1] };
+  }, [gastos]);
+
+  /** Al elegir el rango manual arranca con todo el historial disponible a la vista. */
+  const elegirPeriodo = (valor: string) => {
+    setPeriodoSeleccionado(valor);
+    if (valor === 'personalizado' && rangoDisponible) {
+      setFiltrosPeriodo({ fechaInicio: rangoDisponible.min, fechaFin: rangoDisponible.max });
+    }
+  };
+
+  const etiquetaRango = periodoSeleccionado === 'personalizado'
+    ? rangoDisponible
+      ? `máx. ${formatFecha(rangoDisponible.min)} → ${formatFecha(rangoDisponible.max)}`
+      : 'sin gastos registrados'
+    : `${formatFecha(filtrosPeriodo.fechaInicio)} → ${formatFecha(filtrosPeriodo.fechaFin)}`;
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
@@ -183,14 +192,40 @@ export default function ERPGastos() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center gap-4 flex-wrap">
           <SelectorDesplegable
             icono="calendar_month"
             valor={periodoSeleccionado}
-            onChange={setPeriodoSeleccionado}
+            onChange={elegirPeriodo}
             opciones={OPCIONES_PERIODO}
-            hint={periodoSeleccionado === 'todos' ? null : `${filtrosPeriodo.fechaInicio} → ${filtrosPeriodo.fechaFin}`}
+            hint={etiquetaRango}
           />
+          {periodoSeleccionado === 'personalizado' && (
+            <div className="flex items-center gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
+                <input
+                  type="date"
+                  value={filtrosPeriodo.fechaInicio}
+                  min={rangoDisponible?.min}
+                  max={filtrosPeriodo.fechaFin || rangoDisponible?.max}
+                  onChange={e => setFiltrosPeriodo(p => ({ ...p, fechaInicio: e.target.value }))}
+                  className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
+                <input
+                  type="date"
+                  value={filtrosPeriodo.fechaFin}
+                  min={filtrosPeriodo.fechaInicio || rangoDisponible?.min}
+                  max={rangoDisponible?.max}
+                  onChange={e => setFiltrosPeriodo(p => ({ ...p, fechaFin: e.target.value }))}
+                  className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -198,7 +233,9 @@ export default function ERPGastos() {
             <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total de Ventas</p>
             <h3 className="text-3xl font-black text-primary">{fmt(totalVentasPeriodo)}</h3>
             <p className="text-[10px] text-primary/60 mt-2 font-bold uppercase">
-              {periodoSeleccionado === 'todos' ? 'Acumulado histórico' : 'En el periodo seleccionado'}
+              {periodoSeleccionado === 'personalizado' && rangoDisponible
+                ? `Del ${formatFecha(rangoDisponible.min)} al ${formatFecha(rangoDisponible.max)}`
+                : 'En el periodo seleccionado'}
             </p>
           </div>
           <div className="bg-error/5 p-6 rounded-2xl shadow-sm border border-error/20">

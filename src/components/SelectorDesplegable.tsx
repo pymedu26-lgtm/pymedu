@@ -8,12 +8,14 @@ export interface OpcionDesplegable {
   icono?: string;
 }
 
-/** Periodos de filtro estandar del ERP; las paginas que tengan rango manual agregan el suyo. */
+/**
+ * Periodos de filtro del ERP. El rango manual se maneja con los campos
+ * Desde/Hasta del panel de filtros, que lo activan al cambiar una fecha.
+ */
 export const OPCIONES_PERIODO: OpcionDesplegable[] = [
   { valor: 'este_mes', etiqueta: 'Este Mes', icono: 'calendar_today' },
   { valor: 'mes_anterior', etiqueta: 'Mes Anterior', icono: 'history' },
-  { valor: 'este_anio', etiqueta: 'Este Año', icono: 'date_range' },
-  { valor: 'todos', etiqueta: 'Todo el Historial', icono: 'all_inclusive' }
+  { valor: 'personalizado', etiqueta: 'Rango Personalizado', icono: 'tune' }
 ];
 
 interface SelectorDesplegableProps {
