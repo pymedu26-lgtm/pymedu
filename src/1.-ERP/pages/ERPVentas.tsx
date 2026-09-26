@@ -13,7 +13,7 @@ import {
 const ModalCargaMasivaVentas = lazy(() => import('../components/ModalCargaMasivaVentas'));
 
 export default function ERPVentas() {
-  const { user: userAuth, perfil } = useAuth();
+  const { user: userAuth } = useAuth();
   const {
     ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto
   } = useERP();
@@ -1140,15 +1140,6 @@ const stockInsuficiente = productoSeleccionado
                       <p className="text-on-surface-variant">Doc. SII: {ventaNota.documento_id}</p>
                     )}
                   </div>
-                </div>
-
-                <div className="mb-4 rounded-xl bg-surface-container-low/50 p-4 text-sm">
-                  <p className="text-xs font-bold uppercase tracking-wider text-primary">Emisor</p>
-                  <p className="mt-1 font-black text-on-surface">
-                    {perfil?.negocio_nombre || perfil?.institucion_nombre || 'Mi PYME'}
-                  </p>
-                  <p className="text-on-surface-variant">RUT {perfil?.rut || '—'} • Giro: Venta al por menor</p>
-                  <p className="text-on-surface-variant">Dirección: {perfil?.direccion || '—'}</p>
                 </div>
 
                 <div className="mb-4 flex items-center justify-between">
