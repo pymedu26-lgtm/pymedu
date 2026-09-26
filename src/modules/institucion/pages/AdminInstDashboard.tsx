@@ -37,7 +37,7 @@ const prioridadConfig: Record<string, { color: string; dot: string }> = {
 const alertaTipoConfig: Record<string, { color: string; icon: string }> = {
   cumplimiento: { color: 'bg-amber-100 text-amber-700', icon: 'gpp_maybe' },
   desercion: { color: 'bg-red-100 text-red-700', icon: 'person_off' },
-  calidad: { color: 'bg-blue-100 text-blue-700', icon: 'data_check' },
+  calidad: { color: 'bg-blue-100 text-blue-700', icon: 'fact_check' },
   vencimiento: { color: 'bg-purple-100 text-purple-700', icon: 'schedule' },
 };
 
@@ -73,7 +73,7 @@ export default function AdminInstDashboard() {
         {[
           { label: 'Cobertura', value: `${cobertura}%`, icon: 'groups', color: 'bg-blue-500', sub: `${usuariosTotal} usuarios totales`, trend: '+5% vs mes anterior' },
           { label: 'Cumplimiento', value: `${avanceGlobal}%`, icon: 'task_alt', color: 'bg-green-500', sub: 'avance promedio', trend: '+8% vs mes anterior' },
-          { label: 'Actividad Semanal', value: '82%', icon: 'monitoring', color: 'bg-teal-500', sub: 'tasa de participación', trend: '234 sesiones registradas' },
+          { label: 'Actividad Semanal', value: '82%', icon: 'insights', color: 'bg-teal-500', sub: 'tasa de participación', trend: '234 sesiones registradas' },
           { label: 'Alertas Activas', value: alertas.length.toString(), icon: 'notifications_active', color: 'bg-red-500', sub: `${alertasAltas} de alta prioridad`, trend: 'Requieren atención' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">

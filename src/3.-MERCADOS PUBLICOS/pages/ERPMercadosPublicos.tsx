@@ -56,7 +56,7 @@ const responsablesBasePostulacion: ResponsablePostulacion[] = [
 const metodoPostulacion = [
   { paso: '1', titulo: 'Encontrar oportunidad', detalle: 'Traemos licitaciones activas por rubro, territorio, organismo y fecha de cierre.', icon: 'travel_explore' },
   { paso: '2', titulo: 'Entender si conviene', detalle: 'El sistema explica calce, riesgo, documentos faltantes y proximo paso en lenguaje simple.', icon: 'psychology_alt' },
-  { paso: '3', titulo: 'Preparar respaldo', detalle: 'Conecta Equipo, Documentos, Reportes y Municipalidad para armar una postulacion seria.', icon: 'folder_managed' },
+  { paso: '3', titulo: 'Preparar respaldo', detalle: 'Conecta Equipo, Documentos, Reportes y Municipalidad para armar una postulacion seria.', icon: 'folder_shared' },
   { paso: '4', titulo: 'Postular oficialmente', detalle: 'La postulacion final ocurre en Mercado Publico; PymEdu deja el expediente listo.', icon: 'verified' },
 ];
 

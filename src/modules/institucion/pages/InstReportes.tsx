@@ -15,7 +15,7 @@ const reportes = [
   {
     id: 'r2', categoria: 'participacion' as const, titulo: 'Participación y Actividad por Programa',
     descripcion: 'Sesiones asistidas, tareas completadas, interacciones por cohorte.',
-    icon: 'monitoring', color: 'bg-teal-500',
+    icon: 'insights', color: 'bg-teal-500',
     metrics: [
       { label: 'Sesiones este mes', value: '234' },
       { label: 'Asistencia promedio', value: '82%' },

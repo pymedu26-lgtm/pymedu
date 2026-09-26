@@ -45,7 +45,7 @@ export default function ERPPagar() {
     <div className="p-8 space-y-8">
       <div>
         <h2 className="text-3xl font-extrabold text-error flex items-center gap-3">
-          <span className="material-symbols-outlined text-4xl">send_money</span>
+          <span className="material-symbols-outlined text-4xl">account_balance_wallet</span>
           Cuentas por Pagar
         </h2>
         <p className="text-on-surface-variant mt-1 text-sm">Gastos con saldo pendiente y pagos registrados.</p>

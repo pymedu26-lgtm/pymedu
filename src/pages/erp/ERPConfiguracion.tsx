@@ -310,7 +310,7 @@ export default function ERPConfiguracion() {
 
           <button onClick={guardarNegocio} disabled={guardando}
             className="w-full py-4 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
-            {guardando ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : <span className="material-symbols-outlined">save</span>}
+            {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
         </div>
@@ -381,7 +381,7 @@ export default function ERPConfiguracion() {
 
           <button onClick={guardarCuenta} disabled={guardando}
             className="w-full py-4 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
-            {guardando ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : <span className="material-symbols-outlined">save</span>}
+            {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
         </div>
@@ -403,7 +403,7 @@ export default function ERPConfiguracion() {
             {puedeGestionarEquipo ? (
               equipo === null ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">
-                  <span className="material-symbols-outlined animate-spin inline-block">progress_activity</span>
+                  <span className="material-symbols-outlined animate-spin inline-block">autorenew</span>
                 </div>
               ) : equipo.length === 0 ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">Aún no hay miembros en tu institución.</div>

@@ -316,7 +316,7 @@ export default function ERPInventario() {
           {[
             { id: 'lista', label: 'Inventario', icon: 'list' },
             { id: 'movimientos', label: 'Movimientos', icon: 'swap_horiz' },
-            { id: 'toma', label: 'Toma Stock', icon: 'barcode_scanner' },
+            { id: 'toma', label: 'Toma Stock', icon: 'qr_code_scanner' },
             { id: 'herramientas', label: 'Herramientas', icon: 'construction' }
           ].map(tab => (
             <button
@@ -646,7 +646,7 @@ export default function ERPInventario() {
             <div className="relative z-10 flex flex-col md:flex-row justify-between gap-6">
               <div className="max-w-xl">
                 <h3 className="text-2xl font-black mb-2 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-3xl">barcode_scanner</span>
+                  <span className="material-symbols-outlined text-3xl">qr_code_scanner</span>
                   Toma de Inventario Física
                 </h3>
                 <p className="text-white/70 text-sm font-medium mb-6">
@@ -826,7 +826,7 @@ export default function ERPInventario() {
           <div className="bg-scrim rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden group">
             <div className="relative z-10">
               <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mb-6">
-                <span className="material-symbols-outlined text-white text-3xl">barcode_scanner</span>
+                <span className="material-symbols-outlined text-white text-3xl">qr_code_scanner</span>
               </div>
               <h3 className="text-2xl font-black mb-2">Generador de Etiquetas</h3>
               <p className="text-white/60 text-sm mb-8 font-medium">Imprime códigos de barras y SKU para tu bodega física.</p>

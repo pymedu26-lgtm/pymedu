@@ -25,7 +25,7 @@ const mapManifestToCourses = (category: 'gratis' | 'suscripcion') => {
     duration: '35 min',
     level: c.level === 1 ? 'Basico' : c.level === 2 ? 'Intermedio' : 'Avanzado',
     progress: 0,
-    icon: c.type === 'Fin' ? 'monitoring' : 'gavel',
+    icon: c.type === 'Fin' ? 'insights' : 'gavel',
     color: c.type === 'Fin' ? 'primary' : 'indigo',
     category: c.category,
     type: c.type,

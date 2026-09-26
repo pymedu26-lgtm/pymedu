@@ -158,7 +158,7 @@ name: 'Mi institución',
         {
           name: 'Cuentas por pagar',
           path: '/erp/pagar',
-          icon: 'send_money',
+          icon: 'account_balance_wallet',
           tag: 'CP',
           hint: 'Compromisos, pagos y salidas de caja.',
           permiso: 'crear_gastos',

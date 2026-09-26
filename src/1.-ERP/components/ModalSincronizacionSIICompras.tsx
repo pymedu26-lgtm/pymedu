@@ -161,7 +161,7 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
             onClick={() => { setActiveMode('auto'); setPreview([]); }}
             className={`px-6 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeMode === 'auto' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            <span className="material-symbols-outlined text-sm">robot_2</span>
+            <span className="material-symbols-outlined text-sm">smart_toy</span>
             AUTOMÁTICO (BETA)
           </button>
         </div>
@@ -219,7 +219,7 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
               <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-red-500">
-                    {activeMode === 'auto' ? 'robot_2' : 'description'}
+                    {activeMode === 'auto' ? 'smart_toy' : 'description'}
                   </span>
                   <div>
                     <p className="text-sm font-bold text-slate-800">
