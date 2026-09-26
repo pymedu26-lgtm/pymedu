@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import { useAuth } from '../../context/AuthContext';import ModalSincronizacionSII from '../components/ModalSincronizacionSII';
+import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { cn } from '@/lib/utils';
 import { 
@@ -9,13 +9,16 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line 
 } from 'recharts';
 
+/** El lector de Excel pesa ~400 KB: se descarga solo al abrir la carga masiva, no con la pagina. */
+const ModalCargaMasivaVentas = lazy(() => import('../components/ModalCargaMasivaVentas'));
+
 export default function ERPVentas() {
   const { user: userAuth, perfil } = useAuth();
   const {
     ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto
   } = useERP();
   const [showModal, setShowModal] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,10 +40,8 @@ export default function ERPVentas() {
     montoMax: ''
   });
 
-  const handleImportSII = (nuevasVentas: Partial<Venta>[]) => {
-    nuevasVentas.forEach(v => {
-      addVenta(v as any);
-    });
+  const handleImportMasivo = (nuevasVentas: Omit<Venta, 'id'>[]) => {
+    nuevasVentas.forEach(v => addVenta(v));
   };
 
   const [nuevaVenta, setNuevaVenta] = useState<Partial<Venta>>({
@@ -477,11 +478,11 @@ const stockInsuficiente = productoSeleccionado
         </div>
         <div className="flex gap-3">
           <button 
-            onClick={() => setShowSyncModal(true)}
+            onClick={() => setShowCargaMasiva(true)}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-lg">sync</span>
-            Sincronizar SII
+            <span className="material-symbols-outlined text-lg">upload_file</span>
+            Carga Masiva
           </button>
           <button 
             onClick={() => { setEditingId(null); setShowModal(true); }}
@@ -1244,12 +1245,18 @@ const stockInsuficiente = productoSeleccionado
         title="Eliminar Venta"
       />
 
-      <ModalSincronizacionSII 
-        isOpen={showSyncModal}
-        onClose={() => setShowSyncModal(false)}
-        onImport={handleImportSII}
-        ventasExistentes={ventas}
-      />
+      {showCargaMasiva && (
+        <Suspense fallback={null}>
+          <ModalCargaMasivaVentas
+            isOpen
+            onClose={() => setShowCargaMasiva(false)}
+            onImport={handleImportMasivo}
+            ventasExistentes={ventas}
+            inventario={inventario}
+            modoIntegracion={configuracionCumplimiento.modoIntegracion}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
