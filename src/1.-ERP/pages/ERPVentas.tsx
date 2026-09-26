@@ -662,7 +662,6 @@ const stockInsuficiente = productoSeleccionado
           <table className="w-full text-left text-sm">
             <thead className="bg-surface-container-low text-on-surface-variant font-bold uppercase tracking-wider text-xs">
               <tr>
-                <th className="px-6 py-4">ID</th>
                 <th className="px-6 py-4">Documento</th>
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4">Cliente</th>
@@ -677,7 +676,6 @@ const stockInsuficiente = productoSeleccionado
             <tbody className="divide-y divide-outline-variant/20">
               {ventasFiltradas.map((venta) => (
                 <tr key={venta.id} className="hover:bg-surface-container-low/30 transition-colors cursor-pointer" onClick={() => setVentaNota(venta)}>
-                  <td className="px-6 py-4 font-medium text-primary">{venta.id}</td>
                   <td className="px-6 py-4">
                     <p className="text-xs font-black text-on-surface">
                       {DOCUMENT_LABELS[normalizeDocumentType(venta.tipo_documento)]}
