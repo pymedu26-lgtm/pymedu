@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, formatFecha } from '@/lib/utils';
 
 export interface OpcionDesplegable {
   valor: string;
@@ -17,6 +17,24 @@ export const OPCIONES_PERIODO: OpcionDesplegable[] = [
   { valor: 'mes_anterior', etiqueta: 'Mes Anterior', icono: 'history' },
   { valor: 'personalizado', etiqueta: 'Rango Personalizado', icono: 'tune' }
 ];
+
+/**
+ * Texto que acompaña al periodo elegido: el rango que se esta viendo y, cuando
+ * el usuario aun no escribe las fechas, hasta donde hay datos disponibles.
+ */
+export function etiquetaRangoPeriodo(
+  personalizado: boolean,
+  inicio: string,
+  fin: string,
+  rango: { min: string; max: string } | null
+): string {
+  if (!personalizado) return 'En el periodo seleccionado';
+
+  const tope = rango ? `máx. ${formatFecha(rango.min)} → ${formatFecha(rango.max)}` : 'sin registros';
+  if (!inicio && !fin) return `ingresa el rango · ${tope}`;
+
+  return `${formatFecha(inicio || rango?.min)} → ${formatFecha(fin || rango?.max)}`;
+}
 
 interface SelectorDesplegableProps {
   valor: string;

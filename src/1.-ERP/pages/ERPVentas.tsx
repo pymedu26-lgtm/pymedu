@@ -2,11 +2,11 @@ import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
-import SelectorDesplegable, { OPCIONES_PERIODO } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta } from '../services/pdfNotaVenta';
-import { cn, formatFecha } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend, LineChart, Line 
@@ -325,19 +325,20 @@ const stockInsuficiente = productoSeleccionado
     return { min: fechas[0], max: fechas[fechas.length - 1] };
   }, [ventas]);
 
-  /** Al elegir el rango manual arranca con todo el historial disponible a la vista. */
+  /** El rango manual queda en blanco: el usuario elige desde y hasta. */
   const elegirPeriodo = (valor: string) => {
     setPeriodoSeleccionado(valor);
-    if (valor === 'personalizado' && rangoDisponible) {
-      setFiltros(prev => ({ ...prev, fechaInicio: rangoDisponible.min, fechaFin: rangoDisponible.max }));
+    if (valor === 'personalizado') {
+      setFiltros(prev => ({ ...prev, fechaInicio: '', fechaFin: '' }));
     }
   };
 
-  const etiquetaRango = periodoSeleccionado === 'personalizado'
-    ? rangoDisponible
-      ? `máx. ${formatFecha(rangoDisponible.min)} → ${formatFecha(rangoDisponible.max)}`
-      : 'sin ventas registradas'
-    : `${formatFecha(filtros.fechaInicio)} → ${formatFecha(filtros.fechaFin)}`;
+  const etiquetaRango = etiquetaRangoPeriodo(
+    periodoSeleccionado === 'personalizado',
+    filtros.fechaInicio,
+    filtros.fechaFin,
+    rangoDisponible
+  );
 
   const ventasFiltradas = useMemo(() => {
     return ventas.filter(v => {
@@ -547,9 +548,7 @@ const stockInsuficiente = productoSeleccionado
           meta={metaVenta}
           porcentajeMeta={porcentajeMeta}
           enNumerosVerdes={enNumerosVerdes}
-          etiquetaPeriodo={periodoSeleccionado === 'personalizado' && rangoDisponible
-            ? `Del ${formatFecha(rangoDisponible.min)} al ${formatFecha(rangoDisponible.max)}`
-            : 'En el periodo seleccionado'}
+          etiquetaPeriodo={etiquetaRango}
         />
       </div>
 
@@ -628,8 +627,6 @@ const stockInsuficiente = productoSeleccionado
             <input 
               type="date" 
               value={filtros.fechaInicio} 
-              min={rangoDisponible?.min}
-              max={filtros.fechaFin || rangoDisponible?.max}
               onChange={e => {
                 setFiltros({...filtros, fechaInicio: e.target.value});
                 setPeriodoSeleccionado('personalizado');
@@ -642,8 +639,6 @@ const stockInsuficiente = productoSeleccionado
             <input 
               type="date" 
               value={filtros.fechaFin} 
-              min={filtros.fechaInicio || rangoDisponible?.min}
-              max={rangoDisponible?.max}
               onChange={e => {
                 setFiltros({...filtros, fechaFin: e.target.value});
                 setPeriodoSeleccionado('personalizado');

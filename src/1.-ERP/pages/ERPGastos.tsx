@@ -3,7 +3,7 @@ import { useERP, Gasto, MetodoPago } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ModalSincronizacionSIICompras from '../components/ModalSincronizacionSIICompras';
 import TarjetasResumen from '../components/TarjetasResumen';
-import SelectorDesplegable, { OPCIONES_PERIODO } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
 
 const CATEGORIAS_GASTO = ['Insumos/Mercaderia','Servicios Basicos','Arriendo','Sueldos','Publicidad','Tecnologia','Transporte','Capacitacion','Mantencion','IVA/Impuestos','Otros'];
@@ -65,19 +65,20 @@ export default function ERPGastos() {
     return { min: fechas[0], max: fechas[fechas.length - 1] };
   }, [gastos]);
 
-  /** Al elegir el rango manual arranca con todo el historial disponible a la vista. */
+  /** El rango manual queda en blanco: el usuario elige desde y hasta. */
   const elegirPeriodo = (valor: string) => {
     setPeriodoSeleccionado(valor);
-    if (valor === 'personalizado' && rangoDisponible) {
-      setFiltrosPeriodo({ fechaInicio: rangoDisponible.min, fechaFin: rangoDisponible.max });
+    if (valor === 'personalizado') {
+      setFiltrosPeriodo({ fechaInicio: '', fechaFin: '' });
     }
   };
 
-  const etiquetaRango = periodoSeleccionado === 'personalizado'
-    ? rangoDisponible
-      ? `máx. ${formatFecha(rangoDisponible.min)} → ${formatFecha(rangoDisponible.max)}`
-      : 'sin gastos registrados'
-    : `${formatFecha(filtrosPeriodo.fechaInicio)} → ${formatFecha(filtrosPeriodo.fechaFin)}`;
+  const etiquetaRango = etiquetaRangoPeriodo(
+    periodoSeleccionado === 'personalizado',
+    filtrosPeriodo.fechaInicio,
+    filtrosPeriodo.fechaFin,
+    rangoDisponible
+  );
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
@@ -208,8 +209,6 @@ export default function ERPGastos() {
                 <input
                   type="date"
                   value={filtrosPeriodo.fechaInicio}
-                  min={rangoDisponible?.min}
-                  max={filtrosPeriodo.fechaFin || rangoDisponible?.max}
                   onChange={e => setFiltrosPeriodo(p => ({ ...p, fechaInicio: e.target.value }))}
                   className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                 />
@@ -219,8 +218,6 @@ export default function ERPGastos() {
                 <input
                   type="date"
                   value={filtrosPeriodo.fechaFin}
-                  min={filtrosPeriodo.fechaInicio || rangoDisponible?.min}
-                  max={rangoDisponible?.max}
                   onChange={e => setFiltrosPeriodo(p => ({ ...p, fechaFin: e.target.value }))}
                   className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                 />
@@ -235,9 +232,7 @@ export default function ERPGastos() {
           meta={ventaObjetivo}
           porcentajeMeta={porcentajeMeta}
           enNumerosVerdes={enNumerosVerdes}
-          etiquetaPeriodo={periodoSeleccionado === 'personalizado' && rangoDisponible
-            ? `Del ${formatFecha(rangoDisponible.min)} al ${formatFecha(rangoDisponible.max)}`
-            : 'En el periodo seleccionado'}
+          etiquetaPeriodo={etiquetaRango}
         />
       </div>
 
