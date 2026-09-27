@@ -197,7 +197,10 @@ export const ROLES: RolDefinicion[] = [
     ],
     matriz: T({
       dashboard: 'r', comunidad: 'r', mentoria: 'r', academia: 'rw',
-      ventas: 'rw', gastos: 'rw', inventario: 'r', promociones: 'r',
+      // El inventario iba en 'r' mientras ventas y gastos estaban en 'rw': el titular
+      // podia registrar ventas (que ya descuentan stock) y gastos, pero no corregir ni
+      // eliminar articulos de su propia bodega. El rol hermano 'dueño' ya tiene 'rwd'.
+      ventas: 'rw', gastos: 'rw', inventario: 'rwd', promociones: 'r',
       clientes: 'r', proveedores: 'r', caja: 'r', reportes: 'r', rrhh: 'r',
       config: 'rw',
     }),
@@ -361,16 +364,29 @@ export function rolLabel(rol: string): string {
 }
 
 /**
+ * Roles con acceso total en toda la aplicacion. La misma lista que aplica
+ * `puedeHacer` en AuthContext: sin ella, 'admin_institucional' era administrador en
+ * todos los modulos pero quedaba en solo lectura donde se usara la matriz.
+ */
+export const ROLES_ACCESO_TOTAL: Rol[] = ['superadmin', 'admin_institucional', 'demo'];
+
+/**
  * Nivel de acceso a un modulo segun la matriz del rol. La matriz existia pero solo
  * se dibujaba en la pantalla de administracion: ningun modulo del ERP la consultaba.
- * Un rol sin dato para ese modulo no se bloquea, para no dejar paginas inaccesibles.
+ *
+ * Ojo con el valor por defecto: `T()` inicializa TODOS los modulos en 'none' y cada
+ * rol solo sobrescribe los que declara, asi que `matriz[modulo]` siempre existe. Por
+ * eso un rol que no nombra el modulo queda bloqueado, y no en 'rw' como se podria
+ * suponer. Un rol desconocido o un perfil aun no cargado devuelve 'rwd' para no dejar
+ * paginas inaccesibles mientras se resuelve el perfil.
  */
 export function nivelModulo(rol: string | undefined, modulo: string): NivelPermiso {
   if (!rol) return 'rwd';
+  if ((ROLES_ACCESO_TOTAL as string[]).includes(rol)) return 'rwd';
   return ROL_INFO[rol]?.matriz?.[modulo] ?? 'rwd';
 }
 
-/** true si el rol puede crear o modificar en el modulo; 'r' es solo lectura. */
+/** true si el rol puede crear o modificar en el modulo; 'r' y 'none' son solo lectura. */
 export function puedeEditarModulo(rol: string | undefined, modulo: string): boolean {
   const nivel = nivelModulo(rol, modulo);
   return nivel === 'rw' || nivel === 'rwd';
