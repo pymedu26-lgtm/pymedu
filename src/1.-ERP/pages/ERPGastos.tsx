@@ -365,13 +365,6 @@ export default function ERPGastos() {
                 );
               })}
             </tbody>
-            <tfoot className="bg-surface-container-low border-t-2 border-outline-variant/30">
-              <tr>
-                <td colSpan={3} className="p-4 font-extrabold text-on-surface">TOTAL</td>
-                <td className="p-4 font-extrabold text-error">{fmt(gastosFiltrados.reduce((a, g) => a + g.monto, 0))}</td>
-                <td colSpan={4} />
-              </tr>
-            </tfoot>
           </table>
         </div>
       </div>
