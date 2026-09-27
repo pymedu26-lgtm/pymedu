@@ -1,345 +1,284 @@
-import { useEffect, useRef, useState, ChangeEvent, DragEvent } from 'react';
+import { useRef, useState, ChangeEvent, DragEvent } from 'react';
 import * as XLSX from 'xlsx';
-import { EstadoPago, MetodoPago, Producto, Venta, VentaProducto } from '../context/ERPContext';
-import { DocumentType, IntegrationMode, isExemptDocument, normalizeDocumentType } from '../services/documentCompliance';
+import { EstadoPago, Gasto, MetodoPago, TipoDocumento } from '../context/ERPContext';
+import { DocumentType } from '../services/documentCompliance';
 import {
   ESTADOS, EXTENSIONES, METODOS_PAGO, descargarLibroPlantilla, elegirEnum, extensionValida,
   formatPesos, mapearColumnas, normKey, parseFecha, parseNumero,
 } from './cargaMasivaUtil';
 
-interface ModalCargaMasivaVentasProps {
+interface ModalCargaMasivaGastosProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (ventas: Omit<Venta, 'id'>[]) => void;
-  ventasExistentes: Venta[];
-  inventario: Producto[];
-  modoIntegracion: IntegrationMode;
+  onImport: (gastos: Partial<Gasto>[]) => void;
+  gastosExistentes: Gasto[];
 }
 
-type CampoClave = 'folio' | 'fecha' | 'rut' | 'cliente' | 'tipoDocumento' | 'codigo' | 'descripcion'
-  | 'cantidad' | 'precio' | 'descuento' | 'estado' | 'metodoPago' | 'nota';
+type CampoClave =
+  | 'fecha' | 'proveedor' | 'rut' | 'categoria' | 'tipoDocumento' | 'folio'
+  | 'monto' | 'subtotal' | 'iva' | 'estado' | 'metodoPago' | 'fechaVencimiento' | 'nota';
 
-interface GrupoVenta {
+interface GastoPrevio {
   clave: string;
-  folio: string;
+  fila: number;
   fecha: string;
-  cliente: string;
-  tipoDocumento: DocumentType;
-  estado: EstadoPago;
-  metodoPago: MetodoPago;
-  nota: string;
-  items: VentaProducto[];
-  errores: string[];
-}
-
-interface VentaPrevia {
-  clave: string;
+  proveedor: string;
   folio: string;
-  fecha: string;
-  cliente: string;
-  tipoDocumento: DocumentType;
-  items: number;
+  categoria: string;
+  tipoDocumento: TipoDocumento;
   subtotal: number;
   iva: number;
-  total: number;
+  monto: number;
   estado: EstadoPago;
   metodoPago: MetodoPago;
+  fechaVencimiento: string;
+  nota: string;
   existe: boolean;
   errores: string[];
-  venta: Omit<Venta, 'id'>;
+  gasto: Partial<Gasto>;
 }
 
 const COLUMNAS: { campo: CampoClave; titulo: string; obligatorio: boolean; ayuda: string }[] = [
-  { campo: 'folio', titulo: 'Folio', obligatorio: false, ayuda: 'Agrupa varias filas en una misma venta. Si va vacío, cada fila es una venta independiente.' },
   { campo: 'fecha', titulo: 'Fecha', obligatorio: true, ayuda: 'Formato aaaa-mm-dd o dd-mm-aaaa.' },
-  { campo: 'rut', titulo: 'RUT Cliente', obligatorio: false, ayuda: 'Opcional. Se usa como nombre si no hay Razón Social.' },
-  { campo: 'cliente', titulo: 'Razón Social', obligatorio: true, ayuda: 'Nombre del cliente. Si el cliente ya existe en Ventas se reutiliza.' },
-  { campo: 'tipoDocumento', titulo: 'Tipo Documento', obligatorio: false, ayuda: 'boleta_electronica (por defecto), factura_electronica, boleta_exenta o factura_exenta.' },
-  { campo: 'codigo', titulo: 'Código Producto', obligatorio: false, ayuda: 'Debe existir en Inventario: permite descontar stock y conocer el costo.' },
-  { campo: 'descripcion', titulo: 'Descripción', obligatorio: true, ayuda: 'Obligatoria solo si no informas Código Producto.' },
-  { campo: 'cantidad', titulo: 'Cantidad', obligatorio: false, ayuda: 'Por defecto 1.' },
-  { campo: 'precio', titulo: 'Precio Unitario', obligatorio: true, ayuda: 'Precio de cada unidad, IVA incluido.' },
-  { campo: 'descuento', titulo: 'Descuento %', obligatorio: false, ayuda: 'Descuento sobre el bruto de la línea. Por defecto 0.' },
-  { campo: 'estado', titulo: 'Estado', obligatorio: false, ayuda: 'Pagado (por defecto) o Pendiente.' },
+  { campo: 'proveedor', titulo: 'Proveedor', obligatorio: true, ayuda: 'Razón social de quien emitió el gasto. Si va vacío se usa el RUT.' },
+  { campo: 'rut', titulo: 'RUT Proveedor', obligatorio: false, ayuda: 'Opcional. Identifica al proveedor y alimenta el crédito fiscal.' },
+  { campo: 'categoria', titulo: 'Categoria', obligatorio: false, ayuda: 'Insumos/Mercaderia, Servicios Basicos, Arriendo, Sueldos, Publicidad, Tecnologia, Transporte, Capacitacion, Mantencion, IVA/Impuestos u Otros.' },
+  { campo: 'tipoDocumento', titulo: 'Tipo Documento', obligatorio: false, ayuda: 'factura_electronica (33), boleta_electronica (39), factura_exenta (34) o boleta_exenta (41).' },
+  { campo: 'folio', titulo: 'Folio', obligatorio: false, ayuda: 'Numero del documento. Sirve para detectar duplicados en reimportaciones.' },
+  { campo: 'monto', titulo: 'Monto Total', obligatorio: false, ayuda: 'Total con IVA. Si informas Neto e IVA puedes dejarlo vacio.' },
+  { campo: 'subtotal', titulo: 'Neto', obligatorio: false, ayuda: 'Monto sin IVA. Tiene prioridad sobre el cálculo automático.' },
+  { campo: 'iva', titulo: 'IVA', obligatorio: false, ayuda: 'IVA de la operación. Si falta se calcula al 19% sobre el neto.' },
+  { campo: 'estado', titulo: 'Estado', obligatorio: false, ayuda: 'Pagado (por defecto), Pendiente o Por Pagar (deja saldo pendiente).' },
   { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, debito, credito, mixto o cheque.' },
-  { campo: 'nota', titulo: 'Nota', obligatorio: false, ayuda: 'Observación interna de la venta.' },
+  { campo: 'fechaVencimiento', titulo: 'Vencimiento', obligatorio: false, ayuda: 'Solo para gastos Pendientes: fecha en que se debe pagar.' },
+  { campo: 'nota', titulo: 'Nota', obligatorio: false, ayuda: 'Observación o glosa del gasto.' },
 ];
 
+/** Nombres alternativos aceptados, incluidos los del detalle de compras del SII. */
 const ALIAS: Record<CampoClave, string[]> = {
-  folio: ['folio', 'nrodocto', 'nrodocumento', 'nrodocto', 'numerodocumento', 'numdocumento', 'ndoc', 'n', 'documento', 'idventa'],
-  fecha: ['fecha', 'fechaventa', 'fechaemision', 'fechaemisiondoc', 'fechav', 'f'],
-  rut: ['rut', 'rutcliente', 'rutreceptor', 'rutempresa', 'r'],
-  cliente: ['razonsocial', 'cliente', 'nombrecliente', 'nombre', 'receptor', 'empresa', 'razon', 'clienteempresa'],
-  tipoDocumento: ['tipodocumento', 'tipodocto', 'tipodoc', 'tipo', 'tipocomprobante'],
-  codigo: ['codigoproducto', 'codigo', 'codigosku', 'sku', 'codigobarras', 'codigointerno', 'idproducto'],
-  descripcion: ['descripcion', 'producto', 'detalle', 'nombreproducto', 'concepto', 'item'],
-  cantidad: ['cantidad', 'cant', 'cants', 'unidades', 'cantidadunidades', 'q'],
-  precio: ['preciounitario', 'precio', 'preciounid', 'valorunitario', 'pu', 'preciounidad', 'p'],
-  descuento: ['descuento', 'descuentoporcentaje', 'descuento%', 'dctopct', 'dcto', 'desc'],
-  estado: ['estado', 'estadopago', 'estadoweb', 'condicionpago', 'estadoventa'],
+  fecha: ['fecha', 'fechagasto', 'fechacompra', 'fechaemision', 'fechaemisiondoc', 'fechadocto', 'fechav', 'f'],
+  proveedor: ['proveedor', 'razonsocial', 'razonsocialemisor', 'razonsocialproveedor', 'nombreproveedor', 'emisor', 'nombre', 'razon'],
+  rut: ['rut', 'rutproveedor', 'rutemisor', 'rutempresa', 'rutrazonsocial', 'r'],
+  categoria: ['categoria', 'categoriagasto', 'tipogasto', 'tipocosto', 'clasificacion', 'grupo', 'c'],
+  tipoDocumento: ['tipodocumento', 'tipodocto', 'tipodoc', 'tipo', 'tipocomprobante', 'tipodocumento'],
+  folio: ['folio', 'nrodocto', 'nrodocumento', 'numerodocumento', 'numdocumento', 'ndoc', 'n', 'documento', 'idgasto'],
+  monto: ['montototal', 'monto', 'total', 'totalgasto', 'valortotal', 'bruto', 'montoivaincluido', 'totalconiva', 'montototalconiva'],
+  subtotal: ['neto', 'subtotal', 'montoneto', 'valorneto', 'netosii', 'base', 'basesii'],
+  iva: ['iva', 'montoiva', 'valoriva', 'ivasii', 'ivaacumulado'],
+  estado: ['estado', 'estadopago', 'condicionpago', 'estadogasto', 'estadocompra'],
   metodoPago: ['metodopago', 'metododepago', 'formapago', 'formadepago', 'mediopago', 'medio', 'tipopago', 'mp'],
-  nota: ['nota', 'notas', 'observacion', 'observaciones', 'comentario', 'comentarios'],
+  fechaVencimiento: ['fechavencimiento', 'vencimiento', 'fechavto', 'fecha_vencimiento', 'vto', 'vence'],
+  nota: ['nota', 'notas', 'observacion', 'observaciones', 'comentario', 'comentarios', 'glosa', 'descripcion'],
 };
-
-/** En Ventas "por pagar" es un estado de cobranza pendiente, no un saldo por pagar. */
-const ESTADOS_VENTA: { valor: EstadoPago; alias: string[] }[] = ESTADOS.map(e =>
-  e.valor === 'Pendiente'
-    ? { valor: e.valor, alias: [...e.alias, 'porpagar', 'por pagar', 'deuda', 'credito'] }
-    : e
-);
 
 const TIPOS_DOC: { valor: DocumentType; alias: string[] }[] = [
   { valor: 'factura_exenta', alias: ['facturaexenta', 'facturaexentaoafectaiva', '34', 'fe'] },
   { valor: 'boleta_exenta', alias: ['boletaexenta', 'boletaexentaoafectaiva', '41', 'be'] },
-  { valor: 'factura_electronica', alias: ['facturaelectronica', 'factura', '33'] },
-  { valor: 'boleta_electronica', alias: ['boletaelectronica', 'boleta', '39'] },
+  { valor: 'factura_electronica', alias: ['facturaelectronica', 'factura', '33', 'fac'] },
+  { valor: 'boleta_electronica', alias: ['boletaelectronica', 'boleta', '39', 'bol'] },
+  { valor: 'nota_credito', alias: ['notacredito', 'notacreditocompra', 'nc', '61'] },
 ];
 
-/** Igual que el cálculo de ítems del formulario de venta: precio con IVA incluido por defecto.
- *  Un documento exento no desglosa IVA: el monto completo queda como monto exento. */
-function calcularItem(precio: number, cantidad: number, descuentoPct: number, incluyeIva: boolean, exento = false) {
-  const d = Math.min(Math.max(descuentoPct, 0), 100);
-  const base = Math.max(0, precio * cantidad - precio * cantidad * (d / 100));
-  if (exento) return { subtotal: base, iva: 0, total: base };
-  if (incluyeIva) {
-    const subtotal = Math.round(base / 1.19);
-    return { subtotal, iva: base - subtotal, total: base };
-  }
-  const iva = Math.round(base * 0.19);
-  return { subtotal: base, iva, total: base + iva };
+/** Mapea el tipo de documento de compra al tipo genérico que guarda Gasto. */
+const TIPO_COMPRA: { valor: TipoDocumento; alias: string[] }[] = TIPOS_DOC.map(t => ({
+  valor: t.valor as TipoDocumento,
+  alias: t.alias,
+}));
+
+/** Estados de pago de un gasto. "Por Pagar" es el que genera saldo pendiente en addGasto. */
+const ESTADOS_GASTO: { valor: EstadoPago; alias: string[] }[] = [
+  ...ESTADOS,
+  { valor: 'Por Pagar', alias: ['porpagar', 'por pagar', 'deudaporpagar', 'pendientedepago', 'deuda', 'unpaid', 'credito'] },
+];
+
+const CATEGORIAS = [
+  'Insumos/Mercaderia', 'Servicios Basicos', 'Arriendo', 'Sueldos', 'Publicidad',
+  'Tecnologia', 'Transporte', 'Capacitacion', 'Mantencion', 'IVA/Impuestos', 'Otros',
+];
+
+const CATEGORIAS_KEY = new Map(CATEGORIAS.map(c => [normKey(c), c]));
+
+/** Ajusta el texto de categoría a una de la lista, o devuelve null si no existe. */
+function normalizarCategoria(valor: unknown): string | null {
+  const clave = normKey(valor);
+  if (!clave) return null;
+  return CATEGORIAS_KEY.get(clave) ?? null;
 }
 
-function buscarProducto(codigo: unknown, descripcion: unknown, inventario: Producto[]): Producto | null {
-  const c = normKey(codigo);
-  if (c) {
-    const porCodigo = inventario.find(p => normKey(p.codigo) === c
-      || normKey(p.codigoBarras) === c
-      || normKey(p.id) === c);
-    if (porCodigo) return porCodigo;
+/** La categoría no reconocida se informa como error en vez de caer silenciosamente en "Otros". */
+function calcularMontos(monto: number, subtotal: number, iva: number, esExento: boolean) {
+  if (subtotal > 0 || iva > 0) {
+    const neto = subtotal > 0 ? subtotal : 0;
+    const imp = iva > 0 ? iva : (esExento ? 0 : Math.round(neto * 0.19));
+    return { subtotal: neto, iva: imp, monto: neto + imp };
   }
-  const d = normKey(descripcion);
-  if (d) {
-    const porNombre = inventario.find(p => normKey(p.nombre) === d);
-    if (porNombre) return porNombre;
-  }
-  return null;
+  if (esExento) return { subtotal: monto, iva: 0, monto };
+  const neto = Math.round(monto / 1.19);
+  return { subtotal: neto, iva: monto - neto, monto };
 }
 
 function descargarPlantilla() {
   descargarLibroPlantilla(
-    'plantilla_ventas.xlsx',
-    'Ventas',
+    'plantilla_gastos.xlsx',
+    'Gastos',
     [
       COLUMNAS.map(c => c.titulo),
-      ['1001', '2026-09-01', '76.123.456-7', 'CLIENTE EJEMPLO SPA', 'boleta_electronica', 'PROD-001', 'Servicio de ejemplo', 2, 5000, 0, 'Pagado', 'efectivo', 'Venta de ejemplo'],
-      ['1001', '2026-09-01', '76.123.456-7', 'CLIENTE EJEMPLO SPA', 'boleta_electronica', '', 'Ítem libre sin stock', 1, 11900, 10, 'Pagado', 'efectivo', 'Segunda línea del mismo folio'],
-      ['1002', '02-09-2026', '99.888.777-6', 'OTRA EMPRESA LTDA', 'factura_electronica', '', 'Servicio mensual', 1, 250000, 0, 'Pendiente', 'transferencia', ''],
+      ['2026-09-01', 'PROVEEDOR EJEMPLO SPA', '76.123.456-7', 'Insumos/Mercaderia', '33', '1001', 11900, '', '', 'Pagado', 'transferencia', '', 'Compra de mercadería'],
+      ['02-09-2026', 'SERVICIOS DE TELECOMUNICACIONES', '96.888.777-1', 'Servicios Basicos', '33', '1002', '', 100000, 19000, 'Pendiente', 'debito', '30-09-2026', 'Factura de internet'],
+      ['15-09-2026', 'COMERCIO MINORISTA', '77.555.444-K', 'Arriendo', '39', '1003', 500000, '', '', 'Pagado', 'efectivo', '', 'Arriendo mensual'],
     ],
-    COLUMNAS.map(c => ({ wch: Math.max(14, c.titulo.length + 4) })),
+    COLUMNAS.map(c => ({ wch: Math.max(16, c.titulo.length + 4) })),
     [
       ['Columna', 'Obligatorio', 'Descripcion'],
       ...COLUMNAS.map(c => [c.titulo, c.obligatorio ? 'Si' : 'No', c.ayuda]),
       [],
-      ['Como agrupar', '', 'Repite el mismo Folio en varias filas para sumar esas lineas en una sola venta.'],
-      ['Sin Folio', '', 'Cada fila se importa como una venta independiente.'],
-      ['Stock', '', 'Un Codigo Producto existente en Inventario descuenta stock; el resto se registra como texto libre.'],
-      ['IVA', '', 'El Precio Unitario se interpreta con IVA incluido (19%), igual que el formulario de venta.'],
-      ['Exentas', '', 'Los tipos *_exenta no generan IVA y se registran como monto exento.'],
+      ['Montos', '', 'Informa "Monto Total" con IVA, o bien "Neto" e "IVA". Con solo el total, el neto se calcula al 19%.'],
+      ['Categorias', '', CATEGORIAS.join(' · ')],
+      ['Documentos SII', '', 'Acepta los codigos del Registro de Compras: 33 factura, 39 boleta, 34/41 exentas, 61 nota de credito.'],
+      ['Duplicados', '', 'Una fila con el mismo Folio, Proveedor y Fecha que ya existe no se importa.'],
+      ['Pendientes', '', 'Un gasto Pendiente con Vencimiento genera saldo pendiente por cobrar.'],
     ],
     [{ wch: 20 }, { wch: 14 }, { wch: 95 }]
   );
 }
 
-export default function ModalCargaMasivaVentas({
-  isOpen, onClose, onImport, ventasExistentes, inventario, modoIntegracion
-}: ModalCargaMasivaVentasProps) {
+export default function ModalCargaMasivaGastos({
+  isOpen, onClose, onImport, gastosExistentes
+}: ModalCargaMasivaGastosProps) {
   const [arrastrando, setArrastrando] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
-  const [previas, setPrevias] = useState<VentaPrevia[]>([]);
+  const [previas, setPrevias] = useState<GastoPrevio[]>([]);
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dragContador = useRef(0);
 
-  useEffect(() => {
-    if (isOpen) return;
-    setArchivo(null);
-    setPrevias([]);
-    setSeleccionadas(new Set());
-    setError(null);
-    setArrastrando(false);
-    dragContador.current = 0;
-  }, [isOpen]);
-
   const procesar = (file: File) => {
+    setError(null);
     if (!extensionValida(file.name)) {
-      setArchivo(null);
-      setPrevias([]);
-      setError(`Formato no soportado. Usa un archivo ${EXTENSIONES.join(', ')}.`);
+      setError('Formato no admitido. Usa un archivo .xlsx, .xls, .xlsm o .csv.');
       return;
     }
-    setArchivo(file);
-    setError(null);
     setCargando(true);
+    setArchivo(file);
     setPrevias([]);
     setSeleccionadas(new Set());
 
     const reader = new FileReader();
-    reader.onload = evento => {
+    reader.onerror = () => {
+      setCargando(false);
+      setError('No se pudo leer el archivo. Verifica que no este abierto en otro programa.');
+    };
+    reader.onload = (evento) => {
       try {
         const buffer = evento.target?.result as ArrayBuffer;
-        // raw:true evita que el lector adivine valores en CSV: "01-09-2026" debe leerse
-        // dd-mm-aaaa (formato Chile) y "5.950" como miles, no como decimal.
         const libro = XLSX.read(buffer, { type: 'array', cellDates: true, raw: true });
         const hoja = libro.Sheets[libro.SheetNames[0]];
-        if (!hoja) throw new Error('El archivo no contiene hojas de cálculo.');
+        if (!hoja) throw new Error('El archivo no contiene ninguna hoja.');
 
         const filas = XLSX.utils.sheet_to_json<unknown[]>(hoja, { header: 1, blankrows: false, defval: '' });
-        if (filas.length < 2) throw new Error('La hoja está vacía: necesitas el encabezado y al menos una venta.');
-
-        // La fila de encabezados se ubica por la columna de precio: aunque el archivo traiga
-        // titulos, logos o notas arriba, la carga se entiende igual que la plantilla.
-        const indiceEncabezado = filas.findIndex(fila => mapearColumnas(fila, ALIAS).precio >= 0);
+        // El encabezado se busca por la columna obligatoria, tolerando titulos de basura arriba.
+        const indiceEncabezado = filas.findIndex(fila => mapearColumnas(fila, ALIAS).fecha >= 0);
         if (indiceEncabezado < 0) {
-          throw new Error('No se reconoce el encabezado. Descarga la plantilla y copia sus columnas.');
+          throw new Error('No se encontro una fila de encabezados. Debe incluir al menos las columnas Fecha y Proveedor.');
         }
 
         const columnas = mapearColumnas(filas[indiceEncabezado], ALIAS);
         const celda = (fila: unknown[], campo: CampoClave) => {
           const i = columnas[campo];
-          return i >= 0 ? fila[i] ?? '' : '';
+          return i >= 0 ? fila[i] : '';
         };
 
         const hoy = new Date().toISOString().split('T')[0];
-        const grupos = new Map<string, GrupoVenta>();
+        const lista: GastoPrevio[] = [];
 
         filas.slice(indiceEncabezado + 1).forEach((fila, offset) => {
-          const numeroFila = indiceEncabezado + offset + 2;
-          if (!fila.some(v => String(v ?? '').trim() !== '')) return;
+          if (fila.every(c => String(c ?? '').trim() === '')) return;
 
-          const folio = String(celda(fila, 'folio') ?? '').trim();
+          const numeroFila = indiceEncabezado + offset + 2;
           const fecha = parseFecha(celda(fila, 'fecha'));
+          const folio = String(celda(fila, 'folio') ?? '').trim();
           const rut = String(celda(fila, 'rut') ?? '').trim();
-          const cliente = String(celda(fila, 'cliente') ?? '').trim() || rut;
-          const descripcion = String(celda(fila, 'descripcion') ?? '').trim();
-          const codigo = celda(fila, 'codigo');
-          const cantidad = parseNumero(celda(fila, 'cantidad')) || 1;
-          const precio = parseNumero(celda(fila, 'precio'));
-          const descuento = parseNumero(celda(fila, 'descuento'));
-          const tipoDocumento = normalizeDocumentType(elegirEnum(celda(fila, 'tipoDocumento'), TIPOS_DOC, 'boleta_electronica'));
-          const estado = elegirEnum(celda(fila, 'estado'), ESTADOS_VENTA, 'Pagado');
+          const proveedor = String(celda(fila, 'proveedor') ?? '').trim() || rut;
+          const textoCategoria = String(celda(fila, 'categoria') ?? '').trim();
+          const categoria = normalizarCategoria(textoCategoria) ?? CATEGORIAS[10];
+          const tipoDocumento = elegirEnum(celda(fila, 'tipoDocumento'), TIPO_COMPRA, 'factura_electronica');
+          const estado = elegirEnum(celda(fila, 'estado'), ESTADOS_GASTO, 'Pagado');
           const metodoPago = elegirEnum(celda(fila, 'metodoPago'), METODOS_PAGO, 'efectivo');
+          const fechaVencimiento = parseFecha(celda(fila, 'fechaVencimiento'));
           const nota = String(celda(fila, 'nota') ?? '').trim();
 
-          const producto = buscarProducto(codigo, descripcion, inventario);
-          const errores: string[] = [];
-          if (!fecha) errores.push('Fecha vacía o con formato inválido');
-          if (!cliente) errores.push('Falta Razón Social del cliente');
-          if (!descripcion && !producto) errores.push('Falta Descripción y Código Producto');
-          if (cantidad <= 0) errores.push('Cantidad debe ser mayor a 0');
-          if (precio <= 0) errores.push('Precio Unitario debe ser mayor a 0');
+          const esExento = tipoDocumento === 'factura_exenta' || tipoDocumento === 'boleta_exenta';
+          const calculo = calcularMontos(
+            parseNumero(celda(fila, 'monto')),
+            parseNumero(celda(fila, 'subtotal')),
+            parseNumero(celda(fila, 'iva')),
+            esExento
+          );
 
-          const exenta = isExemptDocument(tipoDocumento);
-          const calculo = calcularItem(precio, cantidad, descuento, producto ? !!producto.incluyeIva : true, exenta);
-          const item: VentaProducto = {
-            productoId: producto ? producto.id : `TEXTO-LIBRE-${numeroFila}-${normKey(descripcion).slice(0, 8) || 'item'}`,
-            productoNombre: producto?.nombre || descripcion || 'Ítem sin descripción',
-            esInventariable: !!producto && producto.tipo === 'producto',
-            cantidad,
-            precioBase: precio,
-            costoUnitario: producto?.costo ?? 0,
-            descuentoTipo: descuento > 0 ? 'porcentaje' : 'ninguno',
-            descuentoValor: descuento > 0 ? descuento : 0,
-            /** Mismo valor por defecto que la carga manual. */
-            categoria: producto?.categoria || 'Sin categoria',
+          const errores: string[] = [];
+          if (!fecha) errores.push('Fecha obligatoria en formato aaaa-mm-dd o dd-mm-aaaa.');
+          if (!proveedor) errores.push('Falta el Proveedor o el RUT.');
+          if (calculo.monto <= 0) errores.push('El monto debe ser mayor a 0.');
+          if (textoCategoria && !normalizarCategoria(textoCategoria)) {
+            errores.push(`Categoria "${textoCategoria}" no existe. Usa: ${CATEGORIAS.join(', ')}.`);
+          }
+
+          // El folio viaja en las notas, que es donde el gasto guarda su trazabilidad.
+          const existe = Boolean(folio) && gastosExistentes.some(g =>
+            String(g.notas ?? '').toLowerCase().includes(`folio ${folio}`.toLowerCase())
+            && normKey(g.proveedor) === normKey(proveedor)
+            && g.fecha === fecha
+          );
+
+          // tipo_documento_compra, periodo_tributario y los saldos los recalcula addGasto
+          // a partir de esFactura y estado, asi que no se envian desde aqui.
+          const gasto: Partial<Gasto> = {
+            fecha: fecha || hoy,
+            proveedor: proveedor || 'Proveedor sin identificar',
+            categoria,
             subtotal: calculo.subtotal,
             iva: calculo.iva,
-            total: calculo.total,
+            monto: calculo.monto,
+            esFactura: tipoDocumento === 'factura_electronica' || tipoDocumento === 'factura_exenta',
+            estado,
+            metodo_pago: metodoPago,
+            notas: nota && folio ? `${nota} · Folio ${folio}` : nota || (folio ? `Folio ${folio}` : ''),
           };
+          if (fechaVencimiento) gasto.fecha_vencimiento = fechaVencimiento;
 
-          // Sin Folio cada fila es una venta independiente; con Folio se acumulan las líneas.
-          const clave = folio ? `F:${folio}` : `L${numeroFila}`;
-          const grupo = grupos.get(clave);
-          if (grupo) {
-            grupo.items.push(item);
-            grupo.errores.push(...errores.map(e => `Fila ${numeroFila}: ${e}`));
-            if (!grupo.fecha && fecha) grupo.fecha = fecha;
-            if (!grupo.cliente && cliente) grupo.cliente = cliente;
-            if (!grupo.nota && nota) grupo.nota = nota;
-            if (estado === 'Pendiente') grupo.estado = 'Pendiente';
-          } else {
-            grupos.set(clave, {
-              clave,
-              folio,
-              fecha,
-              cliente,
-              tipoDocumento,
-              estado,
-              metodoPago,
-              nota,
-              items: [item],
-              errores: errores.map(e => `Fila ${numeroFila}: ${e}`),
-            });
-          }
+          lista.push({
+            clave: `L${numeroFila}-${normKey(proveedor).slice(0, 8)}`,
+            fila: numeroFila,
+            fecha: fecha || '—',
+            proveedor: proveedor || '—',
+            folio,
+            categoria,
+            tipoDocumento,
+            subtotal: calculo.subtotal,
+            iva: calculo.iva,
+            monto: calculo.monto,
+            estado,
+            metodoPago,
+            fechaVencimiento,
+            nota,
+            existe,
+            errores,
+            gasto,
+          });
         });
 
-        const lista: VentaPrevia[] = [...grupos.values()].map(g => {
-          const subtotal = g.items.reduce((acc, i) => acc + i.subtotal, 0);
-          const iva = g.items.reduce((acc, i) => acc + i.iva, 0);
-          const total = g.items.reduce((acc, i) => acc + i.total, 0);
-          const pendiente = g.estado === 'Pendiente' ? total : 0;
-          const fecha = g.fecha || hoy;
-          const cliente = g.cliente || 'Cliente General';
-          return {
-            clave: g.clave,
-            folio: g.folio,
-            fecha,
-            cliente,
-            tipoDocumento: g.tipoDocumento,
-            items: g.items.length,
-            subtotal,
-            iva,
-            total,
-            estado: g.estado,
-            metodoPago: g.metodoPago,
-            // El Folio queda trazado en la nota: permite detectar y no repetir una carga.
-            existe: !!g.folio && ventasExistentes.some(v =>
-              v.fecha === fecha && !!v.nota && v.nota.includes(`Folio masiva: ${g.folio}`)),
-            errores: g.errores,
-            venta: {
-              fecha,
-              cliente,
-              productos: g.items,
-              subtotal,
-              iva,
-              monto: total,
-              estado: g.estado,
-              tipo_documento: g.tipoDocumento,
-              metodo_pago: g.metodoPago,
-              modo_integracion: modoIntegracion,
-              saldo_base: pendiente,
-              saldo_pendiente: pendiente,
-              monto_efectivo: g.estado === 'Pagado' && g.metodoPago === 'efectivo' ? total : undefined,
-              monto_digital: g.estado === 'Pagado' && g.metodoPago !== 'efectivo' ? total : undefined,
-              nota: `${g.nota ? `${g.nota} ` : ''}${g.folio ? `Folio masiva: ${g.folio}` : ''}`.trim() || undefined,
-            },
-          };
-        });
+        if (lista.length === 0) throw new Error('El archivo no tiene filas de datos.');
 
         setPrevias(lista);
         setSeleccionadas(new Set(lista.filter(p => p.errores.length === 0 && !p.existe).map(p => p.clave)));
-        setCargando(false);
-        if (lista.length === 0) setError('El archivo no tiene filas con datos de venta.');
-      } catch (err) {
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo interpretar el archivo.');
         setPrevias([]);
+      } finally {
         setCargando(false);
-        setError(err instanceof Error ? err.message : 'No se pudo leer el archivo.');
       }
-    };
-    reader.onerror = () => {
-      setCargando(false);
-      setError('No se pudo leer el archivo.');
     };
     reader.readAsArrayBuffer(file);
   };
@@ -391,7 +330,7 @@ export default function ModalCargaMasivaVentas({
   const conProblemas = previas.filter(p => p.errores.length > 0 || p.existe);
 
   const confirmar = () => {
-    onImport(aImportar.map(p => p.venta));
+    onImport(aImportar.map(p => p.gasto));
     onClose();
   };
 
@@ -402,8 +341,8 @@ export default function ModalCargaMasivaVentas({
       <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
         <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50">
           <div>
-            <h3 className="text-xl font-bold text-primary">Carga Masiva de Ventas</h3>
-            <p className="text-xs text-on-surface-variant mt-1">Sube tu Excel con muchas ventas a la vez usando nuestra plantilla.</p>
+            <h3 className="text-xl font-bold text-primary">Carga Masiva de Gastos</h3>
+            <p className="text-xs text-on-surface-variant mt-1">Sube tu Excel con muchos gastos a la vez. Aceptamos tambien el detalle de compras del SII.</p>
           </div>
           <button onClick={onClose} className="text-outline hover:text-error transition-colors">
             <span className="material-symbols-outlined">close</span>
@@ -426,7 +365,7 @@ export default function ModalCargaMasivaVentas({
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-bold text-on-surface">¿Primera vez cargando?</p>
-                <p className="text-xs text-on-surface-variant">Descarga la plantilla con las columnas y un ejemplo de venta por fila.</p>
+                <p className="text-xs text-on-surface-variant">Descarga la plantilla con las columnas y un ejemplo de gasto por fila.</p>
               </div>
             </div>
             <button
@@ -472,8 +411,8 @@ export default function ModalCargaMasivaVentas({
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-on-surface truncate">{archivo?.name}</p>
                   <p className="text-xs text-on-surface-variant">
-                    {previas.length} ventas detectadas · {aImportar.length} por importar ·{' '}
-                    {formatPesos(previas.reduce((acc, p) => acc + p.total, 0))} en total
+                    {previas.length} gastos detectados · {aImportar.length} por importar ·{' '}
+                    {formatPesos(previas.reduce((acc, p) => acc + p.monto, 0))} en total
                   </p>
                 </div>
               </div>
@@ -526,8 +465,8 @@ export default function ModalCargaMasivaVentas({
                       <th className="px-4 py-3 w-10"></th>
                       <th className="px-4 py-3">Folio</th>
                       <th className="px-4 py-3">Fecha</th>
-                      <th className="px-4 py-3">Cliente</th>
-                      <th className="px-4 py-3 text-center">Líneas</th>
+                      <th className="px-4 py-3">Proveedor</th>
+                      <th className="px-4 py-3">Categoría</th>
                       <th className="px-4 py-3 text-right">Total</th>
                       <th className="px-4 py-3 text-center">Estado</th>
                     </tr>
@@ -548,9 +487,9 @@ export default function ModalCargaMasivaVentas({
                           </td>
                           <td className="px-4 py-3 font-bold text-primary">{p.folio || '—'}</td>
                           <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap">{p.fecha}</td>
-                          <td className="px-4 py-3 truncate max-w-[200px] font-medium" title={p.cliente}>{p.cliente}</td>
-                          <td className="px-4 py-3 text-center text-on-surface-variant">{p.items}</td>
-                          <td className="px-4 py-3 text-right font-black text-on-surface whitespace-nowrap">{formatPesos(p.total)}</td>
+                          <td className="px-4 py-3 truncate max-w-[180px] font-medium" title={p.proveedor}>{p.proveedor}</td>
+                          <td className="px-4 py-3 text-on-surface-variant text-xs">{p.categoria}</td>
+                          <td className="px-4 py-3 text-right font-black text-on-surface whitespace-nowrap">{formatPesos(p.monto)}</td>
                           <td className="px-4 py-3 text-center">
                             {p.errores.length > 0 ? (
                               <span title={p.errores.join(' | ')} className="inline-flex items-center gap-1 text-[9px] bg-error-container text-on-error-container px-2 py-0.5 rounded-full font-black uppercase cursor-help">
@@ -576,14 +515,14 @@ export default function ModalCargaMasivaVentas({
               {conProblemas.length > 0 && (
                 <details className="px-4 py-3 rounded-2xl bg-warning-container border border-warning/30 text-xs text-on-warning-container">
                   <summary className="font-black cursor-pointer">
-                    {conProblemas.length} venta(s) no se importarán — revisa los detalles
+                    {conProblemas.length} fila(s) no se importarán — revisa los detalles
                   </summary>
                   <ul className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-2">
                     {conProblemas.map(p => (
                       <li key={p.clave} className="bg-surface-container-lowest/70 rounded-xl px-3 py-2">
-                        <span className="font-bold">Folio {p.folio || '—'} · {p.cliente}</span>
-                        <ul className="list-disc list-inside mt-1 text-on-warning-container">
-                          {p.existe && <li>Ya existe una venta con este Folio en la misma fecha.</li>}
+                        <span className="font-bold">Fila {p.fila} · {p.proveedor}</span>
+                        <ul className="list-disc list-inside mt-1">
+                          {p.existe && <li>Ya existe un gasto con este Folio, Proveedor y Fecha.</li>}
                           {p.errores.map((e, i) => <li key={i}>{e}</li>)}
                         </ul>
                       </li>
@@ -605,7 +544,7 @@ export default function ModalCargaMasivaVentas({
             className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-sm">cloud_upload</span>
-            Importar {aImportar.length} ventas
+            Importar {aImportar.length} gastos
           </button>
         </div>
       </div>

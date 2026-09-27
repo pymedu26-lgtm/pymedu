@@ -1,11 +1,12 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useERP, Gasto, MetodoPago } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import ModalSincronizacionSIICompras from '../components/ModalSincronizacionSIICompras';
 import TarjetasResumen from '../components/TarjetasResumen';
 import SelectorFecha from '../components/SelectorFecha';
 import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
+
+const ModalCargaMasivaGastos = lazy(() => import('../components/ModalCargaMasivaGastos'));
 
 const CATEGORIAS_GASTO = ['Insumos/Mercaderia','Servicios Basicos','Arriendo','Sueldos','Publicidad','Tecnologia','Transporte','Capacitacion','Mantencion','IVA/Impuestos','Otros'];
 const METODOS: { value: MetodoPago; label: string }[] = [
@@ -21,7 +22,7 @@ export default function ERPGastos() {
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState('Todas');
   const [showModal, setShowModal] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -32,9 +33,9 @@ export default function ERPGastos() {
     metodo_pago: 'efectivo', recurrente: false,
   });
 
-  const handleImportSII = (nuevosGastos: Partial<Gasto>[]) => {
+  const handleImportMasivo = (nuevosGastos: Partial<Gasto>[]) => {
     nuevosGastos.forEach(g => {
-      addGasto(g as any);
+      addGasto(g as Omit<Gasto, 'id'>);
     });
   };
 
@@ -182,10 +183,10 @@ export default function ERPGastos() {
           <p className="text-on-surface-variant mt-1 text-sm">Registra todos los egresos y controla tu credito fiscal IVA.</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => setShowSyncModal(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-surface-container-lowest text-error border border-error/30 rounded-2xl font-bold text-sm shadow-sm hover:bg-error/5 transition-colors">
-            <span className="material-symbols-outlined text-lg">sync</span>
-            Sincronizar SII
+          <button onClick={() => setShowCargaMasiva(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-2xl font-bold text-sm shadow-sm hover:bg-primary/5 transition-colors">
+            <span className="material-symbols-outlined text-lg">cloud_upload</span>
+            Carga Masiva
           </button>
           <button onClick={() => { setEditingId(null); setShowModal(true); }}
             className="flex items-center gap-2 px-5 py-3 bg-error text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-error/20 hover:scale-105 transition-transform">
@@ -439,12 +440,16 @@ export default function ERPGastos() {
         onConfirm={() => { if (itemToDelete) deleteGasto(itemToDelete); }}
         title="Eliminar Gasto" />
 
-      <ModalSincronizacionSIICompras 
-        isOpen={showSyncModal}
-        onClose={() => setShowSyncModal(false)}
-        onImport={handleImportSII}
-        gastosExistentes={gastos}
-      />
+      {showCargaMasiva && (
+        <Suspense fallback={null}>
+          <ModalCargaMasivaGastos
+            isOpen
+            onClose={() => setShowCargaMasiva(false)}
+            onImport={handleImportMasivo}
+            gastosExistentes={gastos}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
