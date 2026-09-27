@@ -36,9 +36,9 @@ const ETIQUETA_STOCK: Record<EstadoStock, { texto: string; clase: string }> = {
 };
 
 /**
- * Filtro de mes de Inventario. Se usa en las dos pestañas, solo cambia de lado: en
- * Inventario va a la izquierda de las pestañas y en Movimientos a la derecha. Comparte
- * el componente y las opciones con Ventas para que ambos modulos se comporten igual.
+ * Filtro de mes de Inventario. Vive en la misma fila que las pestañas en las dos
+ * pestañas, siempre a la izquierda, con las pestañas a la derecha. Comparte el
+ * componente y las opciones con Ventas para que ambos modulos se comporten igual.
  */
 function FiltroPeriodoMes({ periodo, etiqueta, rango, onPeriodo, onRango }: {
   periodo: string;
@@ -414,20 +414,18 @@ export default function ERPInventario() {
         )}
       </div>
 
-      {/* Tabs. El filtro de mes vive en la misma fila en las dos pestañas: a la
-          izquierda en Inventario y a la derecha en Movimientos. Se eliminaron los
+      {/* Tabs. El filtro de mes vive en la misma fila en las dos pestañas y siempre
+          a la izquierda; el grupo de pestañas queda a la derecha. Se eliminaron los
           botones table_rows / grid_view, asi que la vista de tarjetas ya no tiene
           forma de activarse y la tabla es la unica vista. */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        {activeTab === 'lista' && (
-          <FiltroPeriodoMes
-            periodo={periodoMovimientos}
-            etiqueta={etiquetaRangoMovimientos}
-            rango={rangoMovimientos}
-            onPeriodo={elegirPeriodoMovimientos}
-            onRango={setRangoMovimientos}
-          />
-        )}
+        <FiltroPeriodoMes
+          periodo={periodoMovimientos}
+          etiqueta={etiquetaRangoMovimientos}
+          rango={rangoMovimientos}
+          onPeriodo={elegirPeriodoMovimientos}
+          onRango={setRangoMovimientos}
+        />
 
         <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto">
           {[
@@ -447,16 +445,6 @@ export default function ERPInventario() {
             </button>
           ))}
         </div>
-
-        {activeTab === 'movimientos' && (
-          <FiltroPeriodoMes
-            periodo={periodoMovimientos}
-            etiqueta={etiquetaRangoMovimientos}
-            rango={rangoMovimientos}
-            onPeriodo={elegirPeriodoMovimientos}
-            onRango={setRangoMovimientos}
-          />
-        )}
       </div>
 
       {activeTab === 'lista' && (
