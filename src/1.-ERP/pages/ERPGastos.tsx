@@ -274,20 +274,19 @@ export default function ERPGastos() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['ID', 'Fecha', 'Proveedor / Concepto', 'Categoria', 'Monto', 'Saldo', 'Metodo', 'Estado', 'Acciones'].map(h => (
+                {['Fecha', 'Proveedor / Concepto', 'Categoria', 'Monto', 'Saldo', 'Metodo', 'Estado', 'Acciones'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {gastosFiltrados.length === 0 && (
-                <tr><td colSpan={9} className="p-8 text-center text-on-surface-variant">No se encontraron gastos.</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-on-surface-variant">No se encontraron gastos.</td></tr>
               )}
               {gastosFiltrados.map(g => {
                 const saldo = getSaldoPendienteGasto(g.id);
                 return (
                   <tr key={g.id} className={cn('hover:bg-surface-container-low/50 transition-colors', saldo > 0 ? 'bg-secondary/5' : '')}>
-                    <td className="p-4 font-mono text-xs text-outline">{g.id}</td>
                     <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</td>
                     <td className="p-4">
                       <p className="font-bold text-on-surface">{g.proveedor}</p>
@@ -326,7 +325,7 @@ export default function ERPGastos() {
             </tbody>
             <tfoot className="bg-surface-container-low border-t-2 border-outline-variant/30">
               <tr>
-                <td colSpan={4} className="p-4 font-extrabold text-on-surface">TOTAL</td>
+                <td colSpan={3} className="p-4 font-extrabold text-on-surface">TOTAL</td>
                 <td className="p-4 font-extrabold text-error">{fmt(gastosFiltrados.reduce((a, g) => a + g.monto, 0))}</td>
                 <td colSpan={4} />
               </tr>
