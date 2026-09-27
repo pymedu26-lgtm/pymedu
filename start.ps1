@@ -34,10 +34,10 @@ Write-Host ""
 Write-Host "  Frontend:  http://localhost:3000" -ForegroundColor White
 Write-Host "  API:       http://localhost:4000" -ForegroundColor White
 Write-Host ""
-Write-Host "  Base de datos: Supabase (remota)" -ForegroundColor White
-Write-Host "  (configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env)" -ForegroundColor White
+Write-Host "  Base de datos: PostgreSQL en Railway" -ForegroundColor White
+Write-Host "  (configura DATABASE_URL y JWT_SECRET en .env)" -ForegroundColor White
 Write-Host ""
-Write-Host "  Cuentas demo (password: demo123):" -ForegroundColor Yellow
+Write-Host "  Cuentas demo (password: Demo#2026):" -ForegroundColor Yellow
 Write-Host "    - supadmin@pymedu.com (Super Admin)" -ForegroundColor White
 Write-Host "    - admin@colegiosanjose.cl (Admin Institucional)" -ForegroundColor White
 Write-Host "    - coord@colegiosanjose.cl (Coordinador)" -ForegroundColor White

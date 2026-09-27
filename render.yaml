@@ -10,11 +10,12 @@ services:
     startCommand: node src/index.js
     plan: free
     envVars:
-      - key: SUPABASE_URL
+      # Postgres en Railway. Copiar la URL publica de Railway y pegarla en el
+      # dashboard de Render cuando lo pida.
+      - key: DATABASE_URL
         sync: false
-      - key: SUPABASE_ANON_KEY
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      # Firma los JWT de /login. Generar con: openssl rand -hex 32
+      - key: JWT_SECRET
         sync: false
       - key: FRONT_URL
         sync: false

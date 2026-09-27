@@ -9,6 +9,10 @@ dist/
 *.db-wal
 *.db-shm
 
+# Tokens sueltos
+tmp_token.txt
+server/tmp_token.txt
+
 # Deploy
 .vercel/
 

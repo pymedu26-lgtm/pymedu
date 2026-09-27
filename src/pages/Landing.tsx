@@ -60,7 +60,7 @@ const FAQS = [
   { q: '¿Necesito ser contador para usar PymEdu?', a: 'No. PymEdu está diseñado para dueños de negocio sin formación contable. Todo está explicado en lenguaje cotidiano.' },
   { q: '¿Puedo probarlo antes de pagar?', a: 'Sí. Crea una cuenta gratis y usa el demo premium sin costo por tiempo ilimitado.' },
   { q: '¿Funciona para mi tipo de negocio?', a: 'PymEdu funciona para cualquier mype: retail, servicios, gastronomía, manufactura, profesionales independientes.' },
-  { q: '¿Mis datos están seguros?', a: 'Sí. Usamos Supabase (PostgreSQL) con encriptación en reposo y tránsito, RLS por empresa, y autenticación segura.' },
+  { q: '¿Mis datos están seguros?', a: 'Sí. Usamos PostgreSQL en Railway con encriptación en tránsito, sesiones firmadas con token y separación de datos por empresa.' },
 ];
 
 export default function Landing() {

@@ -49,40 +49,7 @@ function generarToken(perfil) {
   );
 }
 
-// El frontend se autentica con Supabase Auth; ademas aceptamos access tokens de
-// Supabase validandolos contra /auth/v1/user.
-async function verificarSupabase(token) {
-  const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
-  if (!supabaseUrl) {
-    console.error('[auth] SUPABASE_URL no configurada.');
-    return null;
-  }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10000);
-  try {
-    const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      headers: {
-        apikey: process.env.SUPABASE_ANON_KEY || '',
-        Authorization: `Bearer ${token}`,
-      },
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const cuerpo = await res.text().catch(() => '');
-      console.error(`[auth] Supabase /auth/v1/user HTTP ${res.status}: ${cuerpo.slice(0, 300)}`);
-      return null;
-    }
-    const user = await res.json();
-    return user && user.id ? user : null;
-  } catch (error) {
-    console.error('[auth] Error llamando Supabase /auth/v1/user:', error);
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// Middleware async: valida JWT local; si falla, valida contra Supabase.
+// Middleware async: valida el JWT firmado por /login contra la tabla perfiles.
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -103,19 +70,7 @@ async function requireAuth(req, res, next) {
     return next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      const usuarioSupabase = await verificarSupabase(token);
-      if (!usuarioSupabase || !usuarioSupabase.id) {
-        console.error('[auth] Token rechazado por Supabase. Prefijo:', token.slice(0, 24), '...');
-        return res.status(401).json({ error: 'Token invalido o expirado' });
-      }
-      const perfil = await db.prepare('SELECT * FROM perfiles WHERE email = ? AND activo = 1').get(usuarioSupabase.email || '');
-      req.perfil = {
-        id: perfil ? perfil.id : usuarioSupabase.id,
-        email: perfil ? perfil.email : (usuarioSupabase.email || ''),
-        nombre_completo: perfil ? perfil.nombre_completo : '',
-        rol: perfil ? perfil.rol : 'emprendedor',
-      };
-      return next();
+      return res.status(401).json({ error: 'Token invalido o expirado' });
     }
     console.error('[auth] Error verificando token:', error);
     return res.status(500).json({ error: 'Error interno del servidor' });

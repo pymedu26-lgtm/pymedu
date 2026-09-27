@@ -7,7 +7,6 @@ const router = Router();
 router.use(requireAuth);
 
 // Activa (o degrada) la membresia del propio usuario autenticado.
-// Equivale a la funcion activar_membresia() que en Supabase era SECURITY DEFINER.
 router.post('/activar', async (req, res) => {
   try {
     const { nivel, expira } = req.body ?? {};

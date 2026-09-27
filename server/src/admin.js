@@ -40,7 +40,6 @@ router.get('/perfiles/conteo-por-rol', soloSuperadmin, async (req, res) => {
 });
 
 // Superadmin crea un usuario con rol y membresia.
-// Equivale a la RPC admin_crear_usuario de Supabase.
 router.post('/crear-usuario', soloSuperadmin, async (req, res) => {
   try {
     const {

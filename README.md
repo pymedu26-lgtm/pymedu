@@ -6,14 +6,14 @@ Sistema completo de gestión para pequeñas y medianas empresas, con estructura 
 
 - **Estructura jerárquica de roles**: SuperAdmin → Admin Institucional → Coordinador → Mentor → Emprendedor
 - **Multi-tenant**: Soporte para múltiples instituciones
-- **Base de datos escalable**: PostgreSQL administrado con Supabase
-- **Autenticación local**: Sin dependencia de servicios externos
+- **Base de datos escalable**: PostgreSQL en Railway
+- **Autenticación local**: JWT firmado por la propia API, sin dependencia de servicios externos
 
 ## Requisitos Previos
 
 - [Node.js](https://nodejs.org/) v18 o superior
 - npm o yarn
-- Proyecto en [Supabase](https://supabase.com) creado
+- Un PostgreSQL creado en [Railway](https://railway.app)
 
 ## Instalación Rápida
 
@@ -33,7 +33,7 @@ npm install
 cp .env.example .env
 ```
 
-Luego completa en `.env` tus credenciales de Supabase (ver sección **Conexión a Supabase**).
+Luego completa en `.env` tu `DATABASE_URL` de Railway y un `JWT_SECRET` (ver sección **Base de datos**).
 
 ### 4. Iniciar servicios
 ```bash
@@ -61,50 +61,29 @@ npm run dev
 | Frontend | http://localhost:3000 |
 | API | http://localhost:4000 |
 
-## Conexión a Supabase
+## Base de datos
 
-El frontend se conecta a Supabase usando `@supabase/supabase-js`. Solo necesitas dos variables en `.env`:
+PostgreSQL en Railway. La API se conecta con la librería `pg` usando una sola variable:
 
 ```
-VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...tu-anon-key...
+DATABASE_URL="postgresql://usuario:password@host.railway.app:5432/railway?sslmode=require"
+JWT_SECRET="un-secreto-largo-y-aleatorio"
 ```
 
-### ¿Cómo obtener las keys?
+- `DATABASE_URL`: en Railway → tu proyecto → **Variables** → copia la URL pública de Postgres.
+- `JWT_SECRET`: firma los tokens de sesión. Generar con `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
 
-1. Entra a [Supabase Dashboard](https://supabase.com/dashboard)
-2. Selecciona tu proyecto
-3. Ve a **Settings → API** (o **Project Settings → API Keys**)
-4. Copia:
-   - **Project URL** → `VITE_SUPABASE_URL`
-   - **anon public** (o **API Keys → anon**) → `VITE_SUPABASE_ANON_KEY`
+### Esquema
 
-> **Importante**: usa siempre la key `anon` pública en el frontend, nunca la `service_role` (es secreta).
+No hay archivos SQL que correr: `server/src/db.js` crea las tablas con `CREATE TABLE IF NOT EXISTS` al conectar, así que basta con apuntar `DATABASE_URL` a una base vacía. Las tablas son `instituciones`, `perfiles`, `programas`, `usuario_programas`, `pagos`, `solicitudes_vinculacion`, `codigos_invitacion` y `erp_datos`.
 
-### SQL de la base de datos
+### Datos demo
 
-Todos los scripts SQL están en la carpeta `1.-SUPABASE/`:
+Con `SEED_DEMO=1` en `.env`, la API inserta las cuentas demo de la tabla de abajo la primera vez que arranca (bcrypt, contraseña `Demo#2026`). Sin esa variable no se insertan.
 
-| Archivo | Descripción |
-|---------|-------------|
-| `00-reset.sql` | Elimina TODO el esquema public + usuarios demo (partir de cero) |
-| `01-init.sql` | Estructura de la base de datos |
-| `02-seed.sql` | Datos de prueba |
-| `03-migrate.sql` | Script de migración |
-| `04-supabase-migracion.sql` | Migración completa para Supabase (esquema + RLS + seed) |
-| `05-supabase-seed.sql` | Usuarios demo en Supabase Auth |
+### Autenticación
 
-### Crear la base de datos en Supabase (desde cero)
-
-1. Entra a tu proyecto → **SQL Editor** → **New Query**
-2. Pega el contenido de `04-supabase-migracion.sql` y ejecútalo
-3. Luego pega y ejecuta `05-supabase-seed.sql` (usuarios demo)
-
-### Resetear y volver a empezar
-
-1. Ejecuta `00-reset.sql` (borra todas las tablas, funciones, policies y usuarios demo)
-2. Ejecuta `04-supabase-migracion.sql`
-3. Ejecuta `05-supabase-seed.sql`
+No hay proveedor externo. `POST /api/auth/login` valida el bcrypt contra la tabla `perfiles` y devuelve un JWT firmado con `JWT_SECRET` (24 h). `requireAuth` (`server/src/auth.js`) lo verifica en cada request y carga el perfil desde la base; si el token expiró responde `401` y el frontend debe volver a iniciar sesión.
 
 ## Credenciales Demo
 
@@ -117,7 +96,7 @@ Todos los scripts SQL están en la carpeta `1.-SUPABASE/`:
 | Emprendedor | emprendedor@pymedu.com | `Demo#2026` |
 | Demo (todos los roles) | demo@pymedu.com | `Demo#2026` |
 
-> La contraseña de todos los accesos demo es `Demo#2026`. Para activar los botones de acceso rápido de la pantalla de Login deben existir estos usuarios en Supabase (Auth + tabla `perfiles`), creados con `05-supabase-seed.sql`.
+> La contraseña de todos los accesos demo es `Demo#2026`. Se insertan al arrancar la API con `SEED_DEMO=1`.
 
 ## Estructura de Roles
 
@@ -157,29 +136,28 @@ npm run server
 
 ```
 PymEdu/
-├── 1.-SUPABASE/
-│   ├── 01-init.sql           # Estructura de BD
-│   ├── 02-seed.sql           # Datos de prueba
-│   ├── 03-migrate.sql        # Script de migración
-│   ├── 04-supabase-migracion.sql
-│   └── 05-supabase-seed.sql
 ├── src/
 │   ├── lib/
-│   │   ├── api.ts        # Cliente API local
-│   │   └── supabase.ts   # Cliente Supabase (supabase-js)
+│   │   ├── api.ts            # Cliente de la API
+│   │   ├── roles.ts          # Rampa de colores por rol
+│   │   └── useColoresTema.ts # Lee los tokens del tema para Recharts
 │   ├── context/
-│   │   └── AuthContext.tsx
+│   │   ├── AuthContext.tsx
+│   │   └── ThemeContext.tsx
 │   └── ...
 ├── server/
-│   └── src/              # Backend API (Express)
+│   └── src/                  # Backend API (Express + pg)
+│       ├── index.js
+│       ├── db.js             # Pool de Postgres + creación del esquema
+│       └── auth.js           # /login y requireAuth
 └── package.json
 ```
 
 ### Agregar Nuevos Roles
 
-1. Editar `1.-SUPABASE/01-init.sql`:
+1. Editar la tabla `perfiles` en la base (quitar el `CHECK` del rol si existe):
 ```sql
-ALTER TABLE perfiles DROP CONSTRAINT perfiles_rol_check;
+ALTER TABLE perfiles DROP CONSTRAINT IF EXISTS perfiles_rol_check;
 ALTER TABLE perfiles ADD CONSTRAINT perfiles_rol_check CHECK (rol IN (
   'superadmin', 'admin_institucional', 'coordinador', 
   'mentor', 'emprendedor', 'dueño', 'vendedor', 
