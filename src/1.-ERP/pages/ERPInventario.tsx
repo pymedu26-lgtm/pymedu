@@ -36,6 +36,41 @@ const ETIQUETA_STOCK: Record<EstadoStock, { texto: string; clase: string }> = {
 };
 
 /**
+ * Campos que se autocompletan al elegir Producto o Servicio. Lo que no aplica en el
+ * otro caso se deja en cero o vacio a proposito: un servicio con stock o codigo de
+ * barras colgando ensucia la valorizacion, el historial y el contador de alertas.
+ */
+const CAMPOS_INICIALES = (tipo: 'producto' | 'servicio' = 'producto'): Partial<Producto> => ({
+  nombre: '',
+  codigo: '',
+  codigoBarras: '',
+  categoria: tipo === 'servicio' ? 'Servicios' : 'Mercadería',
+  tipo,
+  tipoOperativo: tipo === 'servicio' ? 'servicio' : 'producto_simple',
+  descripcion: '',
+  costo: 0,
+  precio: 0,
+  incluyeIva: true,
+  stock: 0,
+  stockReservado: 0,
+  stockMinimo: 0,
+  unidadMedida: tipo === 'servicio' ? 'servicio' : 'un',
+  estado: 'activo',
+  proveedorId: ''
+});
+
+/** Campos que el usuario escribio y que valen igual para un producto y para un servicio. */
+const CAMPOS_COMUNES: (keyof Producto)[] = [
+  'nombre', 'codigo', 'descripcion', 'costo', 'precio', 'incluyeIva', 'proveedorId', 'estado'
+];
+
+/** Categorias segun el tipo, para no guardar un producto en "Servicios" o al reves. */
+const CATEGORIAS_POR_TIPO = {
+  producto: ['Mercadería', 'Insumos', 'Otros'],
+  servicio: ['Servicios', 'Otros']
+} as const;
+
+/**
  * Filtro de mes de Inventario. Vive en la misma fila que las pestañas en las dos
  * pestañas, siempre a la izquierda, con las pestañas a la derecha. Comparte el
  * componente y las opciones con Ventas para que ambos modulos se comporten igual.
@@ -252,24 +287,7 @@ export default function ERPInventario() {
       .slice(0, 5);
   }, [ventas, inventario, rangoMovimientos]);
 
-  const [nuevoProducto, setNuevoProducto] = useState<Partial<Producto>>({
-    nombre: '',
-    codigo: '',
-    codigoBarras: '',
-    categoria: 'Mercadería',
-    tipo: 'producto',
-    tipoOperativo: 'producto_simple',
-    descripcion: '',
-    costo: 0,
-    precio: 0,
-    incluyeIva: true,
-    stock: 0,
-    stockReservado: 0,
-    stockMinimo: 0,
-    unidadMedida: 'un',
-    estado: 'activo',
-    proveedorId: ''
-  });
+  const [nuevoProducto, setNuevoProducto] = useState<Partial<Producto>>(CAMPOS_INICIALES());
 
   /**
    * Orden de columnas del archivo de inventario. Es el mismo que usa la plantilla,
@@ -322,6 +340,11 @@ export default function ERPInventario() {
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'producto' | 'servicio'>('todos');
+
+  // Tipo efectivo del formulario. Se normaliza en un solo lugar porque la pregunta, los
+  // campos condicionales y el guardado dependen de el, y si quedara indefinido la
+  // pregunta marcaria Producto mientras el bloque de stock seguiria oculto.
+  const tipoEnFormulario: 'producto' | 'servicio' = nuevoProducto.tipo === 'servicio' ? 'servicio' : 'producto';
 
   // "Activos" de verdad: la etiqueta prometia productos vendibles, pero contaba servicios
   // e inactivos, mientras que el selector de Ventas solo ofrece los que estan activos.
@@ -377,23 +400,41 @@ export default function ERPInventario() {
     setShowHistorialModal(true);
   };
 
+  /**
+   * Cambiar entre Producto y Servicio autocompleta los campos que dependen del tipo y
+   * respeta lo que el usuario ya escribio. Al editar no se permite cambiar el tipo, como
+   * antes: mover un producto con historial a servicio dejaria movimientos huerfanos.
+   */
+  const elegirTipo = (tipo: 'producto' | 'servicio') => {
+    if (editingId) return;
+    setNuevoProducto(prev => {
+      const yaEscrito = Object.fromEntries(
+        CAMPOS_COMUNES.filter(k => prev[k] !== undefined && prev[k] !== '').map(k => [k, prev[k]])
+      );
+      return { ...CAMPOS_INICIALES(tipo), ...yaEscrito };
+    });
+  };
+
   const handleGuardar = () => {
     if (nuevoProducto.nombre && nuevoProducto.categoria) {
+      const esServicio = tipoEnFormulario === 'servicio';
       const productoData = {
         nombre: nuevoProducto.nombre,
         codigo: nuevoProducto.codigo || '',
-        codigoBarras: nuevoProducto.codigoBarras || '',
+        // Un servicio no se escanea ni se reserva: aunque el formulario esconda estos
+        // campos, se fuerzan aqui para que ningun estado desincronizado los guarde.
+        codigoBarras: esServicio ? '' : (nuevoProducto.codigoBarras || ''),
         categoria: nuevoProducto.categoria,
-        tipo: nuevoProducto.tipo || 'producto',
-        tipoOperativo: nuevoProducto.tipoOperativo || (nuevoProducto.tipo === 'servicio' ? 'servicio' : 'producto_simple'),
+        tipo: esServicio ? 'servicio' : 'producto',
+        tipoOperativo: esServicio ? 'servicio' : (nuevoProducto.tipoOperativo || 'producto_simple'),
         descripcion: nuevoProducto.descripcion || '',
         costo: Number(nuevoProducto.costo) || 0,
         precio: Number(nuevoProducto.precio) || 0,
         incluyeIva: nuevoProducto.incluyeIva ?? true,
-        stock: Number(nuevoProducto.stock) || 0,
-        stockReservado: Number(nuevoProducto.stockReservado) || 0,
-        stockMinimo: Number(nuevoProducto.stockMinimo) || 0,
-        unidadMedida: nuevoProducto.unidadMedida || 'un',
+        stock: esServicio ? 0 : (Number(nuevoProducto.stock) || 0),
+        stockReservado: esServicio ? 0 : (Number(nuevoProducto.stockReservado) || 0),
+        stockMinimo: esServicio ? 0 : (Number(nuevoProducto.stockMinimo) || 0),
+        unidadMedida: esServicio ? 'servicio' : (nuevoProducto.unidadMedida || 'un'),
         estado: nuevoProducto.estado || 'activo',
         proveedorId: nuevoProducto.proveedorId || ''
       };
@@ -403,15 +444,10 @@ export default function ERPInventario() {
       } else {
         addProducto(productoData);
       }
-      
+
       setShowModal(false);
       setEditingId(null);
-      setNuevoProducto({
-        nombre: '', codigo: '', codigoBarras: '', categoria: 'Mercadería',
-        tipo: 'producto', tipoOperativo: 'producto_simple', descripcion: '',
-        costo: 0, precio: 0, incluyeIva: true, stock: 0, stockReservado: 0,
-        stockMinimo: 0, unidadMedida: 'un', estado: 'activo', proveedorId: ''
-      });
+      setNuevoProducto(CAMPOS_INICIALES());
     }
   };
 
@@ -858,6 +894,41 @@ export default function ERPInventario() {
               </button>
             </div>
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* La pregunta va primero porque de ella depende que campos tengan sentido:
+                  un servicio no lleva codigo de barras ni stock minimo. */}
+              <div>
+                <p className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
+                  {editingId ? 'Tipo' : '¿Producto o Servicio?'}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { valor: 'producto', titulo: 'Producto', desc: 'Físico, se controla por stock', icon: 'inventory_2' },
+                    { valor: 'servicio', titulo: 'Servicio', desc: 'Intangible, no lleva stock', icon: 'work' }
+                  ] as const).map(op => {
+                    const activo = tipoEnFormulario === op.valor;
+                    return (
+                      <button
+                        key={op.valor}
+                        type="button"
+                        onClick={() => elegirTipo(op.valor)}
+                        disabled={!!editingId}
+                        className={cn(
+                          "flex flex-col items-start gap-1 p-4 rounded-2xl border-2 text-left transition-all",
+                          activo
+                            ? "border-primary bg-primary/5 shadow-sm"
+                            : "border-outline-variant/30 hover:border-primary/40",
+                          editingId && !activo && "opacity-50"
+                        )}
+                      >
+                        <span className={cn("material-symbols-outlined text-xl", activo ? "text-primary" : "text-outline")}>{op.icon}</span>
+                        <span className={cn("text-sm font-black", activo ? "text-primary" : "text-on-surface")}>{op.titulo}</span>
+                        <span className="text-[11px] text-outline leading-tight">{op.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre</label>
@@ -871,45 +942,37 @@ export default function ERPInventario() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Codigo de barras</label>
-                  <input type="text" value={nuevoProducto.codigoBarras || ''} onChange={(e) => setNuevoProducto({ ...nuevoProducto, codigoBarras: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: 7800000000000" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
-                  <select value={nuevoProducto.tipoOperativo || 'producto_simple'} onChange={(e) => setNuevoProducto({ ...nuevoProducto, tipoOperativo: e.target.value as Producto['tipoOperativo'] })}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                    <option value="producto_simple">Producto simple</option>
-                    <option value="servicio">Servicio</option>
-                    <option value="pack">Pack / combo</option>
-                    <option value="insumo">Insumo</option>
-                    <option value="producto_compuesto">Producto compuesto</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
+                <select value={nuevoProducto.categoria} onChange={(e) => setNuevoProducto({...nuevoProducto, categoria: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
+                  {CATEGORIAS_POR_TIPO[tipoEnFormulario].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Tipo</label>
-                  <select value={nuevoProducto.tipo} onChange={(e) => setNuevoProducto({...nuevoProducto, tipo: e.target.value as 'producto' | 'servicio'})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" disabled={!!editingId}>
-                    <option value="producto">Producto (Físico)</option>
-                    <option value="servicio">Servicio (Intangible)</option>
-                  </select>
+              {/* Codigo de barras y uso operativo solo aplican a un producto fisico: un
+                  servicio no se escanea y su uso operativo es siempre "servicio". */}
+              {tipoEnFormulario === 'producto' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Codigo de barras</label>
+                    <input type="text" value={nuevoProducto.codigoBarras || ''} onChange={(e) => setNuevoProducto({ ...nuevoProducto, codigoBarras: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: 7800000000000" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
+                    <select value={nuevoProducto.tipoOperativo || 'producto_simple'} onChange={(e) => setNuevoProducto({ ...nuevoProducto, tipoOperativo: e.target.value as Producto['tipoOperativo'] })}
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
+                      <option value="producto_simple">Producto simple</option>
+                      <option value="pack">Pack / combo</option>
+                      <option value="insumo">Insumo</option>
+                      <option value="producto_compuesto">Producto compuesto</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
-                  <select value={nuevoProducto.categoria} onChange={(e) => setNuevoProducto({...nuevoProducto, categoria: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                    <option value="Mercadería">Mercadería</option>
-                    <option value="Insumos">Insumos</option>
-                    <option value="Servicios">Servicios</option>
-                    <option value="Otros">Otros</option>
-                  </select>
-                </div>
-              </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Descripción</label>
@@ -948,7 +1011,7 @@ export default function ERPInventario() {
                 <label htmlFor="incluyeIva" className="text-sm text-on-surface font-medium">El precio de venta incluye IVA</label>
               </div>
 
-              {nuevoProducto.tipo === 'producto' && (
+              {tipoEnFormulario === 'producto' && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/20">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Actual</label>
