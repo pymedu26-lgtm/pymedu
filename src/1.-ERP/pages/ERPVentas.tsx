@@ -533,7 +533,7 @@ const stockInsuficiente = productoSeleccionado
 
       {/* Summary Section */}
       <div className="space-y-4">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center gap-4 flex-wrap">
           <SelectorDesplegable
             icono="calendar_month"
             valor={periodoSeleccionado}
@@ -541,6 +541,28 @@ const stockInsuficiente = productoSeleccionado
             opciones={OPCIONES_PERIODO}
             hint={etiquetaRango}
           />
+          {periodoSeleccionado === 'personalizado' && (
+            <div className="flex items-center gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
+                <input
+                  type="date"
+                  value={filtros.fechaInicio}
+                  onChange={e => setFiltros({ ...filtros, fechaInicio: e.target.value })}
+                  className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
+                <input
+                  type="date"
+                  value={filtros.fechaFin}
+                  onChange={e => setFiltros({ ...filtros, fechaFin: e.target.value })}
+                  className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <TarjetasResumen
@@ -622,31 +644,7 @@ const stockInsuficiente = productoSeleccionado
           <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">Filtros Avanzados</h3>
           <button onClick={limpiarFiltros} className="text-sm text-primary hover:underline font-medium">Limpiar Filtros</button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div>
-            <label className="block text-xs text-on-surface-variant mb-1">Desde</label>
-            <input 
-              type="date" 
-              value={filtros.fechaInicio} 
-              onChange={e => {
-                setFiltros({...filtros, fechaInicio: e.target.value});
-                setPeriodoSeleccionado('personalizado');
-              }} 
-              className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-on-surface-variant mb-1">Hasta</label>
-            <input 
-              type="date" 
-              value={filtros.fechaFin} 
-              onChange={e => {
-                setFiltros({...filtros, fechaFin: e.target.value});
-                setPeriodoSeleccionado('personalizado');
-              }} 
-              className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
-            />
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs text-on-surface-variant mb-1">Estado</label>
             <select value={filtros.estado} onChange={e => setFiltros({...filtros, estado: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
