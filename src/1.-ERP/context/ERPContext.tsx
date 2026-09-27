@@ -64,7 +64,7 @@ export interface Venta {
   iva: number;
   monto: number;
   monto_neto?: number;
-  margenEstimado?: number;
+
   /** Propina registrada como campo separado: no infla IVA ni documento tributario,
    *  se suma al total a cobrar (Caja) y queda trazada como propina. */
   propina?: number;

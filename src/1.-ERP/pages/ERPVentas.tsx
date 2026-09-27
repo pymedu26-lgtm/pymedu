@@ -48,6 +48,37 @@ const TIPOS_DOCUMENTO_LOTE: Venta['tipo_documento'][] = [
   'nota_credito',
 ];
 
+/** Categorias de una venta en la tabla: muestra hasta 2 y el resto como "+N". */
+function ChipsCategorias({ categorias }: { categorias: string[] }) {
+  if (categorias.length === 0) {
+    return <span className="text-on-surface-variant/50 text-xs">—</span>;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {categorias.slice(0, 2).map(c => (
+        <span
+          key={c}
+          className={`px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap ${
+            c === 'Sin categoria'
+              ? 'bg-surface-container-high text-on-surface-variant/80 border border-dashed border-outline-variant/40'
+              : 'bg-secondary/15 text-secondary'
+          }`}
+        >
+          {c}
+        </span>
+      ))}
+      {categorias.length > 2 && (
+        <span
+          title={categorias.slice(2).join(', ')}
+          className="px-2 py-1 rounded-full text-[10px] font-bold bg-primary/10 text-primary cursor-help"
+        >
+          +{categorias.length - 2}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function ERPVentas() {
   const { user: userAuth, perfil } = useAuth();
   const {
@@ -331,10 +362,8 @@ const stockInsuficiente = productoSeleccionado
     const subtotal = prods.reduce((acc, p) => acc + p.subtotal, 0);
     const iva = prods.reduce((acc, p) => acc + p.iva, 0);
     const total = prods.reduce((acc, p) => acc + p.total, 0);
-    const costoTotal = prods.reduce((acc, p) => acc + (p.costoUnitario * p.cantidad), 0);
-    const margenEstimado = subtotal > 0 ? ((subtotal - costoTotal) / subtotal) * 100 : 0;
-    
-    return { subtotal, iva, total, margenEstimado };
+
+    return { subtotal, iva, total };
   }, [nuevaVenta.productos]);
 
   const propinaCalculada = aplicarPropina && totalesVenta.subtotal > 0
@@ -466,17 +495,45 @@ const stockInsuficiente = productoSeleccionado
       .sort((a, b) => a.dia.localeCompare(b.dia));
   }, [ventasFiltradas]);
 
+  /* ══ Categorias ══ */
+
+  /** Categoria del inventario por id de producto: respaldo cuando el item no la trae. */
+  const categoriaPorProducto = useMemo(() => {
+    const mapa: Record<string, string> = {};
+    inventario.forEach(p => {
+      if (p.categoria) mapa[p.id] = p.categoria;
+    });
+    return mapa;
+  }, [inventario]);
+
+  /** Categorias distintas de los items de una venta, en el orden en que aparecen. */
+  const categoriasDeVenta = (venta: Venta): string[] => {
+    const cats = new Set<string>();
+    venta.productos.forEach(p => {
+      cats.add(p.categoria || categoriaPorProducto[p.productoId] || 'Sin categoria');
+    });
+    return Array.from(cats);
+  };
+
+  /** Resueltas una vez por venta, para no recalcularlas en cada render de la tabla. */
+  const categoriasPorVenta = useMemo(() => {
+    const mapa: Record<string, string[]> = {};
+    ventasFiltradas.forEach(v => {
+      mapa[v.id] = categoriasDeVenta(v);
+    });
+    return mapa;
+  }, [ventasFiltradas, categoriaPorProducto]);
+
   const datosVentasPorCategoria = useMemo(() => {
     const ventasPorCat: Record<string, number> = {};
     ventasFiltradas.forEach(v => {
       v.productos.forEach(p => {
-        const producto = inventario.find(inv => inv.id === p.productoId);
-        const cat = p.categoria || producto?.categoria || 'Sin categoria';
+        const cat = p.categoria || categoriaPorProducto[p.productoId] || 'Sin categoria';
         ventasPorCat[cat] = (ventasPorCat[cat] || 0) + p.total;
       });
     });
     return Object.entries(ventasPorCat).map(([name, value]) => ({ name, value }));
-  }, [ventasFiltradas, inventario]);
+  }, [ventasFiltradas, categoriaPorProducto]);
 
   const datosMetodosPago = useMemo(() => {
     const metodos: Record<string, number> = {};
@@ -522,7 +579,6 @@ const stockInsuficiente = productoSeleccionado
         subtotal: impactoVenta.neto || impactoVenta.exento || totalesVenta.subtotal,
         iva: impactoVenta.ivaDebito,
         monto: totalesVenta.total,
-        margenEstimado: totalesVenta.margenEstimado,
         /** Propina separada de un documento que SI es venta indicada (no infla IVA). */
         propina: propinaCalculada,
         estado: saldoPendiente > 0 ? 'Pendiente' : 'Pagado',
@@ -841,7 +897,7 @@ const stockInsuficiente = productoSeleccionado
                 <th className="px-6 py-4">Realizado por</th>
                 <th className="px-6 py-4">Productos</th>
                 <th className="px-6 py-4 text-right">Total</th>
-                <th className="px-6 py-4 text-right">Margen</th>
+                <th className="px-6 py-4">Categoria</th>
                 <th className="px-6 py-4 text-center">Estado</th>
                 <th className="px-6 py-4 text-center">Acciones</th>
               </tr>
@@ -892,8 +948,8 @@ const stockInsuficiente = productoSeleccionado
                     ${venta.monto.toLocaleString('es-CL')}
                     <span className="block text-[10px] text-on-surface-variant/60 font-normal">IVA: ${venta.iva?.toLocaleString('es-CL')}</span>
                   </td>
-                  <td className="px-6 py-4 text-right font-bold text-emerald-600">
-                    {venta.margenEstimado != null ? `${venta.margenEstimado.toFixed(1)}%` : '—'}
+                  <td className="px-6 py-4">
+                    <ChipsCategorias categorias={categoriasPorVenta[venta.id] ?? []} />
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${venta.estado === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-secondary/20 text-secondary'}`}>
