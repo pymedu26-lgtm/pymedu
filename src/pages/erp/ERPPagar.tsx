@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useERP, MetodoPago } from '../../1.-ERP/context/ERPContext';
+import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
 import { cn, formatFecha } from '@/lib/utils';
 
 const METODOS: { value: MetodoPago; label: string }[] = [
@@ -120,9 +121,8 @@ export default function ERPPagar() {
                       className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
-                    <input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
+              <SelectorFecha value={form.fecha} onChange={fecha => setForm({ ...form, fecha: fecha })} />
                   </div>
                 </div>
                 <div>

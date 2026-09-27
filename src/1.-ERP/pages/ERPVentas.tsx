@@ -3,6 +3,7 @@ import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
 import BuscadorCliente from '../components/BuscadorCliente';
+import SelectorFecha from '../components/SelectorFecha';
 import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
@@ -546,20 +547,16 @@ const stockInsuficiente = productoSeleccionado
             <div className="flex items-center gap-3">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
-                <input
-                  type="date"
+                <SelectorFecha
                   value={filtros.fechaInicio}
-                  onChange={e => setFiltros({ ...filtros, fechaInicio: e.target.value })}
-                  className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                  onChange={fecha => setFiltros({ ...filtros, fechaInicio: fecha })}
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
-                <input
-                  type="date"
+                <SelectorFecha
                   value={filtros.fechaFin}
-                  onChange={e => setFiltros({ ...filtros, fechaFin: e.target.value })}
-                  className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                  onChange={fecha => setFiltros({ ...filtros, fechaFin: fecha })}
                 />
               </div>
             </div>
@@ -804,11 +801,9 @@ const stockInsuficiente = productoSeleccionado
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha de la venta</label>
-                  <input 
-                    type="date" 
-                    value={nuevaVenta.fecha}
-                    onChange={(e) => setNuevaVenta({...nuevaVenta, fecha: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
+                  <SelectorFecha
+                    value={nuevaVenta.fecha || ''}
+                    onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha: fecha })}
                   />
                 </div>
                 <div>
@@ -1016,13 +1011,11 @@ const stockInsuficiente = productoSeleccionado
                   </div>
                   {impactoVenta.saldoPendiente > 0 && (
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Fecha compromiso de pago</label>
-                      <input
-                        type="date"
-                        value={nuevaVenta.fecha_vencimiento || ''}
-                        onChange={(e) => setNuevaVenta({ ...nuevaVenta, fecha_vencimiento: e.target.value })}
-                        className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                      />
+                    <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Fecha compromiso de pago</label>
+                    <SelectorFecha
+                      value={nuevaVenta.fecha_vencimiento || ''}
+                      onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha_vencimiento: fecha })}
+                    />
                     </div>
                   )}
                 </div>

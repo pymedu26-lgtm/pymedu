@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, type ChangeEvent } from 'react';
 import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import SelectorFecha from '../components/SelectorFecha';
 import { cn } from '@/lib/utils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
@@ -1037,9 +1038,11 @@ export default function ERPInventario() {
                   className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: Compra a proveedor, conteo físico..." />
               </div>
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha</label>
-                <input type="date" value={nuevoMovimiento.fecha} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, fecha: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha</label>
+                    <SelectorFecha
+                      value={nuevoMovimiento.fecha}
+                      onChange={fecha => setNuevoMovimiento({ ...nuevoMovimiento, fecha: fecha })}
+                    />
               </div>
             </div>
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50">

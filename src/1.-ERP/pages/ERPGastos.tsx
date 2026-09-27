@@ -3,6 +3,7 @@ import { useERP, Gasto, MetodoPago } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ModalSincronizacionSIICompras from '../components/ModalSincronizacionSIICompras';
 import TarjetasResumen from '../components/TarjetasResumen';
+import SelectorFecha from '../components/SelectorFecha';
 import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
 
@@ -207,20 +208,16 @@ export default function ERPGastos() {
             <div className="flex items-center gap-3">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
-                <input
-                  type="date"
+                <SelectorFecha
                   value={filtrosPeriodo.fechaInicio}
-                  onChange={e => setFiltrosPeriodo(p => ({ ...p, fechaInicio: e.target.value }))}
-                  className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                  onChange={fecha => setFiltrosPeriodo(p => ({ ...p, fechaInicio: fecha }))}
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
-                <input
-                  type="date"
+                <SelectorFecha
                   value={filtrosPeriodo.fechaFin}
-                  onChange={e => setFiltrosPeriodo(p => ({ ...p, fechaFin: e.target.value }))}
-                  className="px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
+                  onChange={fecha => setFiltrosPeriodo(p => ({ ...p, fechaFin: fecha }))}
                 />
               </div>
             </div>
@@ -359,9 +356,8 @@ export default function ERPGastos() {
                     className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" placeholder="$0" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
-                  <input type="date" value={nuevoGasto.fecha} onChange={e => setNuevoGasto({ ...nuevoGasto, fecha: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
+              <SelectorFecha value={nuevoGasto.fecha} onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha: fecha })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -399,9 +395,11 @@ export default function ERPGastos() {
 
               {nuevoGasto.estado === 'Por Pagar' && (
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha de Vencimiento</label>
-                  <input type="date" value={nuevoGasto.fecha_vencimiento || ''} onChange={e => setNuevoGasto({ ...nuevoGasto, fecha_vencimiento: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-secondary/30 rounded-xl text-sm focus:border-secondary outline-none bg-surface-container-lowest text-on-surface" />
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha de Vencimiento</label>
+              <SelectorFecha
+                value={nuevoGasto.fecha_vencimiento || ''}
+                onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha_vencimiento: fecha })}
+              />
                 </div>
               )}
 

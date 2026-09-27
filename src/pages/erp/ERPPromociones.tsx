@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useERP, Promocion } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
+import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
 import { cn } from '@/lib/utils';
 
 export default function ERPPromociones() {
@@ -128,14 +129,12 @@ export default function ERPPromociones() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Inicio</label>
-                  <input type="date" value={nuevo.fechaInicio} onChange={e => setNuevo({ ...nuevo, fechaInicio: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fin</label>
-                  <input type="date" value={nuevo.fechaFin} onChange={e => setNuevo({ ...nuevo, fechaFin: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Inicio</label>
+                <SelectorFecha value={nuevo.fechaInicio} onChange={fecha => setNuevo({ ...nuevo, fechaInicio: fecha })} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fin</label>
+                <SelectorFecha value={nuevo.fechaFin} onChange={fecha => setNuevo({ ...nuevo, fechaFin: fecha })} />
                 </div>
               </div>
             </div>
