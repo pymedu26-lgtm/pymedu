@@ -17,37 +17,6 @@ import {
 /** El lector de Excel pesa ~400 KB: se descarga solo al abrir la carga masiva, no con la pagina. */
 const ModalCargaMasivaVentas = lazy(() => import('../components/ModalCargaMasivaVentas'));
 
-/** Linea del formulario "Agregar varias ventas": cada una es una venta independiente. */
-interface LineaVentaRapida {
-  id: string;
-  cliente: string;
-  descripcion: string;
-  monto: string;
-  metodo: string;
-}
-
-const nuevaLineaVenta = (): LineaVentaRapida => ({
-  id: crypto.randomUUID(),
-  cliente: '',
-  descripcion: '',
-  monto: '',
-  metodo: 'efectivo',
-});
-
-const METODOS_PAGO_RAPIDO: { valor: string; etiqueta: string }[] = [
-  { valor: 'efectivo', etiqueta: 'Efectivo' },
-  { valor: 'transferencia', etiqueta: 'Transferencia' },
-  { valor: 'debito', etiqueta: 'Débito' },
-  { valor: 'credito', etiqueta: 'Crédito' },
-];
-
-/** Documentos que se pueden emitir en el alta multiple. */
-const TIPOS_DOCUMENTO_LOTE: Venta['tipo_documento'][] = [
-  'boleta_electronica',
-  'factura_electronica',
-  'nota_credito',
-];
-
 /** Categorias de una venta en la tabla: muestra hasta 2 y el resto como "+N". */
 function ChipsCategorias({ categorias }: { categorias: string[] }) {
   if (categorias.length === 0) {
@@ -101,12 +70,6 @@ export default function ERPVentas() {
   const [generandoPdf, setGenerandoPdf] = useState(false);
   /** Ids de las ventas marcadas en la tabla: alimentan el PDF múltiple. */
   const [ventasSeleccionadas, setVentasSeleccionadas] = useState<string[]>([]);
-  /** Alta de varias ventas en una sola pantalla. */
-  const [showVariasVentas, setShowVariasVentas] = useState(false);
-  const [lineasVenta, setLineasVenta] = useState<LineaVentaRapida[]>([nuevaLineaVenta()]);
-  const [tipoDocumentoLote, setTipoDocumentoLote] = useState<Venta['tipo_documento']>('boleta_electronica');
-  const [avisoVarias, setAvisoVarias] = useState('');
-  const [guardandoVarias, setGuardandoVarias] = useState(false);
 
   const [filtros, setFiltros] = useState({
     fechaInicio: '',
@@ -633,74 +596,6 @@ const stockInsuficiente = productoSeleccionado
     }
   };
 
-  /**
-   * Registra varias ventas de una vez. Cada linea es una venta independiente de un solo
-   * item de texto libre (no descuenta inventario). Con `conPdf` abre un unico PDF con
-   * una pagina por venta recien creada.
-   */
-  const guardarVariasVentas = async (conPdf: boolean) => {
-    const validas = lineasVenta.filter(l => l.descripcion.trim() && Number(l.monto) > 0);
-    if (validas.length === 0) {
-      setAvisoVarias('Completa al menos una linea con descripcion y monto mayor a 0.');
-      return;
-    }
-
-    setGuardandoVarias(true);
-    try {
-      const fecha = new Date().toISOString().split('T')[0];
-      const creadas = validas.map(l => {
-        const totales = calcularTotalesItem(Number(l.monto), 1, 'ninguno', 0, true);
-        return addVenta({
-          fecha,
-          cliente: l.cliente.trim() || 'Cliente General',
-          productos: [{
-            productoId: `TEXTO-LIBRE-${crypto.randomUUID().slice(0, 8)}`,
-            productoNombre: l.descripcion.trim(),
-            esInventariable: false,
-            cantidad: 1,
-            precioBase: Number(l.monto),
-            costoUnitario: 0,
-            descuentoTipo: 'ninguno',
-            descuentoValor: 0,
-            categoria: 'Sin categoria',
-            subtotal: totales.subtotal,
-            iva: totales.iva,
-            total: totales.total,
-          }],
-          subtotal: totales.subtotal,
-          iva: totales.iva,
-          monto: totales.total,
-          estado: 'Pagado',
-          tipo_documento: normalizeDocumentType(tipoDocumentoLote),
-          metodo_pago: l.metodo,
-          monto_efectivo: l.metodo === 'efectivo' ? totales.total : undefined,
-          monto_digital: l.metodo !== 'efectivo' ? totales.total : undefined,
-          saldo_base: 0,
-          saldo_pendiente: 0,
-        });
-      });
-
-      if (conPdf) {
-        setGenerandoPdf(true);
-        await abrirPdfVentasLote(creadas, datosEmisorPdf);
-      }
-
-      setLineasVenta([nuevaLineaVenta()]);
-      setAvisoVarias('');
-      setShowVariasVentas(false);
-      // Quedan marcadas para que el usuario vea (y vuelva a imprimir) lo que acaba de crear.
-      setVentasSeleccionadas(creadas.map(v => v.id));
-    } catch (e) {
-      console.error('No se pudieron registrar las ventas', e);
-      setAvisoVarias('No se pudieron registrar las ventas. Intenta de nuevo.');
-    } finally {
-      setGenerandoPdf(false);
-      setGuardandoVarias(false);
-    }
-  };
-
-  const totalLineasVenta = lineasVenta.reduce((acc, l) => acc + (Number(l.monto) || 0), 0);
-
   const abrirEdicion = (venta: Venta) => {
     setEditingId(venta.id);
     const yaPagado = venta.monto - (venta.saldo_pendiente || 0);
@@ -1071,162 +966,8 @@ const stockInsuficiente = productoSeleccionado
             </span>
             {generandoPdf ? 'Generando...' : 'Generar PDF'}
           </button>
-
-          <button
-            onClick={() => setShowVariasVentas(true)}
-            title="Registrar varias ventas y generar su PDF"
-            className="px-4 py-2 rounded-xl text-sm font-bold bg-secondary text-white shadow-sm hover:brightness-110 transition-all flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-lg">playlist_add</span>
-            Agregar varias ventas
-          </button>
         </div>
       </div>
-
-      {/* Agregar varias ventas: una venta por linea, con PDF opcional */}
-      {showVariasVentas && (
-        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
-              <div>
-                <h3 className="text-xl font-bold text-primary">Agregar varias ventas</h3>
-                <p className="text-xs text-on-surface-variant mt-0.5">
-                  Cada linea es una venta independiente y el monto se toma con IVA incluido. Para vender productos del inventario usa "Nueva venta".
-                </p>
-              </div>
-              <button
-                onClick={() => { setShowVariasVentas(false); setAvisoVarias(''); }}
-                className="text-on-surface-variant hover:text-error transition-colors"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto flex-grow space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="min-w-[200px]">
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Tipo de documento</label>
-                  <select
-                    value={tipoDocumentoLote}
-                    onChange={e => setTipoDocumentoLote(e.target.value as Venta['tipo_documento'])}
-                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/50 text-sm bg-surface-container-lowest text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    {TIPOS_DOCUMENTO_LOTE.map(t => (
-                      <option key={t} value={t}>{DOCUMENT_LABELS[normalizeDocumentType(t)]}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="ml-auto text-right">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Total del lote</p>
-                  <p className="text-2xl font-black text-primary">${totalLineasVenta.toLocaleString('es-CL')}</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="hidden md:grid grid-cols-12 gap-2 px-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                  <div className="col-span-3">Cliente</div>
-                  <div className="col-span-4">Descripcion</div>
-                  <div className="col-span-2">Monto</div>
-                  <div className="col-span-2">Metodo de pago</div>
-                  <div className="col-span-1" />
-                </div>
-
-                {lineasVenta.map((linea) => (
-                  <div key={linea.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 rounded-xl bg-surface-container-low/40">
-                    <div className="md:col-span-3">
-                      <input
-                        type="text"
-                        value={linea.cliente}
-                        onChange={e => setLineasVenta(prev => prev.map(l => l.id === linea.id ? { ...l, cliente: e.target.value } : l))}
-                        placeholder="Cliente General"
-                        className="w-full px-3 py-2 rounded-xl border border-outline-variant/50 text-sm bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                    </div>
-                    <div className="md:col-span-4">
-                      <input
-                        type="text"
-                        value={linea.descripcion}
-                        onChange={e => setLineasVenta(prev => prev.map(l => l.id === linea.id ? { ...l, descripcion: e.target.value } : l))}
-                        placeholder="Concepto de la venta"
-                        className="w-full px-3 py-2 rounded-xl border border-outline-variant/50 text-sm bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <input
-                        type="number"
-                        min="0"
-                        value={linea.monto}
-                        onChange={e => setLineasVenta(prev => prev.map(l => l.id === linea.id ? { ...l, monto: e.target.value } : l))}
-                        placeholder="$0"
-                        className="w-full px-3 py-2 rounded-xl border border-outline-variant/50 text-sm bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <select
-                        value={linea.metodo}
-                        onChange={e => setLineasVenta(prev => prev.map(l => l.id === linea.id ? { ...l, metodo: e.target.value } : l))}
-                        className="w-full px-3 py-2 rounded-xl border border-outline-variant/50 text-sm bg-surface-container-lowest text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                      >
-                        {METODOS_PAGO_RAPIDO.map(m => (
-                          <option key={m.valor} value={m.valor}>{m.etiqueta}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="md:col-span-1 flex justify-end">
-                      <button
-                        onClick={() => setLineasVenta(prev => prev.filter(l => l.id !== linea.id))}
-                        disabled={lineasVenta.length === 1}
-                        title="Quitar linea"
-                        className="p-2 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <span className="material-symbols-outlined text-xl">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() => setLineasVenta(prev => [...prev, nuevaLineaVenta()])}
-                className="w-full py-2.5 rounded-xl border-2 border-dashed border-outline-variant/40 text-sm font-bold text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined text-lg">add</span>
-                Agregar otra linea
-              </button>
-
-              {avisoVarias && (
-                <p className="text-xs font-bold text-error bg-error/10 rounded-xl px-3 py-2">{avisoVarias}</p>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-outline-variant/20 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center justify-end bg-surface-container-low/50 shrink-0">
-              <button
-                onClick={() => { setShowVariasVentas(false); setAvisoVarias(''); }}
-                className="px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => guardarVariasVentas(false)}
-                disabled={guardandoVarias}
-                className="px-4 py-2.5 rounded-xl text-sm font-bold border border-primary/40 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
-              >
-                Guardar ventas
-              </button>
-              <button
-                onClick={() => guardarVariasVentas(true)}
-                disabled={guardandoVarias}
-                className="px-5 py-2.5 rounded-xl text-sm font-bold bg-primary text-white shadow-sm hover:brightness-110 transition-all disabled:opacity-50 flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined text-lg">
-                  {guardandoVarias ? 'progress_activity' : 'picture_as_pdf'}
-                </span>
-                {guardandoVarias ? 'Generando...' : 'Guardar y generar PDF'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal Nueva Venta */}
       {showModal && (

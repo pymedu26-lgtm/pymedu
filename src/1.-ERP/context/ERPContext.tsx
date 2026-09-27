@@ -247,7 +247,7 @@ interface ERPContextType {
   pagosPOS: PagoPOS[];
   configuracionCumplimiento: ConfiguracionCumplimiento;
   saldoActual: number;
-  addVenta: (venta: Omit<Venta, 'id'>) => Venta;
+  addVenta: (venta: Omit<Venta, 'id'>) => void;
   updateVenta: (id: string, venta: Partial<Venta>) => void;
   deleteVenta: (id: string) => void;
   addGasto: (gasto: Omit<Gasto, 'id'>) => void;
@@ -633,10 +633,6 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         metodo_pago: venta.metodo_pago ?? 'efectivo', referencia_id: newId,
       }, ...prev]);
     }
-
-    /* Se devuelve la venta ya creada (con id, folio y documento) para que quien la
-       llama pueda generar el PDF de inmediato, sin esperar el siguiente render. */
-    return newVenta;
   };
 
   const deleteVenta = (id: string) => {
