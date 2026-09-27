@@ -18,11 +18,13 @@ export type EstadoStock = 'sin_stock' | 'bajo' | 'ok' | 'no_aplica';
  * pequeñas diferencias: el KPI y la tabla contaban inactivos y la vista de tarjetas
  * no exigia que fuera un producto, asi que un servicio se pintaba "Stock bajo".
  * Este es el mismo criterio que ya usan Dashboard y el Centro de Alertas.
+ *
+ * `stock` permite evaluar contra el stock de otro periodo; si se omite usa el actual.
  */
-function estadoStock(producto: Producto): EstadoStock {
+function estadoStock(producto: Producto, stock: number = producto.stock): EstadoStock {
   if (producto.tipo !== 'producto' || producto.estado !== 'activo') return 'no_aplica';
-  if (producto.stock <= 0) return 'sin_stock';
-  if (producto.stock <= producto.stockMinimo) return 'bajo';
+  if (stock <= 0) return 'sin_stock';
+  if (stock <= producto.stockMinimo) return 'bajo';
   return 'ok';
 }
 
@@ -33,6 +35,49 @@ const ETIQUETA_STOCK: Record<EstadoStock, { texto: string; clase: string }> = {
   no_aplica: { texto: '—', clase: '' },
 };
 
+/**
+ * Filtro de mes de Inventario. Se usa en las dos pestañas, solo cambia de lado: en
+ * Inventario va a la izquierda de las pestañas y en Movimientos a la derecha. Comparte
+ * el componente y las opciones con Ventas para que ambos modulos se comporten igual.
+ */
+function FiltroPeriodoMes({ periodo, etiqueta, rango, onPeriodo, onRango }: {
+  periodo: string;
+  etiqueta: string;
+  rango: { fechaInicio: string; fechaFin: string };
+  onPeriodo: (valor: string) => void;
+  onRango: (rango: { fechaInicio: string; fechaFin: string }) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <SelectorDesplegable
+        icono="calendar_month"
+        valor={periodo}
+        onChange={onPeriodo}
+        opciones={OPCIONES_PERIODO}
+        hint={etiqueta}
+      />
+      {periodo === 'personalizado' && (
+        <>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
+            <SelectorFecha
+              value={rango.fechaInicio}
+              onChange={fecha => onRango({ ...rango, fechaInicio: fecha })}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
+            <SelectorFecha
+              value={rango.fechaFin}
+              onChange={fecha => onRango({ ...rango, fechaFin: fecha })}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ERPInventario() {
   const { inventario, movimientosInventario, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
   // La matriz de roles define quien escribe en cada modulo, pero hasta ahora solo se
@@ -41,7 +86,6 @@ export default function ERPInventario() {
   const puedeEditar = puedeEditarModulo(perfil?.rol, 'inventario');
   const c = useColoresTema();
   const [activeTab, setActiveTab] = useState<'lista' | 'movimientos'>('lista');
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [showModal, setShowModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
   const [showHistorialModal, setShowHistorialModal] = useState(false);
@@ -108,6 +152,54 @@ export default function ERPInventario() {
     rangoMovimientos.fechaFin,
     rangoMovimientosDisponible
   );
+
+  /**
+   * Stock al cierre del periodo. El filtro de mes tambien aplica en Inventario, y como
+   * `Producto` no tiene fecha, lo unico que un periodo puede cambiar es el stock que se
+   * muestra. Se parte del stock actual y se revierten los movimientos posteriores al
+   * cierre; con "Este Mes" el cierre cae en el futuro y no hay nada que revertir, asi que
+   * los numeros no se mueven salvo que se pida un periodo pasado.
+   *
+   * Un `ajuste` no es un delta sino el stock resultante, asi que sirve de ancla: se toma
+   * el mas antiguo posterior al cierre y de ahi se retrocede hasta la fecha de corte. Si
+   * no hay ningun ajuste, se retrocede desde el stock actual.
+   */
+  const stockAlCierre = useMemo(() => {
+    const corte = rangoMovimientos.fechaFin;
+    if (!corte) return null;
+
+    /** Delta de un movimiento: el ajuste fija nivel, no suma. */
+    const delta = (m: MovimientoInventario) =>
+      m.tipo === 'ingreso' || m.tipo === 'devolucion' ? m.cantidad
+        : m.tipo === 'salida' || m.tipo === 'merma' ? -m.cantidad
+          : 0;
+
+    // Ancla: el ajuste mas antiguo en o despues del corte. Sin ancla se parte del actual.
+    const ajustes = movimientosInventario
+      .filter(m => m.tipo === 'ajuste' && (m.fecha || '').slice(0, 10) >= corte)
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const ancla = ajustes[0];
+    const stockActualPorProducto = (p: Producto) => (ancla && ancla.productoId === p.id ? ancla.cantidad : p.stock);
+
+    // Movimientos a revertir: posteriores al corte, pero hasta el ancla como maximo.
+    const reversibles = movimientosInventario.filter(m => {
+      const fecha = (m.fecha || '').slice(0, 10);
+      if (fecha <= corte) return false;
+      if (ancla && fecha > ancla.fecha.slice(0, 10)) return false;
+      return true;
+    });
+    if (reversibles.length === 0 && !ancla) return null;
+
+    return (p: Producto) => {
+      const yaAnclado = Boolean(ancla && ancla.productoId === p.id);
+      const ventana = reversibles.filter(m => m.productoId === p.id);
+      const suma = ventana.reduce((acc, m) => acc + delta(m), 0);
+      return yaAnclado ? ancla.cantidad - suma : p.stock - suma;
+    };
+  }, [movimientosInventario, rangoMovimientos.fechaFin]);
+
+  /** El stock a mostrar: el del cierre del periodo, o el actual si no hay nada que revertir. */
+  const stockMostrado = (p: Producto): number => (stockAlCierre ? stockAlCierre(p) : p.stock);
 
   const [nuevoProducto, setNuevoProducto] = useState<Partial<Producto>>({
     nombre: '',
@@ -182,11 +274,12 @@ export default function ERPInventario() {
 
   // "Activos" de verdad: la etiqueta prometia productos vendibles, pero contaba servicios
   // e inactivos, mientras que el selector de Ventas solo ofrece los que estan activos.
+  // Los KPIs siguen el periodo elegido: el stock mostrado es el del cierre, no el de hoy.
   const totalProductos = inventario.filter(p => p.estado === 'activo').length;
-  const valorInventario = inventario.reduce((acc, p) => acc + (p.stock * p.costo), 0);
-  const valorVenta = inventario.reduce((acc, p) => acc + (p.stock * p.precio), 0);
+  const valorInventario = inventario.reduce((acc, p) => acc + (stockMostrado(p) * p.costo), 0);
+  const valorVenta = inventario.reduce((acc, p) => acc + (stockMostrado(p) * p.precio), 0);
   const productosBajoStock = inventario.filter(p => {
-    const e = estadoStock(p);
+    const e = estadoStock(p, stockMostrado(p));
     return e === 'sin_stock' || e === 'bajo';
   }).length;
 
@@ -194,10 +287,10 @@ export default function ERPInventario() {
   const valorizacionPorCategoria = useMemo(() => {
     const mapa: Record<string, number> = {};
     inventario.filter(p => p.tipo === 'producto').forEach(p => {
-      mapa[p.categoria] = (mapa[p.categoria] ?? 0) + p.stock * p.costo;
+      mapa[p.categoria] = (mapa[p.categoria] ?? 0) + stockMostrado(p) * p.costo;
     });
     return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
-  }, [inventario]);
+  }, [inventario, stockAlCierre]);
 
   const inventarioFiltrado = useMemo(() =>
     inventario.filter(p => {
@@ -321,8 +414,21 @@ export default function ERPInventario() {
         )}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs. El filtro de mes vive en la misma fila en las dos pestañas: a la
+          izquierda en Inventario y a la derecha en Movimientos. Se eliminaron los
+          botones table_rows / grid_view, asi que la vista de tarjetas ya no tiene
+          forma de activarse y la tabla es la unica vista. */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        {activeTab === 'lista' && (
+          <FiltroPeriodoMes
+            periodo={periodoMovimientos}
+            etiqueta={etiquetaRangoMovimientos}
+            rango={rangoMovimientos}
+            onPeriodo={elegirPeriodoMovimientos}
+            onRango={setRangoMovimientos}
+          />
+        )}
+
         <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto">
           {[
             { id: 'lista', label: 'Inventario', icon: 'list' },
@@ -342,54 +448,27 @@ export default function ERPInventario() {
           ))}
         </div>
 
-        {activeTab === 'lista' && (
-          <div className="flex items-center gap-2 bg-surface-container-high p-1 rounded-xl">
-            <button onClick={() => setViewMode('table')}
-              className={cn("p-2 rounded-lg transition-all", viewMode === 'table' ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline")}>
-              <span className="material-symbols-outlined">table_rows</span>
-            </button>
-            <button onClick={() => setViewMode('cards')}
-              className={cn("p-2 rounded-lg transition-all", viewMode === 'cards' ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline")}>
-              <span className="material-symbols-outlined">grid_view</span>
-            </button>
-          </div>
-        )}
-
-        {/* Rango de fechas de Movimientos, a la derecha y a la misma altura que las
-            pestañas. Usa el mismo componente y las mismas opciones que Ventas. */}
         {activeTab === 'movimientos' && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <SelectorDesplegable
-              icono="calendar_month"
-              valor={periodoMovimientos}
-              onChange={elegirPeriodoMovimientos}
-              opciones={OPCIONES_PERIODO}
-              hint={etiquetaRangoMovimientos}
-            />
-            {periodoMovimientos === 'personalizado' && (
-              <>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
-                  <SelectorFecha
-                    value={rangoMovimientos.fechaInicio}
-                    onChange={fecha => setRangoMovimientos(prev => ({ ...prev, fechaInicio: fecha }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
-                  <SelectorFecha
-                    value={rangoMovimientos.fechaFin}
-                    onChange={fecha => setRangoMovimientos(prev => ({ ...prev, fechaFin: fecha }))}
-                  />
-                </div>
-              </>
-            )}
-          </div>
+          <FiltroPeriodoMes
+            periodo={periodoMovimientos}
+            etiqueta={etiquetaRangoMovimientos}
+            rango={rangoMovimientos}
+            onPeriodo={elegirPeriodoMovimientos}
+            onRango={setRangoMovimientos}
+          />
         )}
       </div>
 
       {activeTab === 'lista' && (
         <div className="space-y-6 animate-in fade-in duration-500">
+          {/* Aviso de que los numeros son el stock del cierre del periodo, no el de hoy.
+              Sin esto, cambiar de mes parece que el stock se hubiera alterado solo. */}
+          {stockAlCierre && (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold">
+              <span className="material-symbols-outlined text-lg">history</span>
+              Stock al cierre de {etiquetaRangoMovimientos}. Ajustar o registrar movimientos sigue operando sobre el stock actual.
+            </div>
+          )}
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
@@ -477,7 +556,7 @@ export default function ERPInventario() {
               <h3 className="text-xl font-black text-on-surface-variant">No se encontraron productos</h3>
               <p className="text-outline text-sm mt-2">Prueba cambiando los filtros o la búsqueda.</p>
             </div>
-          ) : viewMode === 'table' ? (
+          ) : (
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -492,7 +571,8 @@ export default function ERPInventario() {
                     {inventarioFiltrado.map((producto) => {
                       const precioNeto = producto.incluyeIva ? Math.round(producto.precio / 1.19) : producto.precio;
                       const margen = precioNeto > 0 ? ((precioNeto - producto.costo) / precioNeto) * 100 : 0;
-                      const estado = estadoStock(producto);
+                      const stockPeriodo = stockMostrado(producto);
+                      const estado = estadoStock(producto, stockPeriodo);
 
                       return (
                         <tr key={producto.id} className="group hover:bg-surface-container-low/50 transition-colors">
@@ -519,7 +599,7 @@ export default function ERPInventario() {
                                   "font-black text-base",
                                   estado === 'sin_stock' ? 'text-error' : estado === 'bajo' ? 'text-secondary' : 'text-on-surface'
                                 )}>
-                                  {producto.stock}
+                                  {stockPeriodo}
                                 </span>
                                 <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida}</span>
                                 {estado !== 'ok' && estado !== 'no_aplica' && (
@@ -527,7 +607,10 @@ export default function ERPInventario() {
                                     {ETIQUETA_STOCK[estado].texto}
                                   </span>
                                 )}
-                                {producto.stockReservado ? (
+                                {/* Las reservas son pedidos pendientes de hoy: en un mes
+                                    pasado no existian, asi que no se mezclan con el stock
+                                    de ese cierre. */}
+                                {producto.stockReservado && stockPeriodo === producto.stock ? (
                                   <span className="text-[9px] font-medium text-primary">
                                     ({producto.stockReservado} res. · disp. {Math.max(0, producto.stock - producto.stockReservado)})
                                   </span>
@@ -584,64 +667,6 @@ export default function ERPInventario() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {inventarioFiltrado.map(producto => (
-                <div key={producto.id} className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="px-3 py-1 bg-surface-container-high text-on-surface-variant rounded-full text-[9px] font-black uppercase tracking-wider">
-                      {producto.categoria}
-                    </span>
-                    <div className="flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
-                      {puedeEditar && (
-                        <>
-                          <button onClick={() => handleEditClick(producto)} className="text-outline hover:text-primary" title="Editar"><span className="material-symbols-outlined text-lg">edit</span></button>
-                          <button onClick={() => { setItemToDelete(producto.id); setDeleteModalOpen(true); }} className="text-outline hover:text-error" title="Eliminar"><span className="material-symbols-outlined text-lg">delete</span></button>
-                        </>
-                      )}
-                      <button onClick={() => { setSelectedProductId(producto.id); setShowHistorialModal(true); }} className="text-outline hover:text-primary" title="Historial">
-                        <span className="material-symbols-outlined text-lg">history</span>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <h4 className="text-lg font-black text-on-surface mb-1 truncate">{producto.nombre}</h4>
-                  <p className="text-xs text-outline font-bold mb-4 uppercase tracking-tighter">{producto.codigo || 'Sin Código'}</p>
-                  
-                   <div className="flex items-center gap-4 mb-6">
-                    <div className="flex-1 p-3 bg-surface-container-low rounded-2xl">
-                      <p className="text-[9px] font-black text-outline uppercase mb-1">Stock</p>
-                      <p className={cn(
-                        "text-xl font-black",
-                        estadoStock(producto) === 'sin_stock' ? "text-error"
-                          : estadoStock(producto) === 'bajo' ? "text-secondary" : "text-on-surface"
-                      )}>{producto.stock} <span className="text-[10px] uppercase">{producto.unidadMedida}</span></p>
-                      {estadoStock(producto) !== 'ok' && estadoStock(producto) !== 'no_aplica' && (
-                        <span className={cn('inline-block mt-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full', ETIQUETA_STOCK[estadoStock(producto)].clase)}>
-                          {ETIQUETA_STOCK[estadoStock(producto)].texto}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 p-3 bg-success-container rounded-2xl">
-                      <p className="text-[9px] font-black text-on-success-container uppercase mb-1">Precio</p>
-                      <p className="text-xl font-black text-on-success-container">${producto.precio.toLocaleString('es-CL')}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button onClick={() => handleMovimientoClick(producto.id)}
-                      className="flex-1 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-primary/90 transition-all">
-                      <span className="material-symbols-outlined text-base">swap_horiz</span>
-                      Ajustar Stock
-                    </button>
-                    <button onClick={() => handleHistorialClick(producto.id)}
-                      className="w-10 h-10 border-2 border-outline-variant/20 text-outline rounded-xl flex items-center justify-center hover:bg-surface-container-low transition-all">
-                      <span className="material-symbols-outlined text-lg">history</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>
