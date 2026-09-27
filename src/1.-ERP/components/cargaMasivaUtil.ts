@@ -95,6 +95,23 @@ export function parseNumero(valor: unknown): number {
   return negativo ? -n : n;
 }
 
+const VERDADEROS = ['si', 's', 'sí', 'x', 'v', 'true', 'verdadero', '1', 'yes'];
+const FALSOS = ['no', 'n', 'f', 'false', 'falso', '0'];
+
+/**
+ * Interpreta una celda de opción Sí/No. La celda vacía devuelve el valor por
+ * defecto, para que una columna opcional sin llenar no cambie nada.
+ */
+export function parseBooleano(valor: unknown, defecto = false): boolean {
+  if (typeof valor === 'boolean') return valor;
+  if (typeof valor === 'number') return valor !== 0;
+  const clave = normKey(valor);
+  if (!clave) return defecto;
+  if (VERDADEROS.includes(clave)) return true;
+  if (FALSOS.includes(clave)) return false;
+  return defecto;
+}
+
 export function elegirEnum<T extends string>(valor: unknown, opciones: { valor: T; alias: string[] }[], defecto: T): T {
   const clave = normKey(valor);
   if (!clave) return defecto;

@@ -4,7 +4,7 @@ import { EstadoPago, Gasto, MetodoPago, TipoDocumento } from '../context/ERPCont
 import { DocumentType } from '../services/documentCompliance';
 import {
   ESTADOS, EXTENSIONES, METODOS_PAGO, descargarLibroPlantilla, elegirEnum, extensionValida,
-  formatPesos, mapearColumnas, normKey, parseFecha, parseNumero,
+  formatPesos, mapearColumnas, normKey, parseBooleano, parseFecha, parseNumero,
 } from './cargaMasivaUtil';
 
 interface ModalCargaMasivaGastosProps {
@@ -16,7 +16,8 @@ interface ModalCargaMasivaGastosProps {
 
 type CampoClave =
   | 'fecha' | 'proveedor' | 'rut' | 'categoria' | 'tipoDocumento' | 'folio'
-  | 'monto' | 'subtotal' | 'iva' | 'estado' | 'metodoPago' | 'fechaVencimiento' | 'nota';
+  | 'monto' | 'subtotal' | 'iva' | 'estado' | 'metodoPago' | 'fechaVencimiento'
+  | 'recurrente' | 'nota';
 
 interface GastoPrevio {
   clave: string;
@@ -32,6 +33,7 @@ interface GastoPrevio {
   estado: EstadoPago;
   metodoPago: MetodoPago;
   fechaVencimiento: string;
+  recurrente: boolean;
   nota: string;
   existe: boolean;
   errores: string[];
@@ -51,6 +53,7 @@ const COLUMNAS: { campo: CampoClave; titulo: string; obligatorio: boolean; ayuda
   { campo: 'estado', titulo: 'Estado', obligatorio: false, ayuda: 'Pagado (por defecto), Pendiente o Por Pagar (deja saldo pendiente).' },
   { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, debito, credito, mixto o cheque.' },
   { campo: 'fechaVencimiento', titulo: 'Vencimiento', obligatorio: false, ayuda: 'Solo para gastos Pendientes: fecha en que se debe pagar.' },
+  { campo: 'recurrente', titulo: 'Recurrente', obligatorio: false, ayuda: 'Si/No. Marca el gasto como recurrente (mensual), igual que el formulario.' },
   { campo: 'nota', titulo: 'Nota', obligatorio: false, ayuda: 'Observación o glosa del gasto.' },
 ];
 
@@ -68,6 +71,7 @@ const ALIAS: Record<CampoClave, string[]> = {
   estado: ['estado', 'estadopago', 'condicionpago', 'estadogasto', 'estadocompra'],
   metodoPago: ['metodopago', 'metododepago', 'formapago', 'formadepago', 'mediopago', 'medio', 'tipopago', 'mp'],
   fechaVencimiento: ['fechavencimiento', 'vencimiento', 'fechavto', 'fecha_vencimiento', 'vto', 'vence'],
+  recurrente: ['recurrente', 'gastorecurrente', 'esrecurrente', 'recurrencia', 'mensual', 'periodicidad', 'recurrente_mensual'],
   nota: ['nota', 'notas', 'observacion', 'observaciones', 'comentario', 'comentarios', 'glosa', 'descripcion'],
 };
 
@@ -123,9 +127,9 @@ function descargarPlantilla() {
     'Gastos',
     [
       COLUMNAS.map(c => c.titulo),
-      ['2026-09-01', 'PROVEEDOR EJEMPLO SPA', '76.123.456-7', 'Insumos/Mercaderia', '33', '1001', 11900, '', '', 'Pagado', 'transferencia', '', 'Compra de mercadería'],
-      ['02-09-2026', 'SERVICIOS DE TELECOMUNICACIONES', '96.888.777-1', 'Servicios Basicos', '33', '1002', '', 100000, 19000, 'Pendiente', 'debito', '30-09-2026', 'Factura de internet'],
-      ['15-09-2026', 'COMERCIO MINORISTA', '77.555.444-K', 'Arriendo', '39', '1003', 500000, '', '', 'Pagado', 'efectivo', '', 'Arriendo mensual'],
+      ['2026-09-01', 'PROVEEDOR EJEMPLO SPA', '76.123.456-7', 'Insumos/Mercaderia', '33', '1001', 11900, '', '', 'Pagado', 'transferencia', '', '', 'Compra de mercadería'],
+      ['02-09-2026', 'SERVICIOS DE TELECOMUNICACIONES', '96.888.777-1', 'Servicios Basicos', '33', '1002', '', 100000, 19000, 'Pendiente', 'debito', '30-09-2026', 'No', 'Factura de internet'],
+      ['15-09-2026', 'COMERCIO MINORISTA', '77.555.444-K', 'Arriendo', '39', '1003', 500000, '', '', 'Pagado', 'efectivo', '', 'Si', 'Arriendo mensual'],
     ],
     COLUMNAS.map(c => ({ wch: Math.max(16, c.titulo.length + 4) })),
     [
@@ -137,6 +141,7 @@ function descargarPlantilla() {
       ['Documentos SII', '', 'Acepta los codigos del Registro de Compras: 33 factura, 39 boleta, 34/41 exentas, 61 nota de credito.'],
       ['Duplicados', '', 'Una fila con el mismo Folio, Proveedor y Fecha que ya existe no se importa.'],
       ['Pendientes', '', 'Un gasto Pendiente con Vencimiento genera saldo pendiente por cobrar.'],
+      ['Recurrente', '', 'Acepta Si/No, 1/0, X o vacío. Marca el gasto como recurrente mensual, igual que el formulario.'],
     ],
     [{ wch: 20 }, { wch: 14 }, { wch: 95 }]
   );
@@ -207,6 +212,7 @@ export default function ModalCargaMasivaGastos({
           const estado = elegirEnum(celda(fila, 'estado'), ESTADOS_GASTO, 'Pagado');
           const metodoPago = elegirEnum(celda(fila, 'metodoPago'), METODOS_PAGO, 'efectivo');
           const fechaVencimiento = parseFecha(celda(fila, 'fechaVencimiento'));
+          const recurrente = parseBooleano(celda(fila, 'recurrente'));
           const nota = String(celda(fila, 'nota') ?? '').trim();
 
           const esExento = tipoDocumento === 'factura_exenta' || tipoDocumento === 'boleta_exenta';
@@ -244,6 +250,8 @@ export default function ModalCargaMasivaGastos({
             esFactura: tipoDocumento === 'factura_electronica' || tipoDocumento === 'factura_exenta',
             estado,
             metodo_pago: metodoPago,
+            recurrente,
+            dia_recurrente: recurrente ? 1 : undefined,
             notas: nota && folio ? `${nota} · Folio ${folio}` : nota || (folio ? `Folio ${folio}` : ''),
           };
           if (fechaVencimiento) gasto.fecha_vencimiento = fechaVencimiento;
@@ -262,6 +270,7 @@ export default function ModalCargaMasivaGastos({
             estado,
             metodoPago,
             fechaVencimiento,
+            recurrente,
             nota,
             existe,
             errores,
@@ -467,6 +476,7 @@ export default function ModalCargaMasivaGastos({
                       <th className="px-4 py-3">Fecha</th>
                       <th className="px-4 py-3">Proveedor</th>
                       <th className="px-4 py-3">Categoría</th>
+                      <th className="px-4 py-3 text-center">Recurrente</th>
                       <th className="px-4 py-3 text-right">Total</th>
                       <th className="px-4 py-3 text-center">Estado</th>
                     </tr>
@@ -489,6 +499,13 @@ export default function ModalCargaMasivaGastos({
                           <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap">{p.fecha}</td>
                           <td className="px-4 py-3 truncate max-w-[180px] font-medium" title={p.proveedor}>{p.proveedor}</td>
                           <td className="px-4 py-3 text-on-surface-variant text-xs">{p.categoria}</td>
+                          <td className="px-4 py-3 text-center">
+                            {p.recurrente ? (
+                              <span title="Gasto recurrente mensual" className="inline-flex items-center gap-1 text-[9px] bg-tertiary/10 text-tertiary px-2 py-0.5 rounded-full font-black uppercase">
+                                <span className="material-symbols-outlined text-[10px]">autorenew</span> Si
+                              </span>
+                            ) : <span className="text-outline">—</span>}
+                          </td>
                           <td className="px-4 py-3 text-right font-black text-on-surface whitespace-nowrap">{formatPesos(p.monto)}</td>
                           <td className="px-4 py-3 text-center">
                             {p.errores.length > 0 ? (
