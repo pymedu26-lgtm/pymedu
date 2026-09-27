@@ -114,9 +114,14 @@ export default function ERPGastos() {
   const porCategoria = useMemo(() => {
     const mapa: Record<string, number> = {};
     gastos.forEach(g => { mapa[g.categoria] = (mapa[g.categoria] || 0) + g.monto; });
-    return Object.entries(mapa).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
   }, [gastos]);
-  const maxCategoria = porCategoria[0]?.[1] || 1;
+
+  /** Base 100 del grafico: la suma de todas las categorias, no solo la mas alta. */
+  const totalPorCategoria = useMemo(
+    () => porCategoria.reduce((acc, [, monto]) => acc + monto, 0),
+    [porCategoria]
+  );
 
   const handleGuardar = () => {
     if (!nuevoGasto.monto || !nuevoGasto.fecha || !nuevoGasto.categoria) return;
@@ -237,21 +242,32 @@ export default function ERPGastos() {
 
       {porCategoria.length > 0 && (
         <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-5 mb-5">
-          <h3 className="font-bold text-on-surface text-sm mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
-            Top Categorías de Gasto
-          </h3>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-bold text-on-surface text-sm flex items-center gap-2">
+              <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
+              Categorías de Gasto
+            </h3>
+            <span className="text-xs text-on-surface-variant font-bold">
+              Total {fmt(totalPorCategoria)} · 100%
+            </span>
+          </div>
           <div className="space-y-2.5">
-            {porCategoria.map(([cat, monto]) => (
-              <div key={cat} className="flex items-center gap-3">
-                <span className="text-xs text-on-surface-variant font-bold w-36 truncate">{cat}</span>
-                <div className="flex-1 h-2.5 bg-surface-container-high rounded-full overflow-hidden">
-                  <div className="h-full bg-error/60 rounded-full transition-all duration-500"
-                    style={{ width: `${(monto / maxCategoria) * 100}%` }} />
+            {porCategoria.map(([cat, monto]) => {
+              const pct = totalPorCategoria > 0 ? (monto / totalPorCategoria) * 100 : 0;
+              return (
+                <div key={cat} className="flex items-center gap-3">
+                  <span className="text-xs text-on-surface-variant font-bold w-36 truncate" title={cat}>{cat}</span>
+                  <div className="flex-1 h-2.5 bg-surface-container-high rounded-full overflow-hidden">
+                    <div className="h-full bg-error/60 rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs font-extrabold text-on-surface w-14 text-right tabular-nums">
+                    {pct.toLocaleString('es-CL', { maximumFractionDigits: 1 })}%
+                  </span>
+                  <span className="text-xs text-on-surface-variant w-24 text-right tabular-nums">{fmt(monto)}</span>
                 </div>
-                <span className="text-xs font-extrabold text-on-surface-variant w-24 text-right">{fmt(monto)}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
