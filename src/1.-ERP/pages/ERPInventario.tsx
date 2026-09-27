@@ -7,7 +7,7 @@ import SelectorFecha from '../components/SelectorFecha';
 import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn } from '@/lib/utils';
 import { useColoresTema } from '@/lib/useColoresTema';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 
 const COLORES_CATEGORIA = ['primary', 'secondary', 'tertiary', 'teal', 'violet'] as const;
 
@@ -134,17 +134,42 @@ export default function ERPInventario() {
    * asi que al elegir un periodo se veian movimientos de otra epoca y los del periodo
    * quedaban escondidos detras del corte. Ahora se filtra por fecha y el limite de 100
    * se aplica despues.
+   *
+   * `movimientosEnRango` queda sin recortar porque el grafico por dia lo usa como base:
+   * si se dibujara sobre la lista de 100, el grafico sumaria menos que la tabla.
    */
-  const movimientosFiltrados = useMemo(() => {
+  const movimientosEnRango = useMemo(() => {
     const { fechaInicio, fechaFin } = rangoMovimientos;
-    const enRango = movimientosInventario.filter(m => {
+    return movimientosInventario.filter(m => {
       const fecha = (m.fecha || '').slice(0, 10);
       if (fechaInicio && fecha < fechaInicio) return false;
       if (fechaFin && fecha > fechaFin) return false;
       return true;
     });
-    return { total: enRango.length, lista: enRango.slice(0, 100) };
   }, [movimientosInventario, rangoMovimientos]);
+
+  const movimientosFiltrados = useMemo(() => ({
+    total: movimientosEnRango.length,
+    lista: movimientosEnRango.slice(0, 100)
+  }), [movimientosEnRango]);
+
+  /**
+   * Movimientos por dia del periodo, con entradas y salidas por separado: es el
+   * equivalente al grafico de ventas por dia, pero con las dosSeries que importan en
+   * bodega. El dia se ordena numericamente; ordenar el texto "Dia 10" contra "Dia 2"
+   * los deja fuera de secuencia.
+   */
+  const datosMovimientosPorDia = useMemo(() => {
+    const porDia: Record<number, { dia: number; etiqueta: string; entradas: number; salidas: number }> = {};
+    movimientosEnRango.forEach(m => {
+      const dia = Number((m.fecha || '').slice(8, 10));
+      if (!dia) return;
+      if (!porDia[dia]) porDia[dia] = { dia, etiqueta: `Dia ${dia}`, entradas: 0, salidas: 0 };
+      if (m.tipo === 'ingreso' || m.tipo === 'devolucion') porDia[dia].entradas += m.cantidad;
+      else if (m.tipo === 'salida' || m.tipo === 'merma') porDia[dia].salidas += m.cantidad;
+    });
+    return Object.values(porDia).sort((a, b) => a.dia - b.dia);
+  }, [movimientosEnRango]);
 
   const etiquetaRangoMovimientos = etiquetaRangoPeriodo(
     periodoMovimientos === 'personalizado',
@@ -200,6 +225,16 @@ export default function ERPInventario() {
 
   /** El stock a mostrar: el del cierre del periodo, o el actual si no hay nada que revertir. */
   const stockMostrado = (p: Producto): number => (stockAlCierre ? stockAlCierre(p) : p.stock);
+
+  /** Top productos por valorizacion: los que mas pesan en la bodega. */
+  const topProductosPorValor = useMemo(() => {
+    return inventario
+      .filter(p => p.tipo === 'producto')
+      .map(p => ({ nombre: p.nombre, valor: Math.max(0, stockMostrado(p)) * p.costo }))
+      .filter(x => x.valor > 0)
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 5);
+  }, [inventario, stockAlCierre]);
 
   const [nuevoProducto, setNuevoProducto] = useState<Partial<Producto>>({
     nombre: '',
@@ -475,6 +510,74 @@ export default function ERPInventario() {
                 <p className={cn('text-2xl font-black', k.color)}>{k.value}</p>
               </div>
             ))}
+          </div>
+
+          {/* Graficos: los mismos tres perfiles que Ventas, con los campos del
+              inventario. Este bloque reemplaza al vacio que quedaba bajo los KPIs. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
+              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl">show_chart</span>
+                Movimientos por Dia
+              </h3>
+              <p className="text-[11px] text-outline font-medium mb-4">
+                Entradas y salidas del periodo · {etiquetaRangoMovimientos}
+              </p>
+              {datosMovimientosPorDia.length === 0 ? (
+                <div className="h-[260px] flex flex-col items-center justify-center text-center">
+                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">event_busy</span>
+                  <p className="text-on-surface-variant text-sm font-bold">Sin movimientos en el periodo</p>
+                </div>
+              ) : (
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={datosMovimientosPorDia}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
+                      <XAxis dataKey="etiqueta" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval="preserveStartEnd" />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
+                      <RechartsTooltip
+                        contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value: number, name: string) => [`${value.toLocaleString('es-CL')} uds`, name === 'entradas' ? 'Entradas' : 'Salidas']}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '11px', color: c.onSurfaceVariant }} />
+                      <Line type="monotone" dataKey="entradas" stroke={c.success} strokeWidth={3} dot={{ r: 3, fill: c.success }} activeDot={{ r: 6 }} name="Entradas" />
+                      <Line type="monotone" dataKey="salidas" stroke={c.error} strokeWidth={3} dot={{ r: 3, fill: c.error }} activeDot={{ r: 6 }} name="Salidas" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
+              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl">trophy</span>
+                Top 5 por Valorizacion
+              </h3>
+              <p className="text-[11px] text-outline font-medium mb-4">
+                Productos que mas peso tienen en la bodega, a costo
+              </p>
+              {topProductosPorValor.length === 0 ? (
+                <div className="h-[260px] flex flex-col items-center justify-center text-center">
+                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">inventory_2</span>
+                  <p className="text-on-surface-variant text-sm font-bold">Sin productos con stock valorizado</p>
+                </div>
+              ) : (
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topProductosPorValor} layout="vertical" margin={{ left: 8, right: 16 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.outlineVariant} />
+                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString('es-CL')}`} />
+                      <YAxis type="category" dataKey="nombre" axisLine={false} tickLine={false} width={110} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
+                      <RechartsTooltip
+                        contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value: number) => [`$${value.toLocaleString('es-CL')}`, 'Valorizacion']}
+                      />
+                      <Bar dataKey="valor" fill={c.tertiary} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
