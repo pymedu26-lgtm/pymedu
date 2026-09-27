@@ -584,20 +584,34 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     setDocumentosTributarios(prev => [documento, ...prev]);
     setIntegracionEventos(prev => [evento, ...prev]);
 
+    // Se agrupa por producto antes de descontar. Antes cada linea se restaba contra el
+    // mismo snapshot de stock, asi que dos lineas del mismo producto en una venta
+    // descartaban ambas contra el mismo saldo y se perdian unidades.
+    const pedidoPorProducto = new Map<string, number>();
     venta.productos?.forEach(vp => {
       // Venta con texto libre (no inventariable): no toca stock ni inventario.
-      if (vp.esInventariable === false || inventario.some(p => p.id === vp.productoId) === false) return;
-      setInventario(prev => prev.map(p => {
-        if (p.id === vp.productoId && p.tipo === 'producto') {
-          return { ...p, stock: Math.max(0, p.stock - (vp.cantidad || 0)) };
-        }
-        return p;
-      }));
+      if (vp.esInventariable === false) return;
+      if ((vp.cantidad || 0) > 0) {
+        pedidoPorProducto.set(vp.productoId, (pedidoPorProducto.get(vp.productoId) ?? 0) + (vp.cantidad || 0));
+      }
+    });
+
+    pedidoPorProducto.forEach((pedido, productoId) => {
+      const producto = inventario.find(p => p.id === productoId);
+      if (!producto || producto.tipo !== 'producto') return;
+      // Nunca se descuenta mas de lo que hay. Se registra la salida efectiva y no la
+      // pedida: deleteVenta restituye lo que dice el movimiento, asi que ambas
+      // operaciones siguen siendo simetricas y el historial no miente.
+      const deducido = Math.min(Math.max(0, producto.stock), pedido);
+      if (deducido <= 0) return;
+      setInventario(prev => prev.map(p => (
+        p.id === productoId ? { ...p, stock: Math.max(0, p.stock - pedido) } : p
+      )));
       setMovimientosInventario(prev => [{
         id: safeId('MI'),
-        productoId: vp.productoId,
+        productoId,
         tipo: 'salida',
-        cantidad: vp.cantidad,
+        cantidad: deducido,
         fecha: new Date().toISOString(),
         motivo: `Venta #${newId.split('-')[0]}`,
         origenTipo: 'venta',
@@ -639,14 +653,18 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     const venta = ventas.find(v => v.id === id);
     if (!venta) return;
 
-    // 1) Devolver stock de los productos vendidos
-    setInventario(prev => prev.map(p => {
-      if (p.tipo !== 'producto') return p;
-      const devolver = (venta.productos ?? [])
-        .filter(vp => vp.productoId === p.id)
-        .reduce((acc, vp) => acc + (vp.cantidad || 0), 0);
-      return devolver > 0 ? { ...p, stock: p.stock + devolver } : p;
-    }));
+    // 1) Devolver stock. Se restituye lo que efectivamente registro la venta en sus
+    // movimientos, no las lineas del documento: asi el stock vuelve exactamente al
+    // valor previo, incluso si la venta se guardo con faltante o llevaba texto libre.
+    const salidasPorProducto = new Map<string, number>();
+    movimientosInventario
+      .filter(m => m.origenTipo === 'venta' && m.origenId === id)
+      .forEach(m => salidasPorProducto.set(m.productoId, (salidasPorProducto.get(m.productoId) ?? 0) + (m.cantidad || 0)));
+    salidasPorProducto.forEach((devolver, productoId) => {
+      setInventario(prev => prev.map(p => (
+        p.id === productoId && p.tipo === 'producto' ? { ...p, stock: p.stock + devolver } : p
+      )));
+    });
 
     // 2) Quitar movimientos de caja vinculados (ingreso de la venta + cobros)
     setMovimientos(prev => prev.filter(m => !(m.referencia_id === id)));
@@ -958,14 +976,19 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   const addMovimientoInventario = (m: Omit<MovimientoInventario, 'id'>) => {
     const newId = crypto.randomUUID();
     setMovimientosInventario(prev => [{ ...m, id: newId }, ...prev]);
-    const prodActual = inventario.find(p => p.id === m.productoId);
-    let newStock = prodActual?.stock ?? 0;
-    if (m.tipo === 'ingreso' || m.tipo === 'devolucion') newStock += m.cantidad;
-    else if (m.tipo === 'salida' || m.tipo === 'merma') newStock = Math.max(0, newStock - m.cantidad);
-    else if (m.tipo === 'ajuste') newStock += m.cantidad;
+    // El saldo se calcula DENTRO del actualizador funcional: si se calculara antes
+    // (leyendo `inventario` del render), varios movimientos al mismo producto en un
+    // mismo lote se pisarian entre si y se perderian los ajustes anteriores.
     setInventario(prev => prev.map(p => {
       if (p.id !== m.productoId) return p;
-      return { ...p, stock: newStock, costo: m.costoUnitario ?? p.costo };
+      let stock = p.stock;
+      if (m.tipo === 'ingreso' || m.tipo === 'devolucion') stock += m.cantidad;
+      else if (m.tipo === 'salida' || m.tipo === 'merma') stock = Math.max(0, stock - m.cantidad);
+      else if (m.tipo === 'ajuste') stock += m.cantidad;
+      // El costo solo lo define un ingreso: en una salida, merma o ajuste el valor
+      // enviado puede venir de un campo oculto y dejaria de corresponder al producto.
+      const redefineCosto = (m.tipo === 'ingreso') && m.costoUnitario != null && m.costoUnitario > 0;
+      return { ...p, stock, costo: redefineCosto ? m.costoUnitario! : p.costo };
     }));
   };
 

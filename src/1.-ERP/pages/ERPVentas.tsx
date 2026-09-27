@@ -190,10 +190,12 @@ const stockYaReservado = useMemo(() => {
   return mapa;
 }, [ventaEditada?.id, ventaEditada?.productos]);
 
-// Para el producto seleccionado, el stock disponible considera tambien lo que la
-// venta en edicion ya tenia reservado (se restaura al guardar).
+// Para el producto seleccionado, el stock disponible descuenta lo que el producto ya
+// tiene reservado (campo manual del inventario) y suma lo que la venta en edicion
+// tenia reservado, porque eso se restaura al guardar.
 const stockDisponible = productoSeleccionado
-  ? productoSeleccionado.stock + (editingId ? stockYaReservado[productoActual.productoId] || 0 : 0)
+  ? Math.max(0, productoSeleccionado.stock - (productoSeleccionado.stockReservado || 0))
+    + (editingId ? stockYaReservado[productoActual.productoId] || 0 : 0)
   : 0;
 
 const stockInsuficiente = productoSeleccionado
@@ -549,7 +551,10 @@ const stockInsuficiente = productoSeleccionado
       for (const pp of nuevaVenta.productos) {
         const prod = productoStockMap[pp.productoId];
         if (!prod) continue;
-        const disponible = prod.stock + (editingId ? stockYaReservado[pp.productoId] || 0 : 0);
+        // mismo criterio que la vista previa: descuenta lo reservado y suma lo que
+        // esta misma venta (en edicion) ya tenia tomado.
+        const disponible = Math.max(0, prod.stock - (prod.stockReservado || 0))
+          + (editingId ? stockYaReservado[pp.productoId] || 0 : 0);
         if (itemsPorProducto[pp.productoId] > disponible) {
           setAvisoStock(`Stock insuficiente para "${prod.nombre}": se necesitan ${itemsPorProducto[pp.productoId]} unidades y hay ${Math.max(0, disponible)} disponibles.`);
           return;

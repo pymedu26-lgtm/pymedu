@@ -359,3 +359,19 @@ export function esRolPyme(rol: string): boolean {
 export function rolLabel(rol: string): string {
   return ROL_INFO[rol]?.label ?? rol;
 }
+
+/**
+ * Nivel de acceso a un modulo segun la matriz del rol. La matriz existia pero solo
+ * se dibujaba en la pantalla de administracion: ningun modulo del ERP la consultaba.
+ * Un rol sin dato para ese modulo no se bloquea, para no dejar paginas inaccesibles.
+ */
+export function nivelModulo(rol: string | undefined, modulo: string): NivelPermiso {
+  if (!rol) return 'rwd';
+  return ROL_INFO[rol]?.matriz?.[modulo] ?? 'rwd';
+}
+
+/** true si el rol puede crear o modificar en el modulo; 'r' es solo lectura. */
+export function puedeEditarModulo(rol: string | undefined, modulo: string): boolean {
+  const nivel = nivelModulo(rol, modulo);
+  return nivel === 'rw' || nivel === 'rwd';
+}

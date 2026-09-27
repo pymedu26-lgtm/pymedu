@@ -1,5 +1,7 @@
-import { useState, useMemo, useRef, useEffect, type ChangeEvent } from 'react';
+import { useState, useMemo } from 'react';
 import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
+import { useAuth } from '../../context/AuthContext';
+import { puedeEditarModulo } from '@/lib/roles';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SelectorFecha from '../components/SelectorFecha';
 import { cn } from '@/lib/utils';
@@ -8,10 +10,36 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, L
 
 const COLORES_CATEGORIA = ['primary', 'secondary', 'tertiary', 'teal', 'violet'] as const;
 
+export type EstadoStock = 'sin_stock' | 'bajo' | 'ok' | 'no_aplica';
+
+/**
+ * Criterio unico de alerta de stock. Antes cada vista repetia el predicado con
+ * pequeñas diferencias: el KPI y la tabla contaban inactivos y la vista de tarjetas
+ * no exigia que fuera un producto, asi que un servicio se pintaba "Stock bajo".
+ * Este es el mismo criterio que ya usan Dashboard y el Centro de Alertas.
+ */
+function estadoStock(producto: Producto): EstadoStock {
+  if (producto.tipo !== 'producto' || producto.estado !== 'activo') return 'no_aplica';
+  if (producto.stock <= 0) return 'sin_stock';
+  if (producto.stock <= producto.stockMinimo) return 'bajo';
+  return 'ok';
+}
+
+const ETIQUETA_STOCK: Record<EstadoStock, { texto: string; clase: string }> = {
+  sin_stock: { texto: 'Sin stock', clase: 'bg-error-container text-on-error-container' },
+  bajo: { texto: 'Stock bajo', clase: 'bg-secondary/20 text-secondary' },
+  ok: { texto: 'OK', clase: 'bg-success-container text-on-success-container' },
+  no_aplica: { texto: '—', clase: '' },
+};
+
 export default function ERPInventario() {
   const { inventario, movimientosInventario, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
+  // La matriz de roles define quien escribe en cada modulo, pero hasta ahora solo se
+  // dibujaba en la pantalla de administracion y ninguna pagina la consultaba.
+  const { perfil } = useAuth();
+  const puedeEditar = puedeEditarModulo(perfil?.rol, 'inventario');
   const c = useColoresTema();
-  const [activeTab, setActiveTab] = useState<'lista' | 'movimientos' | 'herramientas' | 'toma'>('lista');
+  const [activeTab, setActiveTab] = useState<'lista' | 'movimientos'>('lista');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [showModal, setShowModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
@@ -20,20 +48,6 @@ export default function ERPInventario() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-
-  const [conteoFisico, setConteoFisico] = useState<Record<string, number>>({});
-  const [tomaScannerInput, setTomaScannerInput] = useState('');
-  const tomaScannerRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (activeTab === 'toma' && tomaScannerRef.current) {
-      tomaScannerRef.current.focus();
-    }
-  }, [activeTab]);
-
-  const [bulkCategory, setBulkCategory] = useState('Todas');
-  const [bulkPercentage, setBulkPercentage] = useState(0);
-  const [bulkType, setBulkType] = useState<'precio' | 'costo'>('precio');
 
   const [nuevoProducto, setNuevoProducto] = useState<Partial<Producto>>({
     nombre: '',
@@ -54,82 +68,44 @@ export default function ERPInventario() {
     proveedorId: ''
   });
 
-  const exportToCSV = () => {
-    const headers = ['Nombre', 'Código', 'Categoría', 'Stock', 'Costo', 'Precio Venta', 'Estado'];
-    const rows = inventario.map(p => [p.nombre, p.codigo, p.categoria, p.stock, p.costo, p.precio, p.estado]);
-    const csvContent = [headers, ...rows].map(e => e.join(';')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  /**
+   * Orden de columnas del archivo de inventario. Es el mismo que usa la plantilla,
+   * asi que lo que se exporta se puede volver a importar sin perder datos.
+   * Estado se agrega al final: los archivos de antes lo omitian y se lee como 'activo'.
+   */
+  const COLUMNAS_INVENTARIO = [
+    'Nombre', 'Codigo_SKU', 'Codigo_Barras', 'Categoria', 'Tipo',
+    'Descripcion', 'Costo', 'Precio_Venta', 'Stock_Actual', 'Stock_Minimo', 'Unidad_Medida', 'Estado',
+  ] as const;
+
+  /** Escapa separadores y saltos de linea para que un valor no rompa el CSV. */
+  const celdaCSV = (valor: unknown) => {
+    const s = String(valor ?? '');
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const descargarCSV = (nombreArchivo: string, headers: string[], rows: (string | number)[][]) => {
+    const csv = [headers, ...rows].map(e => e.map(celdaCSV).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `inventario_${new Date().toISOString().split('T')[0]}.csv`);
+    link.href = url;
+    link.download = nombreArchivo;
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  const exportTemplate = () => {
-    const headers = ['Nombre*', 'Codigo_SKU', 'Codigo_Barras', 'Categoria*', 'Tipo(producto/servicio)', 'Descripcion', 'Costo*', 'Precio_Venta*', 'Stock_Actual', 'Stock_Minimo', 'Unidad_Medida'];
-    const example = ['Ejemplo Producto', 'PROD-001', '780000', 'Mercadería', 'producto', 'Descripción opcional', '5000', '8500', '10', '5', 'un'];
-    const csvContent = [headers, example].map(e => e.join(';')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'plantilla_inventario.csv';
-    link.click();
-  };
-
-  const importFromCSV = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n');
-      const dataLines = lines.slice(1);
-      let importados = 0;
-      dataLines.forEach(line => {
-        if (!line.trim()) return;
-        const [nombre, codigo, barras, cat, tipo, desc, costo, precio, stock, minimo, unidad] = line.split(';');
-        if (nombre && cat) {
-          addProducto({
-            nombre: nombre.trim(),
-            codigo: codigo?.trim() || '',
-            codigoBarras: barras?.trim() || '',
-            categoria: cat.trim(),
-            tipo: (tipo?.trim().toLowerCase() as any) || 'producto',
-            tipoOperativo: tipo?.trim().toLowerCase() === 'servicio' ? 'servicio' : 'producto_simple',
-            descripcion: desc?.trim() || '',
-            costo: Number(costo) || 0,
-            precio: Number(precio) || 0,
-            incluyeIva: true,
-            stock: Number(stock) || 0,
-            stockMinimo: Number(minimo) || 0,
-            unidadMedida: unidad?.trim() || 'un',
-            estado: 'activo'
-          });
-          importados++;
-        }
-      });
-      alert(`Se han importado ${importados} productos correctamente.`);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleBulkUpdate = () => {
-    if (bulkPercentage === 0) return;
-    const affected = inventario.filter(p => bulkCategory === 'Todas' || p.categoria === bulkCategory);
-    if (window.confirm(`¿Estás seguro de actualizar el ${bulkType} de ${affected.length} productos en un ${bulkPercentage}%?`)) {
-      const factor = 1 + (bulkPercentage / 100);
-      affected.forEach(p => {
-        const oldValue = (bulkType === 'precio' ? p.precio : p.costo);
-        const newValue = Math.round(oldValue * factor);
-        editProducto(p.id, { [bulkType]: newValue });
-      });
-      alert('Actualización masiva completada con éxito.');
-      setBulkPercentage(0);
-    }
+  const exportToCSV = () => {
+    descargarCSV(
+      `inventario_${new Date().toISOString().split('T')[0]}.csv`,
+      [...COLUMNAS_INVENTARIO],
+      inventario.map(p => [
+        p.nombre, p.codigo, p.codigoBarras, p.categoria, p.tipo, p.descripcion,
+        p.costo, p.precio, p.stock, p.stockMinimo, p.unidadMedida, p.estado,
+      ])
+    );
   };
 
   const [nuevoMovimiento, setNuevoMovimiento] = useState<Partial<MovimientoInventario>>({
@@ -144,22 +120,24 @@ export default function ERPInventario() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'producto' | 'servicio'>('todos');
 
-  const totalProductos = inventario.length;
+  // "Activos" de verdad: la etiqueta prometia productos vendibles, pero contaba servicios
+  // e inactivos, mientras que el selector de Ventas solo ofrece los que estan activos.
+  const totalProductos = inventario.filter(p => p.estado === 'activo').length;
   const valorInventario = inventario.reduce((acc, p) => acc + (p.stock * p.costo), 0);
   const valorVenta = inventario.reduce((acc, p) => acc + (p.stock * p.precio), 0);
-  const productosBajoStock = inventario.filter(p => p.tipo === 'producto' && p.stock <= p.stockMinimo).length;
+  const productosBajoStock = inventario.filter(p => {
+    const e = estadoStock(p);
+    return e === 'sin_stock' || e === 'bajo';
+  }).length;
 
+  // Solo se acumula la valorizacion a costo, que es lo que usa el pie chart.
   const valorizacionPorCategoria = useMemo(() => {
-    const mapa: Record<string, { costo: number; venta: number; items: number }> = {};
+    const mapa: Record<string, number> = {};
     inventario.filter(p => p.tipo === 'producto').forEach(p => {
-      if (!mapa[p.categoria]) mapa[p.categoria] = { costo: 0, venta: 0, items: 0 };
-      mapa[p.categoria].costo += p.stock * p.costo;
-      mapa[p.categoria].venta += p.stock * p.precio;
-      mapa[p.categoria].items += 1;
+      mapa[p.categoria] = (mapa[p.categoria] ?? 0) + p.stock * p.costo;
     });
-    return Object.entries(mapa).sort((a, b) => b[1].costo - a[1].costo);
+    return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
   }, [inventario]);
-  const maxValor = valorizacionPorCategoria[0]?.[1].costo || 1;
 
   const inventarioFiltrado = useMemo(() =>
     inventario.filter(p => {
@@ -193,46 +171,6 @@ export default function ERPInventario() {
   const handleHistorialClick = (productoId: string) => {
     setSelectedProductId(productoId);
     setShowHistorialModal(true);
-  };
-
-  const handleTomaScanner = (code: string) => {
-    if (!code) return;
-    const producto = inventario.find(p => p.codigoBarras === code || p.codigo === code);
-    if (producto) {
-      setConteoFisico(prev => ({
-        ...prev,
-        [producto.id]: (prev[producto.id] || 0) + 1
-      }));
-      setTomaScannerInput('');
-    }
-  };
-
-  const handleApplyAjustes = () => {
-    const ajustes = Object.entries(conteoFisico).map(([id, fisico]) => {
-      const p = inventario.find(prod => prod.id === id);
-      const diferencia = Number(fisico) - (p?.stock || 0);
-      return { id, diferencia, fisico };
-    }).filter(a => a.diferencia !== 0);
-
-    if (ajustes.length === 0) {
-      alert('No hay diferencias que ajustar.');
-      return;
-    }
-
-    if (window.confirm(`Se realizarán ${ajustes.length} movimientos de ajuste. ¿Continuar?`)) {
-      ajustes.forEach(a => {
-        addMovimientoInventario({
-          productoId: a.id,
-          tipo: 'ajuste',
-          cantidad: a.diferencia,
-          motivo: `Ajuste por Toma de Inventario - Conteo Físico: ${a.fisico}`,
-          fecha: new Date().toISOString()
-        });
-      });
-      alert('Inventario sincronizado con éxito.');
-      setConteoFisico({});
-      setActiveTab('lista');
-    }
   };
 
   const handleGuardar = () => {
@@ -307,12 +245,20 @@ export default function ERPInventario() {
             <span className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all">
-            <span className="material-symbols-outlined text-lg">add_box</span>
-            Nuevo Producto
-          </button>
+          {puedeEditar && (
+            <button onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-6 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all">
+              <span className="material-symbols-outlined text-lg">add_box</span>
+              Nuevo Producto
+            </button>
+          )}
         </div>
+        {!puedeEditar && (
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary/10 text-secondary border border-secondary/30 rounded-xl text-sm font-bold">
+            <span className="material-symbols-outlined text-lg">lock</span>
+            Solo lectura: tu rol no permite modificar el inventario
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -320,9 +266,7 @@ export default function ERPInventario() {
         <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto">
           {[
             { id: 'lista', label: 'Inventario', icon: 'list' },
-            { id: 'movimientos', label: 'Movimientos', icon: 'swap_horiz' },
-            { id: 'toma', label: 'Toma Stock', icon: 'qr_code_scanner' },
-            { id: 'herramientas', label: 'Herramientas', icon: 'construction' }
+            { id: 'movimientos', label: 'Movimientos', icon: 'swap_horiz' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -385,7 +329,7 @@ export default function ERPInventario() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={valorizacionPorCategoria.map(([cat, val]) => ({ name: cat, value: val.costo }))}
+                      data={valorizacionPorCategoria.map(([cat, valor]) => ({ name: cat, value: valor }))}
                       cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value"
                     >
                       {valorizacionPorCategoria.map((_entry, index) => (
@@ -407,14 +351,9 @@ export default function ERPInventario() {
               <div className="relative z-10">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-2">Consejo Logístico</p>
                 <h4 className="text-xl font-black mb-4 leading-tight">Optimiza tu capital de trabajo</h4>
-                <p className="text-white/80 text-sm leading-relaxed mb-6">
-                  Tienes <strong>{productosBajoStock} productos</strong> bajo el stock mínimo. Realiza un ajuste de inventario o genera una orden de compra para evitar quiebres.
+                <p className="text-white/80 text-sm leading-relaxed">
+                  Tienes <strong>{productosBajoStock} productos</strong> bajo el stock mínimo. Ajusta el stock desde el icono de cada producto o registra una salida en Movimientos.
                 </p>
-                <button onClick={() => setActiveTab('herramientas')}
-                  className="w-full py-3 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-lg">auto_awesome</span>
-                  Ver sugerencias de compra
-                </button>
               </div>
               <span className="material-symbols-outlined absolute -bottom-10 -right-10 text-[180px] opacity-10 rotate-12">inventory</span>
             </div>
@@ -438,8 +377,15 @@ export default function ERPInventario() {
             </select>
           </div>
 
-          {/* Table / Cards */}
-          {viewMode === 'table' ? (
+          {/* Sin resultados se muestra solo el aviso: antes se pintaba la tabla con
+              encabezados y sin filas y, debajo, el mismo aviso otra vez. */}
+          {inventarioFiltrado.length === 0 ? (
+            <div className="bg-surface-container-lowest rounded-3xl border-2 border-dashed border-outline-variant/30 p-20 text-center">
+              <span className="material-symbols-outlined text-6xl text-outline/30 mb-4">inventory_2</span>
+              <h3 className="text-xl font-black text-on-surface-variant">No se encontraron productos</h3>
+              <p className="text-outline text-sm mt-2">Prueba cambiando los filtros o la búsqueda.</p>
+            </div>
+          ) : viewMode === 'table' ? (
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -454,8 +400,7 @@ export default function ERPInventario() {
                     {inventarioFiltrado.map((producto) => {
                       const precioNeto = producto.incluyeIva ? Math.round(producto.precio / 1.19) : producto.precio;
                       const margen = precioNeto > 0 ? ((precioNeto - producto.costo) / precioNeto) * 100 : 0;
-                      const alertaStock = producto.tipo === 'producto' && producto.stock <= producto.stockMinimo;
-                      const sinStock = producto.tipo === 'producto' && producto.stock === 0;
+                      const estado = estadoStock(producto);
 
                       return (
                         <tr key={producto.id} className="group hover:bg-surface-container-low/50 transition-colors">
@@ -477,16 +422,23 @@ export default function ERPInventario() {
                           </td>
                           <td className="px-6 py-4 text-right">
                             {producto.tipo === 'producto' ? (
-                              <div className="flex flex-col items-end">
+                              <div className="flex flex-col items-end gap-0.5">
                                 <span className={cn(
                                   "font-black text-base",
-                                  sinStock ? 'text-error' : alertaStock ? 'text-secondary' : 'text-on-surface'
+                                  estado === 'sin_stock' ? 'text-error' : estado === 'bajo' ? 'text-secondary' : 'text-on-surface'
                                 )}>
                                   {producto.stock}
                                 </span>
                                 <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida}</span>
+                                {estado !== 'ok' && estado !== 'no_aplica' && (
+                                  <span className={cn('text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full', ETIQUETA_STOCK[estado].clase)}>
+                                    {ETIQUETA_STOCK[estado].texto}
+                                  </span>
+                                )}
                                 {producto.stockReservado ? (
-                                  <span className="text-[9px] font-medium text-primary">({producto.stockReservado} res.)</span>
+                                  <span className="text-[9px] font-medium text-primary">
+                                    ({producto.stockReservado} res. · disp. {Math.max(0, producto.stock - producto.stockReservado)})
+                                  </span>
                                 ) : null}
                               </div>
                             ) : (
@@ -511,18 +463,26 @@ export default function ERPInventario() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => handleMovimientoClick(producto.id)}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Stock">
-                                <span className="material-symbols-outlined text-lg">swap_horiz</span>
-                              </button>
-                              <button onClick={() => handleEditClick(producto)}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Editar">
-                                <span className="material-symbols-outlined text-lg">edit</span>
-                              </button>
-                              <button onClick={() => { setItemToDelete(producto.id); setDeleteModalOpen(true); }}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-error/10 hover:text-error transition-all" title="Eliminar">
-                                <span className="material-symbols-outlined text-lg">delete</span>
+                            <div className="flex items-center justify-center gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                              {puedeEditar && (
+                                <>
+                                  <button onClick={() => handleMovimientoClick(producto.id)}
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Ajustar stock">
+                                    <span className="material-symbols-outlined text-lg">swap_horiz</span>
+                                  </button>
+                                  <button onClick={() => handleEditClick(producto)}
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Editar">
+                                    <span className="material-symbols-outlined text-lg">edit</span>
+                                  </button>
+                                  <button onClick={() => { setItemToDelete(producto.id); setDeleteModalOpen(true); }}
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-error/10 hover:text-error transition-all" title="Eliminar">
+                                    <span className="material-symbols-outlined text-lg">delete</span>
+                                  </button>
+                                </>
+                              )}
+                              <button onClick={() => { setSelectedProductId(producto.id); setShowHistorialModal(true); }}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Historial">
+                                <span className="material-symbols-outlined text-lg">history</span>
                               </button>
                             </div>
                           </td>
@@ -541,22 +501,35 @@ export default function ERPInventario() {
                     <span className="px-3 py-1 bg-surface-container-high text-on-surface-variant rounded-full text-[9px] font-black uppercase tracking-wider">
                       {producto.categoria}
                     </span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleEditClick(producto)} className="text-outline hover:text-primary"><span className="material-symbols-outlined text-lg">edit</span></button>
-                      <button onClick={() => { setItemToDelete(producto.id); setDeleteModalOpen(true); }} className="text-outline hover:text-error"><span className="material-symbols-outlined text-lg">delete</span></button>
+                    <div className="flex gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                      {puedeEditar && (
+                        <>
+                          <button onClick={() => handleEditClick(producto)} className="text-outline hover:text-primary" title="Editar"><span className="material-symbols-outlined text-lg">edit</span></button>
+                          <button onClick={() => { setItemToDelete(producto.id); setDeleteModalOpen(true); }} className="text-outline hover:text-error" title="Eliminar"><span className="material-symbols-outlined text-lg">delete</span></button>
+                        </>
+                      )}
+                      <button onClick={() => { setSelectedProductId(producto.id); setShowHistorialModal(true); }} className="text-outline hover:text-primary" title="Historial">
+                        <span className="material-symbols-outlined text-lg">history</span>
+                      </button>
                     </div>
                   </div>
                   
                   <h4 className="text-lg font-black text-on-surface mb-1 truncate">{producto.nombre}</h4>
                   <p className="text-xs text-outline font-bold mb-4 uppercase tracking-tighter">{producto.codigo || 'Sin Código'}</p>
                   
-                  <div className="flex items-center gap-4 mb-6">
+                   <div className="flex items-center gap-4 mb-6">
                     <div className="flex-1 p-3 bg-surface-container-low rounded-2xl">
                       <p className="text-[9px] font-black text-outline uppercase mb-1">Stock</p>
                       <p className={cn(
                         "text-xl font-black",
-                        producto.stock <= producto.stockMinimo ? "text-secondary" : "text-on-surface"
+                        estadoStock(producto) === 'sin_stock' ? "text-error"
+                          : estadoStock(producto) === 'bajo' ? "text-secondary" : "text-on-surface"
                       )}>{producto.stock} <span className="text-[10px] uppercase">{producto.unidadMedida}</span></p>
+                      {estadoStock(producto) !== 'ok' && estadoStock(producto) !== 'no_aplica' && (
+                        <span className={cn('inline-block mt-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full', ETIQUETA_STOCK[estadoStock(producto)].clase)}>
+                          {ETIQUETA_STOCK[estadoStock(producto)].texto}
+                        </span>
+                      )}
                     </div>
                     <div className="flex-1 p-3 bg-success-container rounded-2xl">
                       <p className="text-[9px] font-black text-on-success-container uppercase mb-1">Precio</p>
@@ -577,14 +550,6 @@ export default function ERPInventario() {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-
-          {inventarioFiltrado.length === 0 && (
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-dashed border-outline-variant/30 p-20 text-center">
-              <span className="material-symbols-outlined text-6xl text-outline/30 mb-4">inventory_2</span>
-              <h3 className="text-xl font-black text-on-surface-variant">No se encontraron productos</h3>
-              <p className="text-outline text-sm mt-2">Prueba cambiando los filtros o la búsqueda.</p>
             </div>
           )}
         </div>
@@ -640,218 +605,6 @@ export default function ERPInventario() {
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab Toma de Inventario */}
-      {activeTab === 'toma' && (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="bg-primary rounded-3xl p-8 text-inverse-on-surface shadow-xl relative overflow-hidden">
-            <div className="relative z-10 flex flex-col md:flex-row justify-between gap-6">
-              <div className="max-w-xl">
-                <h3 className="text-2xl font-black mb-2 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-3xl">qr_code_scanner</span>
-                  Toma de Inventario Física
-                </h3>
-                <p className="text-white/70 text-sm font-medium mb-6">
-                  Escanea todos los productos físicamente presentes en tu bodega. El sistema comparará tu conteo con el stock registrado y permitirá realizar ajustes masivos.
-                </p>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/40">qr_code_scanner</span>
-                  <input 
-                    ref={tomaScannerRef} type="text" placeholder="Escanea aquí para sumar +1 al conteo..."
-                    value={tomaScannerInput} onChange={(e) => setTomaScannerInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleTomaScanner(tomaScannerInput); }}
-                    className="w-full pl-12 pr-4 py-4 bg-white/10 border-2 border-white/20 rounded-2xl text-white placeholder:text-white/40 focus:bg-white/20 focus:border-white/40 outline-none transition-all font-bold"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col justify-center items-center bg-white/10 rounded-3xl p-6 border border-white/10 backdrop-blur-sm min-w-[200px]">
-                <p className="text-[10px] font-black uppercase tracking-widest text-white/60 mb-1">Ítems Escaneados</p>
-                <p className="text-5xl font-black mb-2">{Object.keys(conteoFisico).length}</p>
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-tight">Diferentes SKUs</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-outline-variant/20 flex items-center justify-between bg-surface-container-low/50">
-              <h3 className="text-lg font-black text-on-surface">Resumen de Conciliación</h3>
-              <div className="flex gap-3">
-                <button onClick={() => setConteoFisico({})}
-                  className="px-4 py-2 text-on-surface-variant hover:text-on-surface font-bold text-sm transition-colors">
-                  Limpiar Todo
-                </button>
-                <button onClick={handleApplyAjustes}
-                  className="px-6 py-2 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all flex items-center gap-2">
-                  <span className="material-symbols-outlined text-lg">sync_alt</span>
-                  Aplicar Ajustes de Stock
-                </button>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-surface-container-low">
-                  <tr>
-                    {['Producto', 'Stock Sistema', 'Conteo Físico', 'Diferencia', 'Estado'].map((h, i) => (
-                      <th key={h} className={cn("px-6 py-4 font-black text-outline uppercase tracking-widest text-[10px]", i >= 1 && "text-right", i === 4 && "text-center")}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/20">
-                  {Object.entries(conteoFisico).map(([id, fisico]) => {
-                    const p = inventario.find(prod => prod.id === id);
-                    const sistema = p?.stock || 0;
-                    const diferencia = Number(fisico) - sistema;
-                    return (
-                      <tr key={id} className="hover:bg-surface-container-low/50 transition-colors">
-                        <td className="px-6 py-4 font-bold text-on-surface">{p?.nombre}</td>
-                        <td className="px-6 py-4 text-right font-medium text-on-surface-variant">{sistema}</td>
-                        <td className="px-6 py-4 text-right">
-                          <input type="number" value={fisico}
-                            onChange={(e) => setConteoFisico(prev => ({ ...prev, [id]: Number(e.target.value) }))}
-                            className="w-20 px-2 py-1 bg-surface-container-low border border-outline-variant/30 rounded-lg text-right font-black focus:ring-2 focus:ring-primary/20 outline-none text-on-surface"
-                          />
-                        </td>
-                        <td className={cn(
-                          "px-6 py-4 text-right font-black",
-                          diferencia > 0 ? "text-success" : diferencia < 0 ? "text-error" : "text-outline"
-                        )}>
-                          {diferencia > 0 ? '+' : ''}{diferencia}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className={cn(
-                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                            diferencia === 0 ? "bg-surface-container-high text-outline" : 
-                            diferencia > 0 ? "bg-success-container text-on-success-container" : "bg-error/10 text-error"
-                          )}>
-                            {diferencia === 0 ? 'Correcto' : diferencia > 0 ? 'Sobrante' : 'Faltante'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {Object.keys(conteoFisico).length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center">
-                        <div className="flex flex-col items-center opacity-30">
-                          <span className="material-symbols-outlined text-5xl mb-2">inventory</span>
-                          <p className="font-bold">Comienza a escanear productos para ver la comparativa.</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab Herramientas */}
-      {activeTab === 'herramientas' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-500">
-          {/* Importación */}
-          <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-8 shadow-sm">
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
-              <span className="material-symbols-outlined text-primary text-3xl">upload_file</span>
-            </div>
-            <h3 className="text-2xl font-black text-on-surface mb-2">Carga Masiva</h3>
-            <p className="text-on-surface-variant text-sm mb-8 font-medium">Sube tu inventario existente usando nuestra plantilla estandarizada.</p>
-            
-            <div className="space-y-4">
-              <button onClick={exportTemplate}
-                className="w-full py-4 bg-surface-container-high text-on-surface rounded-2xl font-bold text-sm hover:bg-surface-container-highest transition-all flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-lg">download_for_offline</span>
-                Descargar Plantilla CSV
-              </button>
-              
-              <div className="relative">
-                <input type="file" accept=".csv" onChange={importFromCSV} className="hidden" id="import-file" />
-                <label htmlFor="import-file"
-                  className="w-full py-4 bg-primary text-inverse-on-surface rounded-2xl font-black text-sm shadow-xl hover:bg-primary/90 transition-all flex items-center justify-center gap-2 cursor-pointer">
-                  <span className="material-symbols-outlined text-lg">publish</span>
-                  Subir Archivo de Inventario
-                </label>
-              </div>
-              <p className="text-[10px] text-outline text-center font-medium">Soporta archivos .csv separados por punto y coma (;)</p>
-            </div>
-          </div>
-
-          {/* Ajuste Masivo */}
-          <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-8 shadow-sm">
-            <div className="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center mb-6">
-              <span className="material-symbols-outlined text-secondary text-3xl">bolt</span>
-            </div>
-            <h3 className="text-2xl font-black text-on-surface mb-2">Ajuste Masivo de Valores</h3>
-            <p className="text-on-surface-variant text-sm mb-8 font-medium">Actualiza precios o costos de forma automática por categoría.</p>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-outline uppercase tracking-widest mb-2">Tipo de Valor</label>
-                <div className="flex p-1 bg-surface-container-high rounded-xl">
-                  <button onClick={() => setBulkType('precio')}
-                    className={cn("flex-1 py-2 rounded-lg text-xs font-bold transition-all", bulkType === 'precio' ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant")}>Precio Venta</button>
-                  <button onClick={() => setBulkType('costo')}
-                    className={cn("flex-1 py-2 rounded-lg text-xs font-bold transition-all", bulkType === 'costo' ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant")}>Costo Unitario</button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-outline uppercase tracking-widest mb-2">Categoría</label>
-                <select value={bulkCategory} onChange={e => setBulkCategory(e.target.value)}
-                  className="w-full px-4 py-3 bg-surface-container-low border-none rounded-2xl text-sm font-bold text-on-surface-variant outline-none focus:ring-2 focus:ring-primary/20">
-                  <option value="Todas">Todas las categorías</option>
-                  {Array.from(new Set(inventario.map(p => p.categoria))).map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-outline uppercase tracking-widest mb-2">Porcentaje de Ajuste</label>
-                <div className="relative">
-                  <input type="number" value={bulkPercentage} onChange={e => setBulkPercentage(Number(e.target.value))}
-                    className="w-full pl-4 pr-12 py-3 bg-surface-container-low border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none text-on-surface" />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-outline">%</span>
-                </div>
-                <p className="mt-2 text-[10px] text-outline font-medium italic">Usa valores negativos para bajar precios (ej: -10).</p>
-              </div>
-
-              <button onClick={handleBulkUpdate} disabled={bulkPercentage === 0}
-                className="w-full py-4 bg-on-surface text-surface rounded-2xl font-black text-sm shadow-xl hover:bg-on-surface/80 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-lg">published_with_changes</span>
-                Aplicar Actualización Masiva
-              </button>
-            </div>
-          </div>
-
-          {/* Generador de Etiquetas */}
-          <div className="bg-scrim rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden group">
-            <div className="relative z-10">
-              <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mb-6">
-                <span className="material-symbols-outlined text-white text-3xl">qr_code_scanner</span>
-              </div>
-              <h3 className="text-2xl font-black mb-2">Generador de Etiquetas</h3>
-              <p className="text-white/60 text-sm mb-8 font-medium">Imprime códigos de barras y SKU para tu bodega física.</p>
-              
-              <div className="space-y-4 mb-8">
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                  <p className="text-xs font-bold text-white/80">Formato: Carta (A4)</p>
-                  <p className="text-[10px] text-white/40 mt-1">30 etiquetas por hoja (65mm x 35mm)</p>
-                </div>
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                  <p className="text-xs font-bold text-white/80">Incluye: Nombre + Código + Precio</p>
-                </div>
-              </div>
-
-              <button className="w-full py-4 bg-white text-on-surface rounded-2xl font-black text-sm shadow-xl hover:bg-surface-container-low transition-all flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-lg">print</span>
-                Preparar Impresión
-              </button>
-            </div>
-            <span className="material-symbols-outlined absolute -top-10 -left-10 text-[200px] opacity-5 rotate-45">qr_code_2</span>
           </div>
         </div>
       )}
