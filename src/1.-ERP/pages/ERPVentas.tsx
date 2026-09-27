@@ -325,11 +325,12 @@ const stockInsuficiente = productoSeleccionado
     return { min: fechas[0], max: fechas[fechas.length - 1] };
   }, [ventas]);
 
-  /** El rango manual queda en blanco: el usuario elige desde y hasta. */
+  /** El rango manual parte con el mes actual; las fechas quedan editables. */
   const elegirPeriodo = (valor: string) => {
     setPeriodoSeleccionado(valor);
     if (valor === 'personalizado') {
-      setFiltros(prev => ({ ...prev, fechaInicio: '', fechaFin: '' }));
+      const { inicio, fin } = rangoMes(0);
+      setFiltros(prev => ({ ...prev, fechaInicio: inicio, fechaFin: fin }));
     }
   };
 

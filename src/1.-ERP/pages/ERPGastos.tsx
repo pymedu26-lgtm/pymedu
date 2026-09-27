@@ -65,11 +65,12 @@ export default function ERPGastos() {
     return { min: fechas[0], max: fechas[fechas.length - 1] };
   }, [gastos]);
 
-  /** El rango manual queda en blanco: el usuario elige desde y hasta. */
+  /** El rango manual parte con el mes actual; las fechas quedan editables. */
   const elegirPeriodo = (valor: string) => {
     setPeriodoSeleccionado(valor);
     if (valor === 'personalizado') {
-      setFiltrosPeriodo({ fechaInicio: '', fechaFin: '' });
+      const { inicio, fin } = rangoMes(0);
+      setFiltrosPeriodo({ fechaInicio: inicio, fechaFin: fin });
     }
   };
 
