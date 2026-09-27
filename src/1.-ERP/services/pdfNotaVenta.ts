@@ -58,17 +58,17 @@ async function cargarLogo(url?: string): Promise<string | null> {
   }
 }
 
-/**
- * Genera la nota de venta en PDF y la abre en una pestaña nueva para previsualizar y descargar.
- * jspdf y autotable se cargan bajo demanda: no pesan en la carga inicial de la app.
- */
-export async function abrirPdfNotaVenta(venta: Venta, emisor: DatosEmisor = {}): Promise<void> {
-  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-    import('jspdf'),
-    import('jspdf-autotable'),
-  ]);
+type JsPdfDoc = import('jspdf').jsPDF;
+type AutoTable = (doc: JsPdfDoc, opciones: Record<string, unknown>) => void;
 
-  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' });
+/** Dibuja una nota de venta en la página actual. El lote reutiliza esta misma función. */
+async function dibujarNotaVenta(
+  doc: JsPdfDoc,
+  venta: Venta,
+  emisor: DatosEmisor,
+  autoTable: AutoTable,
+  logo: string | null
+): Promise<void> {
   const ancho = doc.internal.pageSize.getWidth();
   const margen = 14;
   const derecha = ancho - margen;
@@ -78,7 +78,6 @@ export async function abrirPdfNotaVenta(venta: Venta, emisor: DatosEmisor = {}):
   const gris: [number, number, number] = [100, 116, 139];
 
   /* ── Emisor ── */
-  const logo = await cargarLogo(emisor.logoUrl);
   if (logo) {
     try {
       doc.addImage(logo, undefined, margen, y - 1, 16, 16, undefined, 'FAST');
@@ -261,13 +260,56 @@ export async function abrirPdfNotaVenta(venta: Venta, emisor: DatosEmisor = {}):
     doc.internal.pageSize.getHeight() - 12,
     { align: 'center' }
   );
+}
 
-  /* ── Abre en pestaña nueva para previsualizar y descargar ── */
-  const nombreArchivo = `${titulo.replace(/\s+/g, '-').toLowerCase()}-${folioVenta(venta).replace(/[^\w-]+/g, '')}.pdf`;
+/** Abre el blob en una pestaña nueva para previsualizar y descargar. */
+function abrirEnPestana(doc: JsPdfDoc): void {
   const url = URL.createObjectURL(doc.output('blob'));
   const pestana = window.open(url, '_blank');
   if (!pestana) {
     window.open(url, '_blank', 'noopener');
   }
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+async function cargarLibrerias() {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  return { jsPDF, autoTable: autoTable as unknown as AutoTable };
+}
+
+/**
+ * Genera la nota de venta en PDF y la abre en una pestaña nueva para previsualizar y descargar.
+ * jspdf y autotable se cargan bajo demanda: no pesan en la carga inicial de la app.
+ */
+export async function abrirPdfNotaVenta(venta: Venta, emisor: DatosEmisor = {}): Promise<void> {
+  const { jsPDF, autoTable } = await cargarLibrerias();
+
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' });
+  const logo = await cargarLogo(emisor.logoUrl);
+  await dibujarNotaVenta(doc, venta, emisor, autoTable, logo);
+
+  abrirEnPestana(doc);
+}
+
+/**
+ * Genera un solo PDF con varias notas de venta, una por página, y lo abre en una pestaña nueva.
+ * Se usa al seleccionar varias filas de la tabla.
+ */
+export async function abrirPdfVentasLote(ventas: Venta[], emisor: DatosEmisor = {}): Promise<void> {
+  if (ventas.length === 0) return;
+
+  const { jsPDF, autoTable } = await cargarLibrerias();
+
+  const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' });
+  const logo = await cargarLogo(emisor.logoUrl);
+
+  for (let i = 0; i < ventas.length; i += 1) {
+    if (i > 0) doc.addPage();
+    await dibujarNotaVenta(doc, ventas[i], emisor, autoTable, logo);
+  }
+
+  abrirEnPestana(doc);
 }
