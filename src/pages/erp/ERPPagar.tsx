@@ -85,7 +85,7 @@ export default function ERPPagar() {
                     <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
                     <td className="p-4">
                       <button onClick={() => setAbonoGastoId(g.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-error text-white text-xs font-bold hover:bg-error/80 transition-colors">
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-error text-inverse-on-surface text-xs font-bold hover:bg-error/80 transition-colors">
                         <span className="material-symbols-outlined text-sm">savings</span>
                         Pagar
                       </button>
@@ -136,7 +136,7 @@ export default function ERPPagar() {
               <div className="px-6 pb-6 flex gap-3">
                 <button onClick={() => setAbonoGastoId(null)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
                 <button onClick={registrarAbono} disabled={!form.monto || Number(form.monto) <= 0}
-                  className={cn('flex-1 py-3 rounded-2xl bg-error text-white font-bold disabled:opacity-50')}>
+                  className={cn('flex-1 py-3 rounded-2xl bg-error text-inverse-on-surface font-bold disabled:opacity-50')}>
                   Registrar Pago
                 </button>
               </div>

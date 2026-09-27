@@ -39,10 +39,10 @@ const PLANES: Plan[] = [
     nombre: 'Pro',
     precio: 10000,
     icon: 'trending_up',
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-500/5',
-    iconBg: 'bg-emerald-500/15 text-emerald-400',
-    border: 'border-emerald-500/30',
+    color: 'text-success',
+    bg: 'bg-success/5',
+    iconBg: 'bg-success/15 text-success',
+    border: 'border-success/30',
     destacado: true,
     features: [
       'Todo lo del plan Básico',
@@ -57,10 +57,10 @@ const PLANES: Plan[] = [
     nombre: 'Premium',
     precio: 20000,
     icon: 'workspace_premium',
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/5',
-    iconBg: 'bg-amber-500/15 text-amber-400',
-    border: 'border-amber-500/30',
+    color: 'text-warning',
+    bg: 'bg-warning/5',
+    iconBg: 'bg-warning/15 text-warning',
+    border: 'border-warning/30',
     features: [
       'Todo lo del plan Pro',
       'Equipo y remuneraciones',
@@ -116,7 +116,7 @@ export default function Suscripcion() {
     <div className="p-6 md:p-8 max-w-6xl mx-auto min-h-screen">
       {/* Header */}
       <div className="text-center mb-10">
-        <div className="w-14 h-14 rounded-2xl bg-amber-500/15 flex items-center justify-center mx-auto text-amber-400 mb-4">
+        <div className="w-14 h-14 rounded-2xl bg-warning/15 flex items-center justify-center mx-auto text-warning mb-4">
           <span className="material-symbols-outlined text-3xl">workspace_premium</span>
         </div>
         <h2 className="text-3xl font-extrabold text-on-surface tracking-tight">Elige tu plan</h2>
@@ -129,7 +129,7 @@ export default function Suscripcion() {
       </div>
 
       {error && (
-        <div className="mb-6 max-w-2xl mx-auto p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm font-medium">
+        <div className="mb-6 max-w-2xl mx-auto p-4 rounded-2xl bg-error/10 border border-error/30 text-error text-sm font-medium">
           {error}
         </div>
       )}
@@ -142,7 +142,7 @@ export default function Suscripcion() {
             <div key={plan.id}
               className={`relative flex flex-col p-7 rounded-3xl shadow-sm border ${plan.bg} ${plan.border} ${plan.destacado ? 'shadow-lg scale-[1.02]' : ''}`}>
               {plan.destacado && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-extrabold uppercase tracking-widest bg-emerald-500 text-white px-3 py-1 rounded-full">
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-extrabold uppercase tracking-widest bg-success text-inverse-on-surface px-3 py-1 rounded-full">
                   Más popular
                 </span>
               )}
@@ -172,7 +172,7 @@ export default function Suscripcion() {
                     ? 'bg-surface-container-highest text-on-surface-variant cursor-default'
                     : plan.id === 'free'
                       ? 'bg-surface-container-highest text-on-surface-variant cursor-not-allowed'
-                      : `bg-primary hover:bg-primary/90 text-white shadow-md glow-primary ${pagando ? 'opacity-60 cursor-wait' : ''}`
+                      : `bg-primary hover:bg-primary/90 text-inverse-on-surface shadow-md glow-primary ${pagando ? 'opacity-60 cursor-wait' : ''}`
                 }`}
               >
                 {esActual
@@ -191,7 +191,7 @@ export default function Suscripcion() {
       {/* Info ambiente integración */}
       <div className="max-w-3xl mx-auto bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-6">
         <h3 className="text-sm font-bold text-on-surface flex items-center gap-2 mb-3">
-          <span className="material-symbols-outlined text-lg text-blue-400">info</span>
+          <span className="material-symbols-outlined text-lg text-info">info</span>
           Pago seguro con Webpay Plus
         </h3>
         <p className="text-xs text-on-surface-variant font-medium leading-relaxed">

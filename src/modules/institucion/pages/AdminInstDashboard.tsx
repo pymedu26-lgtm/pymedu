@@ -29,16 +29,16 @@ const tareasPendientes = [
 ];
 
 const prioridadConfig: Record<string, { color: string; dot: string }> = {
-  alta: { color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
-  media: { color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
-  baja: { color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+  alta: { color: 'bg-error-container text-on-error-container', dot: 'bg-error' },
+  media: { color: 'bg-warning-container text-on-warning-container', dot: 'bg-warning' },
+  baja: { color: 'bg-surface-container text-on-surface-variant', dot: 'bg-outline' },
 };
 
 const alertaTipoConfig: Record<string, { color: string; icon: string }> = {
-  cumplimiento: { color: 'bg-amber-100 text-amber-700', icon: 'gpp_maybe' },
-  desercion: { color: 'bg-red-100 text-red-700', icon: 'person_off' },
-  calidad: { color: 'bg-blue-100 text-blue-700', icon: 'fact_check' },
-  vencimiento: { color: 'bg-purple-100 text-purple-700', icon: 'schedule' },
+  cumplimiento: { color: 'bg-warning-container text-on-warning-container', icon: 'gpp_maybe' },
+  desercion: { color: 'bg-error-container text-on-error-container', icon: 'person_off' },
+  calidad: { color: 'bg-info-container text-on-info-container', icon: 'fact_check' },
+  vencimiento: { color: 'bg-info-container text-on-info-container', icon: 'schedule' },
 };
 
 export default function AdminInstDashboard() {
@@ -56,7 +56,7 @@ export default function AdminInstDashboard() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-purple-500">admin_panel_settings</span>
+          <span className="material-symbols-outlined text-3xl text-info">admin_panel_settings</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Panel Institucional</h1>
             <p className="text-on-surface-variant">Bienvenido, {perfil?.nombre_completo}</p>
@@ -71,14 +71,14 @@ export default function AdminInstDashboard() {
       {/* KPIs Principales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Cobertura', value: `${cobertura}%`, icon: 'groups', color: 'bg-blue-500', sub: `${usuariosTotal} usuarios totales`, trend: '+5% vs mes anterior' },
-          { label: 'Cumplimiento', value: `${avanceGlobal}%`, icon: 'task_alt', color: 'bg-green-500', sub: 'avance promedio', trend: '+8% vs mes anterior' },
-          { label: 'Actividad Semanal', value: '82%', icon: 'insights', color: 'bg-teal-500', sub: 'tasa de participación', trend: '234 sesiones registradas' },
-          { label: 'Alertas Activas', value: alertas.length.toString(), icon: 'notifications_active', color: 'bg-red-500', sub: `${alertasAltas} de alta prioridad`, trend: 'Requieren atención' },
+          { label: 'Cobertura', value: `${cobertura}%`, icon: 'groups', color: 'bg-info', sub: `${usuariosTotal} usuarios totales`, trend: '+5% vs mes anterior' },
+          { label: 'Cumplimiento', value: `${avanceGlobal}%`, icon: 'task_alt', color: 'bg-success', sub: 'avance promedio', trend: '+8% vs mes anterior' },
+          { label: 'Actividad Semanal', value: '82%', icon: 'insights', color: 'bg-teal', sub: 'tasa de participación', trend: '234 sesiones registradas' },
+          { label: 'Alertas Activas', value: alertas.length.toString(), icon: 'notifications_active', color: 'bg-error', sub: `${alertasAltas} de alta prioridad`, trend: 'Requieren atención' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
             <div className="flex items-center gap-3 mb-3">
-              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-white`}>
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined">{stat.icon}</span>
               </span>
               <div>
@@ -97,10 +97,10 @@ export default function AdminInstDashboard() {
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-red-500">notifications_active</span>
+              <span className="material-symbols-outlined text-error">notifications_active</span>
               <h2 className="font-extrabold text-on-surface">Alertas Institucionales</h2>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">{alertas.length} activas</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-error-container text-on-error-container">{alertas.length} activas</span>
           </div>
           <div className="divide-y divide-outline-variant/30">
             {alertas.map((alerta) => (
@@ -132,7 +132,7 @@ export default function AdminInstDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-purple-500">school</span>
+              <span className="material-symbols-outlined text-info">school</span>
               <h2 className="font-extrabold text-on-surface">Programas</h2>
             </div>
             <Link to="/institucion/programas" className="text-xs font-bold text-primary hover:underline">Ver todos</Link>
@@ -145,7 +145,7 @@ export default function AdminInstDashboard() {
                   <span className="text-sm font-bold text-on-surface-variant">{prog.avance}%</span>
                 </div>
                 <div className="w-full bg-surface-container-high rounded-full h-1.5 mb-2">
-                  <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${prog.avance}%` }} />
+                  <div className="bg-info h-1.5 rounded-full" style={{ width: `${prog.avance}%` }} />
                 </div>
                 <div className="flex items-center gap-3 text-xs text-on-surface-variant">
                   <span>{prog.emprendedores} emprendedores</span>
@@ -165,10 +165,10 @@ export default function AdminInstDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-green-500">group_work</span>
+              <span className="material-symbols-outlined text-success">group_work</span>
               <h2 className="font-extrabold text-on-surface">Cohortes Activas</h2>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{totalCohortes} activas</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-container text-on-success-container">{totalCohortes} activas</span>
           </div>
           <div className="divide-y divide-outline-variant/30">
             {cohortesActivas.map((cohorte) => (
@@ -181,7 +181,7 @@ export default function AdminInstDashboard() {
                   <span className="text-sm font-bold text-on-surface-variant">{cohorte.avance}%</span>
                 </div>
                 <div className="w-full bg-surface-container-high rounded-full h-2 mb-2">
-                  <div className={`h-2 rounded-full ${cohorte.avance >= 80 ? 'bg-green-500' : cohorte.avance >= 50 ? 'bg-blue-500' : 'bg-amber-500'}`} style={{ width: `${cohorte.avance}%` }} />
+                  <div className={`h-2 rounded-full ${cohorte.avance >= 80 ? 'bg-success' : cohorte.avance >= 50 ? 'bg-info' : 'bg-warning'}`} style={{ width: `${cohorte.avance}%` }} />
                 </div>
                 <div className="flex items-center gap-4 text-xs text-on-surface-variant">
                   <span>{cohorte.emprendedores} emprendedores</span>
@@ -197,7 +197,7 @@ export default function AdminInstDashboard() {
         <div className="space-y-6">
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
             <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-              <span className="material-symbols-outlined text-amber-500">task_alt</span>
+              <span className="material-symbols-outlined text-warning">task_alt</span>
               <h2 className="font-extrabold text-on-surface">Tareas Pendientes</h2>
             </div>
             <div className="divide-y divide-outline-variant/30">
@@ -245,7 +245,7 @@ export default function AdminInstDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
           <div className="flex items-center gap-3 mb-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500 text-white">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-info text-inverse-on-surface">
               <span className="material-symbols-outlined">groups</span>
             </span>
             <div>
@@ -256,7 +256,7 @@ export default function AdminInstDashboard() {
           <p className="text-3xl font-extrabold text-on-surface">{totalEmprendedores}</p>
           <div className="mt-2 flex items-center gap-2">
             <div className="flex-1 bg-surface-container-high rounded-full h-1.5">
-              <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${avanceGlobal}%` }} />
+              <div className="bg-info h-1.5 rounded-full" style={{ width: `${avanceGlobal}%` }} />
             </div>
             <span className="text-xs font-bold text-on-surface-variant">{avanceGlobal}% avance</span>
           </div>
@@ -264,7 +264,7 @@ export default function AdminInstDashboard() {
 
         <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
           <div className="flex items-center gap-3 mb-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500 text-white">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal text-inverse-on-surface">
               <span className="material-symbols-outlined">school</span>
             </span>
             <div>
@@ -278,7 +278,7 @@ export default function AdminInstDashboard() {
 
         <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
           <div className="flex items-center gap-3 mb-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500 text-white">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-success text-inverse-on-surface">
               <span className="material-symbols-outlined">verified</span>
             </span>
             <div>

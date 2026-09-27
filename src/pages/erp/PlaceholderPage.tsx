@@ -1,4 +1,4 @@
-﻿import { Link } from "react-router-dom";
+﻿﻿import { Link } from "react-router-dom";
 
 interface PlaceholderPageProps {
   title: string;
@@ -19,7 +19,7 @@ export default function PlaceholderPage({ title, icon, description }: Placeholde
         </p>
         <Link
           to="/erp/inicio"
-          className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold shadow-lg glow-primary hover:scale-105 transition-all"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-inverse-on-surface rounded-xl font-bold shadow-lg glow-primary hover:scale-105 transition-all"
         >
           <span className="material-symbols-outlined text-lg">arrow_back</span>
           Volver al Panel

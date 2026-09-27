@@ -188,7 +188,7 @@ export default function ERPGastos() {
             Sincronizar SII
           </button>
           <button onClick={() => { setEditingId(null); setShowModal(true); }}
-            className="flex items-center gap-2 px-5 py-3 bg-error text-white rounded-2xl font-bold text-sm shadow-lg shadow-error/20 hover:scale-105 transition-transform">
+            className="flex items-center gap-2 px-5 py-3 bg-error text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-error/20 hover:scale-105 transition-transform">
             <span className="material-symbols-outlined text-lg">add_circle</span>
             Registrar Gasto
           </button>
@@ -298,12 +298,12 @@ export default function ERPGastos() {
                     <td className="p-4"><span className="text-xs bg-surface-container-high text-on-surface-variant font-bold px-2 py-1 rounded-full whitespace-nowrap">{g.categoria}</span></td>
                     <td className="p-4 font-bold text-on-surface">{fmt(g.monto)}</td>
                     <td className="p-4 font-bold">
-                      {saldo > 0 ? <span className="text-secondary">{fmt(saldo)}</span> : <span className="text-emerald-600">$0</span>}
+                      {saldo > 0 ? <span className="text-secondary">{fmt(saldo)}</span> : <span className="text-success">$0</span>}
                     </td>
                     <td className="p-4 text-on-surface-variant text-xs capitalize">{g.metodo_pago || '---'}</td>
                     <td className="p-4">
                       <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold',
-                        g.estado === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-secondary/20 text-secondary')}>
+                        g.estado === 'Pagado' ? 'bg-success-container text-on-success-container' : 'bg-secondary/20 text-secondary')}>
                         {g.estado}
                       </span>
                     </td>
@@ -382,7 +382,7 @@ export default function ERPGastos() {
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => setNuevoGasto({ ...nuevoGasto, estado: 'Pagado' })}
                     className={cn('py-3 rounded-xl border-2 font-bold text-sm transition-all',
-                      nuevoGasto.estado === 'Pagado' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-outline-variant/50 text-on-surface-variant hover:border-outline')}>
+                      nuevoGasto.estado === 'Pagado' ? 'border-success/50 bg-success-container text-on-success-container' : 'border-outline-variant/50 text-on-surface-variant hover:border-outline')}>
                     Pagado
                   </button>
                   <button onClick={() => setNuevoGasto({ ...nuevoGasto, estado: 'Por Pagar' })}
@@ -428,7 +428,7 @@ export default function ERPGastos() {
             </div>
             <div className="px-6 pb-6 flex gap-3 shrink-0">
               <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={handleGuardar} className="flex-1 py-3 rounded-2xl bg-error text-white font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform">{editingId ? 'Guardar Cambios' : 'Guardar Gasto'}</button>
+              <button onClick={handleGuardar} className="flex-1 py-3 rounded-2xl bg-error text-inverse-on-surface font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform">{editingId ? 'Guardar Cambios' : 'Guardar Gasto'}</button>
             </div>
           </div>
         </div>

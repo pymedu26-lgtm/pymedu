@@ -102,7 +102,7 @@ export default function Register() {
         </div>
 
         {error && (
-          <div className="p-4 mb-6 bg-red-50 text-red-600 rounded-xl text-sm font-medium">
+          <div className="p-4 mb-6 bg-error-container text-on-error-container rounded-xl text-sm font-medium">
             {error}
           </div>
         )}
@@ -229,7 +229,7 @@ export default function Register() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 mt-2 bg-primary text-white text-lg font-bold rounded-xl shadow-lg hover:bg-primary/90 disabled:opacity-70 flex justify-center items-center gap-2"
+            className="w-full py-4 mt-2 bg-primary text-inverse-on-surface text-lg font-bold rounded-xl shadow-lg hover:bg-primary/90 disabled:opacity-70 flex justify-center items-center gap-2"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Crear Cuenta'}
           </button>

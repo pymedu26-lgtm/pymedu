@@ -16,21 +16,21 @@ const logs = [
 ];
 
 const nivelConfig: Record<string, { color: string; icon: string }> = {
-  info: { color: 'bg-blue-100 text-blue-700', icon: 'info' },
-  warning: { color: 'bg-amber-100 text-amber-700', icon: 'warning' },
-  error: { color: 'bg-red-100 text-red-700', icon: 'error' },
+  info: { color: 'bg-info-container text-on-info-container', icon: 'info' },
+  warning: { color: 'bg-warning-container text-on-warning-container', icon: 'warning' },
+  error: { color: 'bg-error-container text-on-error-container', icon: 'error' },
 };
 
 const moduloConfig: Record<string, { color: string }> = {
-  Auth: { color: 'bg-purple-100 text-purple-700' },
-  Usuarios: { color: 'bg-blue-100 text-blue-700' },
-  Sistema: { color: 'bg-slate-100 text-slate-600' },
-  Planes: { color: 'bg-amber-100 text-amber-700' },
-  API: { color: 'bg-red-100 text-red-700' },
-  Organizaciones: { color: 'bg-green-100 text-green-700' },
-  Modulos: { color: 'bg-teal-100 text-teal-700' },
-  Monitoreo: { color: 'bg-red-100 text-red-700' },
-  Tareas: { color: 'bg-slate-100 text-slate-600' },
+  Auth: { color: 'bg-info-container text-on-info-container' },
+  Usuarios: { color: 'bg-info-container text-on-info-container' },
+  Sistema: { color: 'bg-surface-container text-on-surface-variant' },
+  Planes: { color: 'bg-warning-container text-on-warning-container' },
+  API: { color: 'bg-error-container text-on-error-container' },
+  Organizaciones: { color: 'bg-success-container text-on-success-container' },
+  Modulos: { color: 'bg-teal-container text-on-teal-container' },
+  Monitoreo: { color: 'bg-error-container text-on-error-container' },
+  Tareas: { color: 'bg-surface-container text-on-surface-variant' },
 };
 
 export default function SuperAdminAuditoria() {
@@ -58,7 +58,7 @@ export default function SuperAdminAuditoria() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-slate-500">fact_check</span>
+          <span className="material-symbols-outlined text-3xl text-on-surface-variant">fact_check</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Auditoria y Logs</h1>
             <p className="text-on-surface-variant">Trazabilidad completa de acciones en la plataforma</p>
@@ -73,14 +73,14 @@ export default function SuperAdminAuditoria() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total eventos', value: stats.total, icon: 'receipt_long', color: 'bg-slate-500' },
-          { label: 'Informativos', value: stats.info, icon: 'info', color: 'bg-blue-500' },
-          { label: 'Advertencias', value: stats.warnings, icon: 'warning', color: 'bg-amber-500' },
-          { label: 'Errores', value: stats.errors, icon: 'error', color: 'bg-red-500' },
+          { label: 'Total eventos', value: stats.total, icon: 'receipt_long', color: 'bg-outline' },
+          { label: 'Informativos', value: stats.info, icon: 'info', color: 'bg-info' },
+          { label: 'Advertencias', value: stats.warnings, icon: 'warning', color: 'bg-warning' },
+          { label: 'Errores', value: stats.errors, icon: 'error', color: 'bg-error' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-white`}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
@@ -130,7 +130,7 @@ export default function SuperAdminAuditoria() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="text-[10px] font-mono text-on-surface-variant">{log.fecha}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${moduloConfig[log.modulo]?.color ?? 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${moduloConfig[log.modulo]?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
                       {log.modulo}
                     </span>
                     <span className="text-[10px] text-on-surface-variant">IP: {log.ip}</span>

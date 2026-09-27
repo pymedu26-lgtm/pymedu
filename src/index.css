@@ -10,7 +10,7 @@
   /* ── Light theme (default) ── */
   --color-primary: #1B3022;
   --color-primary-container: #2A4A33;
-  --color-on-primary-container: #6B9B7E;
+  --color-on-primary-container: #E0F0E4;
   --color-secondary: #C5A059;
   --color-secondary-container: #E8D4A0;
   --color-on-secondary-container: #8A6E2F;
@@ -20,6 +20,41 @@
   --color-error: #ba1a1a;
   --color-error-container: #ffdad6;
   --color-on-error-container: #93000a;
+
+  /* Status palette — Light (reemplaza emerald/amber/blue/green hardcodeados) */
+  --color-success: #2E6B47;
+  --color-success-container: #C9EFD6;
+  --color-on-success-container: #0B3A21;
+  --color-warning: #8A6E2F;
+  --color-warning-container: #FCEBC8;
+  --color-on-warning-container: #54400E;
+  --color-info: #1F5C8B;
+  --color-info-container: #D2E6F8;
+  --color-on-info-container: #0C3252;
+
+  /* Extra accents — Light (teal / violet, hues de categoría) */
+  --color-teal: #0F766E;
+  --color-teal-container: #CCFBF1;
+  --color-on-teal-container: #0A3D38;
+  --color-violet: #6D28D9;
+  --color-violet-container: #EDE9FE;
+  --color-on-violet-container: #3B1A78;
+
+  /* Categorical ramp — Light (identidad de roles y categorías).
+     1 red · 2 amber · 3 purple · 4 blue · 5 teal · 6 green
+     7 emerald · 8 orange · 9 cyan · 10 pink · 11 slate · 12 indigo */
+  --color-cat-1: #C62828;  --color-cat-1-container: #FFDAD6;  --color-on-cat-1-container: #93000A;
+  --color-cat-2: #B26A00;  --color-cat-2-container: #FCEBC8;  --color-on-cat-2-container: #54400E;
+  --color-cat-3: #6D28D9;  --color-cat-3-container: #EDE9FE;  --color-on-cat-3-container: #3B1A78;
+  --color-cat-4: #1D4ED8;  --color-cat-4-container: #DBEAFE;  --color-on-cat-4-container: #1E3A8A;
+  --color-cat-5: #0F766E;  --color-cat-5-container: #CCFBF1;  --color-on-cat-5-container: #0A3D38;
+  --color-cat-6: #15803D;  --color-cat-6-container: #DCFCE7;  --color-on-cat-6-container: #14532D;
+  --color-cat-7: #047857;  --color-cat-7-container: #D1FAE5;  --color-on-cat-7-container: #064E3B;
+  --color-cat-8: #C2410C;  --color-cat-8-container: #FFEDD5;  --color-on-cat-8-container: #7C2D12;
+  --color-cat-9: #0E7490;  --color-cat-9-container: #CFFAFE;  --color-on-cat-9-container: #164E63;
+  --color-cat-10: #BE185D; --color-cat-10-container: #FCE7F3; --color-on-cat-10-container: #831843;
+  --color-cat-11: #475569; --color-cat-11-container: #E2E8F0; --color-on-cat-11-container: #1E293B;
+  --color-cat-12: #4F46E5; --color-cat-12-container: #E0E7FF; --color-on-cat-12-container: #312E81;
 
   /* Surface palette — Light */
   --color-surface: #F8F9FA;
@@ -59,6 +94,39 @@
   --color-error: #FFB4AB;
   --color-error-container: #93000A;
   --color-on-error-container: #FFDAD6;
+
+  /* Status palette — Dark */
+  --color-success: #7FD6A2;
+  --color-success-container: #14532D;
+  --color-on-success-container: #BCF0CD;
+  --color-warning: #E8C77A;
+  --color-warning-container: #57420F;
+  --color-on-warning-container: #F7E3B8;
+  --color-info: #8CC3EC;
+  --color-info-container: #0E3B5B;
+  --color-on-info-container: #D0E7FA;
+
+  /* Extra accents — Dark */
+  --color-teal: #5EEAD4;
+  --color-teal-container: #115E59;
+  --color-on-teal-container: #B8F5EC;
+  --color-violet: #C4B5FD;
+  --color-violet-container: #4C1D95;
+  --color-on-violet-container: #E9D5FF;
+
+  /* Categorical ramp — Dark */
+  --color-cat-1: #FFB4AB;  --color-cat-1-container: #93000A;  --color-on-cat-1-container: #FFDAD6;
+  --color-cat-2: #E8C77A;  --color-cat-2-container: #57420F;  --color-on-cat-2-container: #F7E3B8;
+  --color-cat-3: #C4B5FD;  --color-cat-3-container: #4C1D95;  --color-on-cat-3-container: #E9D5FF;
+  --color-cat-4: #93C5FD;  --color-cat-4-container: #1E3A8A;  --color-on-cat-4-container: #DBEAFE;
+  --color-cat-5: #5EEAD4;  --color-cat-5-container: #115E59;  --color-on-cat-5-container: #B8F5EC;
+  --color-cat-6: #86EFAC;  --color-cat-6-container: #14532D;  --color-on-cat-6-container: #DCFCE7;
+  --color-cat-7: #6EE7B7;  --color-cat-7-container: #064E3B;  --color-on-cat-7-container: #D1FAE5;
+  --color-cat-8: #FDBA74;  --color-cat-8-container: #7C2D12;  --color-on-cat-8-container: #FFEDD5;
+  --color-cat-9: #67E8F9;  --color-cat-9-container: #164E63;  --color-on-cat-9-container: #CFFAFE;
+  --color-cat-10: #F9A8D4; --color-cat-10-container: #831843; --color-on-cat-10-container: #FCE7F3;
+  --color-cat-11: #94A3B8; --color-cat-11-container: #1E293B; --color-on-cat-11-container: #E2E8F0;
+  --color-cat-12: #A5B4FC; --color-cat-12-container: #312E81; --color-on-cat-12-container: #E0E7FF;
 
   /* Surface palette — Dark (deep backgrounds like Landing) */
   --color-surface: #0A0C10;
@@ -103,7 +171,7 @@
     @apply bg-surface/80 backdrop-blur-md;
   }
   .command-gradient {
-    @apply bg-gradient-to-br from-primary to-primary-container;
+    background-image: linear-gradient(135deg, #1B3022 0%, #2A4A33 100%);
   }
   /* Dark mode glass cards */
   .dark-card {

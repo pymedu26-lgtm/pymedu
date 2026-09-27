@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta, abrirPdfVentasLote } from '../services/pdfNotaVenta';
 import { cn } from '@/lib/utils';
+import { useColoresTema } from '@/lib/useColoresTema';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend, LineChart, Line 
@@ -50,6 +51,7 @@ function ChipsCategorias({ categorias }: { categorias: string[] }) {
 
 export default function ERPVentas() {
   const { user: userAuth, perfil } = useAuth();
+  const c = useColoresTema();
   const {
     ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto
   } = useERP();
@@ -529,7 +531,7 @@ const stockInsuficiente = productoSeleccionado
     return Object.entries(metodos).map(([name, value]) => ({ name, value }));
   }, [ventasFiltradas]);
 
-  const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+  const COLORES_CATEGORIA = ['info', 'success', 'warning', 'error', 'violet', 'teal'] as const;
 
   const handleGuardar = () => {
     if (nuevaVenta.productos && nuevaVenta.productos.length > 0 && nuevaVenta.fecha) {
@@ -650,7 +652,7 @@ const stockInsuficiente = productoSeleccionado
           </button>
           <button 
             onClick={() => { setEditingId(null); setShowModal(true); }}
-            className="px-6 py-3 bg-primary text-white rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2"
+            className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-lg">add</span>
             Nueva Venta
@@ -705,14 +707,14 @@ const stockInsuficiente = productoSeleccionado
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={datosVentasPorDia}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} tickFormatter={(val) => `$${val.toLocaleString()}`} />
-                <RechartsTooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
+                <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
+                <RechartsTooltip
+                  contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']}
                 />
-                <Line type="monotone" dataKey="monto" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1' }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="monto" stroke={c.info} strokeWidth={3} dot={{ r: 4, fill: c.info }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -734,11 +736,11 @@ const stockInsuficiente = productoSeleccionado
                     dataKey="value"
                   >
                     {datosVentasPorCategoria.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={c[COLORES_CATEGORIA[index % COLORES_CATEGORIA.length]]} />
                     ))}
                   </Pie>
-                  <RechartsTooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
-                  <Legend wrapperStyle={{ fontSize: '10px' }} />
+                  <RechartsTooltip contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }} formatter={(value: number) => `$${value.toLocaleString()}`} />
+                  <Legend wrapperStyle={{ fontSize: '10px', color: c.onSurfaceVariant }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -749,11 +751,11 @@ const stockInsuficiente = productoSeleccionado
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosMetodosPago}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
                   <YAxis hide />
-                  <RechartsTooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
-                  <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <RechartsTooltip contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }} formatter={(value: number) => `$${value.toLocaleString()}`} />
+                  <Bar dataKey="value" fill={c.success} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -878,7 +880,7 @@ const stockInsuficiente = productoSeleccionado
                     <ChipsCategorias categorias={categoriasPorVenta[venta.id] ?? []} />
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${venta.estado === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-secondary/20 text-secondary'}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${venta.estado === 'Pagado' ? 'bg-success-container text-on-success-container' : 'bg-secondary/20 text-secondary'}`}>
                       {venta.estado}
                     </span>
                   </td>
@@ -959,7 +961,7 @@ const stockInsuficiente = productoSeleccionado
             onClick={handlePdfSeleccionadas}
             disabled={ventasMarcadas.length === 0 || generandoPdf}
             title={ventasMarcadas.length === 0 ? 'Selecciona al menos una venta' : 'Un PDF con una pagina por venta'}
-            className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-white shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
+            className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-inverse-on-surface shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-lg">
               {generandoPdf ? 'progress_activity' : 'picture_as_pdf'}
@@ -1139,7 +1141,7 @@ const stockInsuficiente = productoSeleccionado
                   <button 
                     onClick={handleAgregarProducto}
                     disabled={!fichaValida}
-                    className="px-4 py-2 bg-primary text-white rounded-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="px-4 py-2 bg-primary text-inverse-on-surface rounded-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-outlined text-sm">add</span>
                     Agregar a la venta
@@ -1286,7 +1288,7 @@ const stockInsuficiente = productoSeleccionado
               <button 
                 onClick={handleGuardar} 
                 disabled={!nuevaVenta.productos || nuevaVenta.productos.length === 0}
-                className="px-6 py-2 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
               >
                 Guardar Venta
               </button>
@@ -1349,7 +1351,7 @@ const stockInsuficiente = productoSeleccionado
                     <p className="text-xs font-bold uppercase tracking-wider text-primary">Cliente</p>
                     <p className="text-base font-black text-on-surface">{ventaNota.cliente}</p>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${ventaNota.estado === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${ventaNota.estado === 'Pagado' ? 'bg-success-container text-on-success-container' : 'bg-warning-container text-on-warning-container'}`}>
                     {ventaNota.estado}
                   </span>
                 </div>

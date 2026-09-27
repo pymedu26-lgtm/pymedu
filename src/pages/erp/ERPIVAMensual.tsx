@@ -40,7 +40,7 @@ export default function ERPIVAMensual() {
         </div>
         <div className="bg-secondary/10 p-6 rounded-2xl border border-secondary/20">
           <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Diferencia (a pagar / saldo a favor)</p>
-          <p className={`text-3xl font-black mt-1 ${f29.diferenciaIva >= 0 ? 'text-secondary' : 'text-emerald-600'}`}>{fmt(f29.diferenciaIva)}</p>
+          <p className={`text-3xl font-black mt-1 ${f29.diferenciaIva >= 0 ? 'text-secondary' : 'text-success'}`}>{fmt(f29.diferenciaIva)}</p>
           {f29.ivaNotasCredito > 0 && <p className="text-[10px] font-bold text-on-surface-variant mt-1">Incluye notas de crédito: {fmt(f29.ivaNotasCredito)}</p>}
         </div>
       </div>
@@ -95,7 +95,7 @@ export default function ERPIVAMensual() {
                   <td className="p-4">{fmt(d.iva)}</td>
                   <td className="p-4 font-extrabold text-on-surface">{fmt(d.total)}</td>
                   <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${d.estado === 'aceptado_sii' ? 'bg-emerald-100 text-emerald-700' : d.estado === 'rechazado_sii' ? 'bg-error/10 text-error' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${d.estado === 'aceptado_sii' ? 'bg-success-container text-on-success-container' : d.estado === 'rechazado_sii' ? 'bg-error/10 text-error' : 'bg-surface-container-high text-on-surface-variant'}`}>
                       {d.estado}
                     </span>
                   </td>

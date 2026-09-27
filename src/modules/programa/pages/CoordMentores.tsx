@@ -34,7 +34,7 @@ export default function CoordMentores() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-teal-500">school</span>
+          <span className="material-symbols-outlined text-3xl text-teal">school</span>
           <h1 className="text-2xl font-extrabold text-on-surface">Gestion de Mentores y Cohortes</h1>
         </div>
       </div>
@@ -50,7 +50,7 @@ export default function CoordMentores() {
             onClick={() => setTab(t.key)}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
               tab === t.key
-                ? 'bg-primary text-white shadow-lg shadow-primary/15'
+                ? 'bg-primary text-inverse-on-surface shadow-lg shadow-primary/15'
                 : 'text-on-surface-variant hover:bg-primary/5'
             }`}
           >
@@ -64,7 +64,7 @@ export default function CoordMentores() {
       {tab === 'mentores' && (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors">
+            <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
               <span className="material-symbols-outlined text-lg">person_add</span>
               Asignar Mentor
             </button>
@@ -74,14 +74,14 @@ export default function CoordMentores() {
             {mentoresIniciales.map((mentor) => (
               <div key={mentor.id} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30 hover:border-primary/30 transition-colors">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-100 text-teal-600 font-extrabold text-lg">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-container text-on-teal-container font-extrabold text-lg">
                     {mentor.nombre[0]}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-extrabold text-on-surface">{mentor.nombre}</p>
                     <p className="text-sm text-on-surface-variant">{mentor.especialidad}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${mentor.estado === 'activo' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${mentor.estado === 'activo' ? 'bg-success-container text-on-success-container' : 'bg-surface-container text-on-surface-variant'}`}>
                     {mentor.estado}
                   </span>
                 </div>
@@ -93,7 +93,7 @@ export default function CoordMentores() {
                       <span className="font-bold text-on-surface">{mentor.emprendedoresAsignados}/{mentor.maxEmprendedores}</span>
                     </div>
                     <div className="w-full bg-surface-container-high rounded-full h-2">
-                      <div className="bg-teal-500 h-2 rounded-full" style={{ width: `${(mentor.emprendedoresAsignados / mentor.maxEmprendedores) * 100}%` }} />
+                      <div className="bg-teal h-2 rounded-full" style={{ width: `${(mentor.emprendedoresAsignados / mentor.maxEmprendedores) * 100}%` }} />
                     </div>
                   </div>
 
@@ -123,7 +123,7 @@ export default function CoordMentores() {
       {tab === 'cohortes' && (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors">
+            <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
               <span className="material-symbols-outlined text-lg">add</span>
               Nueva Cohorte
             </button>
@@ -137,7 +137,7 @@ export default function CoordMentores() {
                     <p className="font-extrabold text-on-surface text-lg">{cohorte.nombre}</p>
                     <p className="text-sm text-on-surface-variant mt-1">{cohorte.ruta}</p>
                   </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-container text-on-success-container">
                     {cohorte.estado}
                   </span>
                 </div>
@@ -148,15 +148,15 @@ export default function CoordMentores() {
                     <p className="text-xs text-on-surface-variant">Emprendedores</p>
                   </div>
                   <div className="bg-surface-container-low rounded-xl p-3 text-center">
-                    <p className="text-2xl font-extrabold text-teal-600">{cohorte.mentorAsignados}</p>
+                    <p className="text-2xl font-extrabold text-teal">{cohorte.mentorAsignados}</p>
                     <p className="text-xs text-on-surface-variant">Mentores</p>
                   </div>
                   <div className="bg-surface-container-low rounded-xl p-3 text-center">
-                    <p className="text-2xl font-extrabold text-green-600">{cohorte.avance}%</p>
+                    <p className="text-2xl font-extrabold text-success">{cohorte.avance}%</p>
                     <p className="text-xs text-on-surface-variant">Avance</p>
                   </div>
                   <div className="bg-surface-container-low rounded-xl p-3 text-center">
-                    <p className="text-2xl font-extrabold text-blue-600">3</p>
+                    <p className="text-2xl font-extrabold text-info">3</p>
                     <p className="text-xs text-on-surface-variant">Modulos activos</p>
                   </div>
                 </div>
@@ -167,7 +167,7 @@ export default function CoordMentores() {
                     <span className="font-bold text-on-surface">{cohorte.avance}%</span>
                   </div>
                   <div className="w-full bg-surface-container-high rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full" style={{ width: `${cohorte.avance}%` }} />
+                    <div className="bg-success h-2 rounded-full" style={{ width: `${cohorte.avance}%` }} />
                   </div>
                 </div>
 

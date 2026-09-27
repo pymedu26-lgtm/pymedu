@@ -43,21 +43,21 @@ const tareasBase: Tarea[] = [
 ];
 
 const prioridadConfig = {
-  alta: { color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
-  media: { color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
-  baja: { color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+  alta: { color: 'bg-error-container text-on-error-container', dot: 'bg-error' },
+  media: { color: 'bg-warning-container text-on-warning-container', dot: 'bg-warning' },
+  baja: { color: 'bg-surface-container text-on-surface-variant', dot: 'bg-outline' },
 };
 
 const estadoCasoConfig: Record<EstadoCaso, { label: string; color: string }> = {
-  en_curso: { label: 'En curso', color: 'bg-blue-100 text-blue-700' },
-  riesgo: { label: 'En riesgo', color: 'bg-red-100 text-red-700' },
-  cerrado: { label: 'Cerrado', color: 'bg-slate-100 text-slate-600' },
+  en_curso: { label: 'En curso', color: 'bg-info-container text-on-info-container' },
+  riesgo: { label: 'En riesgo', color: 'bg-error-container text-on-error-container' },
+  cerrado: { label: 'Cerrado', color: 'bg-surface-container text-on-surface-variant' },
 };
 
 const riesgoConfig = {
-  bajo: { label: 'Bajo', color: 'bg-green-100 text-green-700' },
-  medio: { label: 'Medio', color: 'bg-amber-100 text-amber-700' },
-  alto: { label: 'Alto', color: 'bg-red-100 text-red-700' },
+  bajo: { label: 'Bajo', color: 'bg-success-container text-on-success-container' },
+  medio: { label: 'Medio', color: 'bg-warning-container text-on-warning-container' },
+  alto: { label: 'Alto', color: 'bg-error-container text-on-error-container' },
 };
 
 function estadoCasoDesdeEmprendedor(e: Emprendedor | undefined): EstadoCaso {
@@ -120,14 +120,14 @@ export default function MentorSeguimiento() {
   if (!emprendedor) {
     return (
       <div className="p-8 text-center max-w-xl mx-auto">
-        <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+        <div className="w-20 h-20 bg-warning-container text-on-warning-container rounded-3xl flex items-center justify-center mx-auto mb-6">
           <span className="material-symbols-outlined text-4xl">person_off</span>
         </div>
         <h2 className="text-2xl font-black text-on-surface mb-2">Emprendedor no encontrado</h2>
         <p className="text-on-surface-variant mb-8">El caso que buscas no existe o ya no está asignado a ti.</p>
         <button
           onClick={() => navigate('/mentor/alumnos')}
-          className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-colors"
+          className="px-8 py-3 bg-inverse-surface text-inverse-on-surface rounded-2xl font-bold hover:bg-inverse-surface/90 transition-colors"
         >
           Volver a Mis Alumnos
         </button>
@@ -139,7 +139,7 @@ export default function MentorSeguimiento() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-teal-500">assignment</span>
+          <span className="material-symbols-outlined text-3xl text-teal">assignment</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Seguimiento — {emprendedor.nombre}</h1>
             <p className="text-on-surface-variant">{emprendedor.negocio} · {emprendedor.rubro}</p>
@@ -176,7 +176,7 @@ export default function MentorSeguimiento() {
           <p className="text-[10px] font-extrabold uppercase tracking-wider text-outline mb-1">Avance</p>
           <div className="flex items-center gap-2">
             <div className="h-2 flex-1 bg-surface-container-high rounded-full overflow-hidden">
-              <div className="h-full bg-teal-500 rounded-full" style={{ width: `${emprendedor.avance}%` }} />
+              <div className="h-full bg-teal rounded-full" style={{ width: `${emprendedor.avance}%` }} />
             </div>
             <span className="font-bold text-on-surface text-sm">{emprendedor.avance}%</span>
           </div>
@@ -201,7 +201,7 @@ export default function MentorSeguimiento() {
             onClick={() => setTab(t.key)}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
               tab === t.key
-                ? 'bg-primary text-white shadow-lg shadow-primary/15'
+                ? 'bg-primary text-inverse-on-surface shadow-lg shadow-primary/15'
                 : 'text-on-surface-variant hover:bg-primary/5'
             }`}
           >
@@ -218,7 +218,7 @@ export default function MentorSeguimiento() {
             <div key={sesion.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
               <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-blue-500">event</span>
+                  <span className="material-symbols-outlined text-info">event</span>
                   <div>
                     <p className="font-extrabold text-on-surface">{sesion.tema}</p>
                     <p className="text-sm text-on-surface-variant">{sesion.fecha} · {sesion.hora} · {sesion.tipo}</p>
@@ -279,7 +279,7 @@ export default function MentorSeguimiento() {
                 </select>
                 <button
                   onClick={agregarTarea}
-                  className="px-4 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-colors"
+                  className="px-4 py-3 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm hover:bg-primary/90 transition-colors"
                 >
                   <span className="material-symbols-outlined text-lg">add</span>
                 </button>
@@ -295,7 +295,7 @@ export default function MentorSeguimiento() {
                     onClick={() => toggleTarea(tarea.id)}
                     className={`shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all ${
                       tarea.estado === 'completada'
-                        ? 'bg-green-500 border-green-500 text-white'
+                        ? 'bg-success border-success/50 text-inverse-on-surface'
                         : 'border-outline-variant hover:border-primary'
                     }`}
                   >
@@ -334,7 +334,7 @@ export default function MentorSeguimiento() {
             <div className="flex justify-end mt-3">
               <button
                 onClick={agregarNota}
-                className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl text-sm hover:bg-primary/90 transition-colors"
+                className="px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl text-sm hover:bg-primary/90 transition-colors"
               >
                 Guardar nota
               </button>

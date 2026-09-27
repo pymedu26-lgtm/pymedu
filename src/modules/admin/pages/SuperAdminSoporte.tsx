@@ -10,22 +10,22 @@ const tickets = [
 ];
 
 const prioridadConfig: Record<string, { color: string; dot: string }> = {
-  alta: { color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
-  media: { color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
-  baja: { color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+  alta: { color: 'bg-error-container text-on-error-container', dot: 'bg-error' },
+  media: { color: 'bg-warning-container text-on-warning-container', dot: 'bg-warning' },
+  baja: { color: 'bg-surface-container text-on-surface-variant', dot: 'bg-outline' },
 };
 
 const estadoConfig: Record<string, { color: string; label: string; icon: string }> = {
-  abierto: { color: 'bg-red-100 text-red-700', label: 'Abierto', icon: 'radio_button_unchecked' },
-  en_progreso: { color: 'bg-amber-100 text-amber-700', label: 'En progreso', icon: 'pending' },
-  resuelto: { color: 'bg-green-100 text-green-700', label: 'Resuelto', icon: 'check_circle' },
+  abierto: { color: 'bg-error-container text-on-error-container', label: 'Abierto', icon: 'radio_button_unchecked' },
+  en_progreso: { color: 'bg-warning-container text-on-warning-container', label: 'En progreso', icon: 'pending' },
+  resuelto: { color: 'bg-success-container text-on-success-container', label: 'Resuelto', icon: 'check_circle' },
 };
 
 const categoriaConfig: Record<string, { color: string; label: string }> = {
-  bug: { color: 'bg-red-100 text-red-700', label: 'Bug' },
-  feature: { color: 'bg-blue-100 text-blue-700', label: 'Feature' },
-  rendimiento: { color: 'bg-amber-100 text-amber-700', label: 'Rendimiento' },
-  configuracion: { color: 'bg-purple-100 text-purple-700', label: 'Configuracion' },
+  bug: { color: 'bg-error-container text-on-error-container', label: 'Bug' },
+  feature: { color: 'bg-info-container text-on-info-container', label: 'Feature' },
+  rendimiento: { color: 'bg-warning-container text-on-warning-container', label: 'Rendimiento' },
+  configuracion: { color: 'bg-info-container text-on-info-container', label: 'Configuracion' },
 };
 
 export default function SuperAdminSoporte() {
@@ -50,13 +50,13 @@ export default function SuperAdminSoporte() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-orange-500">support_agent</span>
+          <span className="material-symbols-outlined text-3xl text-warning">support_agent</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Soporte y Tickets</h1>
             <p className="text-on-surface-variant">Gestion de incidencias, SLA y soporte tecnico avanzado</p>
           </div>
         </div>
-        <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors">
+        <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
           <span className="material-symbols-outlined text-lg">add</span>
           Nuevo Ticket
         </button>
@@ -65,14 +65,14 @@ export default function SuperAdminSoporte() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total', value: stats.total, icon: 'confirmation_number', color: 'bg-slate-500' },
-          { label: 'Abiertos', value: stats.abiertos, icon: 'radio_button_unchecked', color: 'bg-red-500' },
-          { label: 'En Progreso', value: stats.enProgreso, icon: 'pending', color: 'bg-amber-500' },
-          { label: 'Resueltos', value: stats.resueltos, icon: 'check_circle', color: 'bg-green-500' },
+          { label: 'Total', value: stats.total, icon: 'confirmation_number', color: 'bg-outline' },
+          { label: 'Abiertos', value: stats.abiertos, icon: 'radio_button_unchecked', color: 'bg-error' },
+          { label: 'En Progreso', value: stats.enProgreso, icon: 'pending', color: 'bg-warning' },
+          { label: 'Resueltos', value: stats.resueltos, icon: 'check_circle', color: 'bg-success' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-white`}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
@@ -83,22 +83,22 @@ export default function SuperAdminSoporte() {
       </div>
 
       {/* SLA overview */}
-      <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white">
+      <div className="bg-gradient-to-br from-warning to-error rounded-2xl p-5 text-inverse-on-surface">
         <div className="flex items-center gap-2 mb-3">
           <span className="material-symbols-outlined">timer</span>
           <h2 className="font-extrabold">Estado de SLA</h2>
         </div>
         <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white/15 rounded-xl p-3 backdrop-blur-sm">
-            <p className="text-xs font-bold text-white/70">Cumplimiento SLA</p>
+          <div className="bg-inverse-on-surface/10 rounded-xl p-3 backdrop-blur-sm">
+            <p className="text-xs font-bold text-inverse-on-surface/70">Cumplimiento SLA</p>
             <p className="text-2xl font-extrabold">94%</p>
           </div>
-          <div className="bg-white/15 rounded-xl p-3 backdrop-blur-sm">
-            <p className="text-xs font-bold text-white/70">Tiempo promedio respuesta</p>
+          <div className="bg-inverse-on-surface/10 rounded-xl p-3 backdrop-blur-sm">
+            <p className="text-xs font-bold text-inverse-on-surface/70">Tiempo promedio respuesta</p>
             <p className="text-2xl font-extrabold">1.8h</p>
           </div>
-          <div className="bg-white/15 rounded-xl p-3 backdrop-blur-sm">
-            <p className="text-xs font-bold text-white/70">Tickets vencidos hoy</p>
+          <div className="bg-inverse-on-surface/10 rounded-xl p-3 backdrop-blur-sm">
+            <p className="text-xs font-bold text-inverse-on-surface/70">Tickets vencidos hoy</p>
             <p className="text-2xl font-extrabold">0</p>
           </div>
         </div>
@@ -118,7 +118,7 @@ export default function SuperAdminSoporte() {
                 key={opt.value}
                 onClick={() => setFiltroEstado(opt.value)}
                 className={`px-3 py-2 text-xs font-bold transition-colors ${
-                  filtroEstado === opt.value ? 'bg-primary text-white' : 'hover:bg-surface-container-high text-on-surface-variant'
+                  filtroEstado === opt.value ? 'bg-primary text-inverse-on-surface' : 'hover:bg-surface-container-high text-on-surface-variant'
                 }`}
               >
                 {opt.label}
@@ -166,8 +166,8 @@ export default function SuperAdminSoporte() {
                   <div className="text-right hidden md:block">
                     <p className="text-xs text-on-surface-variant">SLA</p>
                     <p className={`text-sm font-extrabold ${
-                      ticket.slaRestante.includes('Resuelto') ? 'text-green-600' :
-                      ticket.slaRestante.startsWith('1h') || ticket.slaRestante.startsWith('2h') ? 'text-red-600' : 'text-on-surface'
+                      ticket.slaRestante.includes('Resuelto') ? 'text-success' :
+                      ticket.slaRestante.startsWith('1h') || ticket.slaRestante.startsWith('2h') ? 'text-error' : 'text-on-surface'
                     }`}>
                       {ticket.slaRestante}
                     </p>
@@ -205,12 +205,12 @@ export default function SuperAdminSoporte() {
                 </div>
                 <div className="flex items-center gap-2">
                   {ticket.estado === 'abierto' && (
-                    <button className="px-4 py-2 rounded-xl text-sm font-bold bg-amber-500 text-white hover:bg-amber-600 transition-colors">
+                    <button className="px-4 py-2 rounded-xl text-sm font-bold bg-warning text-inverse-on-surface hover:bg-warning/90 transition-colors">
                       Tomar ticket
                     </button>
                   )}
                   {ticket.estado === 'en_progreso' && (
-                    <button className="px-4 py-2 rounded-xl text-sm font-bold bg-green-500 text-white hover:bg-green-600 transition-colors">
+                    <button className="px-4 py-2 rounded-xl text-sm font-bold bg-success text-inverse-on-surface hover:bg-success/90 transition-colors">
                       Marcar resuelto
                     </button>
                   )}

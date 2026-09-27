@@ -18,9 +18,9 @@ const rubros = ['Todos', 'Comercio', 'Artesanías', 'Tecnología', 'Alimentos', 
 const estados = ['Todos', 'activo', 'inactivo', 'completado'];
 
 const estadoConfig: Record<string, { label: string; color: string }> = {
-  activo: { label: 'Activo', color: 'bg-green-100 text-green-700' },
-  inactivo: { label: 'Inactivo', color: 'bg-slate-100 text-slate-600' },
-  completado: { label: 'Completado', color: 'bg-blue-100 text-blue-700' },
+  activo: { label: 'Activo', color: 'bg-success-container text-on-success-container' },
+  inactivo: { label: 'Inactivo', color: 'bg-surface-container text-on-surface-variant' },
+  completado: { label: 'Completado', color: 'bg-info-container text-on-info-container' },
 };
 
 export default function InstComunidad() {
@@ -49,7 +49,7 @@ export default function InstComunidad() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-blue-500">diversity_3</span>
+          <span className="material-symbols-outlined text-3xl text-info">diversity_3</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Comunidad</h1>
             <p className="text-on-surface-variant">{stats.total} participantes registrados</p>
@@ -60,7 +60,7 @@ export default function InstComunidad() {
             <span className="material-symbols-outlined text-lg">upload_file</span>
             Importar
           </button>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
             <span className="material-symbols-outlined text-lg">person_add</span>
             Agregar
           </button>
@@ -70,14 +70,14 @@ export default function InstComunidad() {
       {/* Stats resumen */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total', value: stats.total, icon: 'groups', color: 'bg-blue-500' },
-          { label: 'Activos', value: stats.activos, icon: 'check_circle', color: 'bg-green-500' },
-          { label: 'Formalizados', value: stats.formalizados, icon: 'verified', color: 'bg-teal-500' },
-          { label: 'Con Mentor', value: stats.conMentor, icon: 'school', color: 'bg-purple-500' },
+          { label: 'Total', value: stats.total, icon: 'groups', color: 'bg-info' },
+          { label: 'Activos', value: stats.activos, icon: 'check_circle', color: 'bg-success' },
+          { label: 'Formalizados', value: stats.formalizados, icon: 'verified', color: 'bg-teal' },
+          { label: 'Con Mentor', value: stats.conMentor, icon: 'school', color: 'bg-info' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-white`}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
@@ -123,13 +123,13 @@ export default function InstComunidad() {
           <div className="flex rounded-xl border-2 border-surface-container-high overflow-hidden">
             <button
               onClick={() => setVista('tabla')}
-              className={`px-3 py-2 text-sm font-bold transition-colors ${vista === 'tabla' ? 'bg-primary text-white' : 'hover:bg-surface-container-high'}`}
+              className={`px-3 py-2 text-sm font-bold transition-colors ${vista === 'tabla' ? 'bg-primary text-inverse-on-surface' : 'hover:bg-surface-container-high'}`}
             >
               <span className="material-symbols-outlined text-lg">table_rows</span>
             </button>
             <button
               onClick={() => setVista('cards')}
-              className={`px-3 py-2 text-sm font-bold transition-colors ${vista === 'cards' ? 'bg-primary text-white' : 'hover:bg-surface-container-high'}`}
+              className={`px-3 py-2 text-sm font-bold transition-colors ${vista === 'cards' ? 'bg-primary text-inverse-on-surface' : 'hover:bg-surface-container-high'}`}
             >
               <span className="material-symbols-outlined text-lg">grid_view</span>
             </button>
@@ -170,7 +170,7 @@ export default function InstComunidad() {
                   <tr key={p.id} className="hover:bg-surface-container-low/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-extrabold shrink-0">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-info-container text-on-info-container text-sm font-extrabold shrink-0">
                           {p.nombre[0]}
                         </div>
                         <div>
@@ -183,7 +183,7 @@ export default function InstComunidad() {
                     <td className="p-4 text-sm text-on-surface-variant">{p.region}</td>
                     <td className="p-4">
                       {p.cohortes.length > 0 ? p.cohortes.map(c => (
-                        <span key={c} className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 mr-1">{c}</span>
+                        <span key={c} className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-info-container text-on-info-container mr-1">{c}</span>
                       )) : <span className="text-xs text-on-surface-variant">—</span>}
                     </td>
                     <td className="p-4 text-sm text-on-surface-variant">{p.mentor ?? '—'}</td>
@@ -191,7 +191,7 @@ export default function InstComunidad() {
                       <div className="flex items-center gap-2">
                         <div className="w-16 bg-surface-container-high rounded-full h-1.5">
                           <div
-                            className={`h-1.5 rounded-full ${p.avance >= 80 ? 'bg-green-500' : p.avance >= 50 ? 'bg-blue-500' : p.avance > 0 ? 'bg-amber-500' : 'bg-slate-300'}`}
+                            className={`h-1.5 rounded-full ${p.avance >= 80 ? 'bg-success' : p.avance >= 50 ? 'bg-info' : p.avance > 0 ? 'bg-warning' : 'bg-surface-container-highest'}`}
                             style={{ width: `${p.avance}%` }}
                           />
                         </div>
@@ -230,7 +230,7 @@ export default function InstComunidad() {
             <div key={p.id} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30 hover:border-primary/30 transition-colors">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-extrabold">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-info-container text-on-info-container text-sm font-extrabold">
                     {p.nombre[0]}
                   </div>
                   <div>
@@ -251,14 +251,14 @@ export default function InstComunidad() {
               {p.cohortes.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-3">
                   {p.cohortes.map(c => (
-                    <span key={c} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">{c}</span>
+                    <span key={c} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-info-container text-on-info-container">{c}</span>
                   ))}
                 </div>
               )}
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-surface-container-high rounded-full h-2">
                   <div
-                    className={`h-2 rounded-full ${p.avance >= 80 ? 'bg-green-500' : p.avance >= 50 ? 'bg-blue-500' : p.avance > 0 ? 'bg-amber-500' : 'bg-slate-300'}`}
+                    className={`h-2 rounded-full ${p.avance >= 80 ? 'bg-success' : p.avance >= 50 ? 'bg-info' : p.avance > 0 ? 'bg-warning' : 'bg-surface-container-highest'}`}
                     style={{ width: `${p.avance}%` }}
                   />
                 </div>

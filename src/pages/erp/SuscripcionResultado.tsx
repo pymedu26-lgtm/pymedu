@@ -16,22 +16,22 @@ const fmt = (n: number) => `$${n.toLocaleString('es-CL')}`;
 
 const CONFIG_ESTADO: Record<string, { icon: string; color: string; bg: string; titulo: string; desc: string }> = {
   aprobado: {
-    icon: 'check_circle', color: 'text-emerald-400', bg: 'bg-emerald-500/15',
+    icon: 'check_circle', color: 'text-success', bg: 'bg-success/15',
     titulo: '¡Pago aprobado!',
     desc: 'Tu suscripción fue activada. Ya puedes disfrutar de todas las funciones de tu nuevo plan.',
   },
   rechazado: {
-    icon: 'cancel', color: 'text-red-400', bg: 'bg-red-500/15',
+    icon: 'cancel', color: 'text-error', bg: 'bg-error/15',
     titulo: 'Pago rechazado',
     desc: 'La transacción no fue autorizada por el emisor de la tarjeta. Puedes intentarlo nuevamente.',
   },
   cancelado: {
-    icon: 'remove_shopping_cart', color: 'text-amber-400', bg: 'bg-amber-500/15',
+    icon: 'remove_shopping_cart', color: 'text-warning', bg: 'bg-warning/15',
     titulo: 'Pago cancelado',
     desc: 'Cancelaste la operación en Webpay. No se realizó ningún cobro.',
   },
   error: {
-    icon: 'error', color: 'text-red-400', bg: 'bg-red-500/15',
+    icon: 'error', color: 'text-error', bg: 'bg-error/15',
     titulo: 'Error en el pago',
     desc: 'Ocurrió un problema procesando la transacción. Si el problema persiste, contacta a soporte.',
   },
@@ -113,14 +113,14 @@ export default function SuscripcionResultado() {
           {estado === 'aprobado' ? (
             <button
               onClick={() => { window.location.href = '/erp/inicio'; }}
-              className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-3 px-6 rounded-2xl text-sm transition-colors shadow-md glow-primary"
+              className="flex-1 bg-primary hover:bg-primary/90 text-inverse-on-surface font-bold py-3 px-6 rounded-2xl text-sm transition-colors shadow-md glow-primary"
             >
               Ir al inicio
             </button>
           ) : (
             <button
               onClick={() => { window.location.href = '/erp/suscripcion'; }}
-              className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-3 px-6 rounded-2xl text-sm transition-colors shadow-md glow-primary"
+              className="flex-1 bg-primary hover:bg-primary/90 text-inverse-on-surface font-bold py-3 px-6 rounded-2xl text-sm transition-colors shadow-md glow-primary"
             >
               Volver a intentar
             </button>

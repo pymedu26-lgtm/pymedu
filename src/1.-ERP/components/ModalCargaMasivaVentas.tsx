@@ -510,14 +510,14 @@ export default function ModalCargaMasivaVentas({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-scrim/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
       <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
         <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50">
           <div>
             <h3 className="text-xl font-bold text-primary">Carga Masiva de Ventas</h3>
-            <p className="text-xs text-slate-500 mt-1">Sube tu Excel con muchas ventas a la vez usando nuestra plantilla.</p>
+            <p className="text-xs text-on-surface-variant mt-1">Sube tu Excel con muchas ventas a la vez usando nuestra plantilla.</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-error transition-colors">
+          <button onClick={onClose} className="text-outline hover:text-error transition-colors">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -532,18 +532,18 @@ export default function ModalCargaMasivaVentas({
           />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 rounded-2xl border border-outline-variant/30 bg-slate-50 p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-emerald-700">table_view</span>
+            <div className="md:col-span-2 rounded-2xl border border-outline-variant/30 bg-surface-container-low p-4 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-success-container flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-on-success-container">table_view</span>
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-slate-800">¿Primera vez cargando?</p>
-                <p className="text-xs text-slate-500">Descarga la plantilla con las columnas y un ejemplo de venta por fila.</p>
+                <p className="text-sm font-bold text-on-surface">¿Primera vez cargando?</p>
+                <p className="text-xs text-on-surface-variant">Descarga la plantilla con las columnas y un ejemplo de venta por fila.</p>
               </div>
             </div>
             <button
               onClick={descargarPlantilla}
-              className="px-5 py-4 bg-primary text-white rounded-2xl font-black text-sm shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+              className="px-5 py-4 bg-primary text-inverse-on-surface rounded-2xl font-black text-sm shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
             >
               <span className="material-symbols-outlined text-lg">download_for_offline</span>
               Descargar plantilla
@@ -563,27 +563,27 @@ export default function ModalCargaMasivaVentas({
                   : 'border-outline-variant/50 hover:bg-primary/5 hover:border-primary/30'
               }`}
             >
-              <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto transition-colors ${arrastrando ? 'bg-primary/15' : 'bg-slate-100'}`}>
-                <span className={`material-symbols-outlined text-4xl ${arrastrando ? 'text-primary animate-bounce' : 'text-slate-300 group-hover:text-primary'}`}>
+              <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto transition-colors ${arrastrando ? 'bg-primary/15' : 'bg-surface-container'}`}>
+                <span className={`material-symbols-outlined text-4xl ${arrastrando ? 'text-primary animate-bounce' : 'text-outline group-hover:text-primary'}`}>
                   {cargando ? 'hourglass_top' : 'cloud_upload'}
                 </span>
               </div>
-              <p className="mt-4 text-slate-700 font-bold">
+              <p className="mt-4 text-on-surface-variant font-bold">
                 {cargando ? 'Leyendo archivo…' : arrastrando ? 'Suelta el archivo aquí' : 'Arrastra tu archivo Excel aquí'}
               </p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-outline mt-1">
                 o haz clic para buscarlo en tus carpetas · Formatos: {EXTENSIONES.join(', ')}
               </p>
             </div>
           )}
 
           {previas.length > 0 && (
-            <div className="flex flex-wrap justify-between items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <div className="flex flex-wrap justify-between items-center gap-3 bg-surface-container-low p-4 rounded-2xl border border-outline-variant/30">
               <div className="flex items-center gap-3 min-w-0">
                 <span className="material-symbols-outlined text-primary">description</span>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-800 truncate">{archivo?.name}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-sm font-bold text-on-surface truncate">{archivo?.name}</p>
+                  <p className="text-xs text-on-surface-variant">
                     {previas.length} ventas detectadas · {aImportar.length} por importar ·{' '}
                     {formatPesos(previas.reduce((acc, p) => acc + p.total, 0))} en total
                   </p>
@@ -592,13 +592,13 @@ export default function ModalCargaMasivaVentas({
               <div className="flex gap-2">
                 <button
                   onClick={() => { setPrevias([]); setArchivo(null); setError(null); }}
-                  className="px-4 py-2 rounded-full text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
+                  className="px-4 py-2 rounded-full text-xs font-bold text-on-surface-variant bg-surface-container-lowest border border-outline-variant/30 hover:bg-surface-container transition-colors"
                 >
                   Cambiar archivo
                 </button>
                 <button
                   onClick={descargarPlantilla}
-                  className="px-4 py-2 rounded-full text-xs font-bold text-primary bg-white border border-primary/30 hover:bg-primary/5 transition-colors flex items-center gap-1"
+                  className="px-4 py-2 rounded-full text-xs font-bold text-primary bg-surface-container-lowest border border-primary/30 hover:bg-primary/5 transition-colors flex items-center gap-1"
                 >
                   <span className="material-symbols-outlined text-sm">download_for_offline</span>
                   Plantilla
@@ -608,7 +608,7 @@ export default function ModalCargaMasivaVentas({
           )}
 
           {error && (
-            <div className="px-4 py-3 rounded-2xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700 flex items-center gap-2">
+            <div className="px-4 py-3 rounded-2xl bg-error-container border border-error/30 text-xs font-semibold text-on-error-container flex items-center gap-2">
               <span className="material-symbols-outlined text-sm">error</span>
               {error}
             </div>
@@ -625,7 +625,7 @@ export default function ModalCargaMasivaVentas({
                 </button>
                 <button
                   onClick={() => setSeleccionadas(new Set())}
-                  className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                  className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors"
                 >
                   Deseleccionar
                 </button>
@@ -633,7 +633,7 @@ export default function ModalCargaMasivaVentas({
 
               <div className="border border-outline-variant/30 rounded-2xl overflow-hidden shadow-sm">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-surface-container-low text-slate-500 font-bold text-[10px] uppercase tracking-wider">
+                  <thead className="bg-surface-container-low text-on-surface-variant font-bold text-[10px] uppercase tracking-wider">
                     <tr>
                       <th className="px-4 py-3 w-10"></th>
                       <th className="px-4 py-3">Folio</th>
@@ -648,7 +648,7 @@ export default function ModalCargaMasivaVentas({
                     {previas.map(p => {
                       const bloqueada = p.errores.length > 0 || p.existe;
                       return (
-                        <tr key={p.clave} className={`hover:bg-slate-50/50 transition-colors ${bloqueada ? 'bg-slate-50/40' : ''}`}>
+                        <tr key={p.clave} className={`hover:bg-surface-container-low/50 transition-colors ${bloqueada ? 'bg-surface-container-low/40' : ''}`}>
                           <td className="px-4 py-3">
                             <input
                               type="checkbox"
@@ -659,21 +659,21 @@ export default function ModalCargaMasivaVentas({
                             />
                           </td>
                           <td className="px-4 py-3 font-bold text-primary">{p.folio || '—'}</td>
-                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{p.fecha}</td>
+                          <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap">{p.fecha}</td>
                           <td className="px-4 py-3 truncate max-w-[200px] font-medium" title={p.cliente}>{p.cliente}</td>
-                          <td className="px-4 py-3 text-center text-slate-500">{p.items}</td>
-                          <td className="px-4 py-3 text-right font-black text-slate-800 whitespace-nowrap">{formatPesos(p.total)}</td>
+                          <td className="px-4 py-3 text-center text-on-surface-variant">{p.items}</td>
+                          <td className="px-4 py-3 text-right font-black text-on-surface whitespace-nowrap">{formatPesos(p.total)}</td>
                           <td className="px-4 py-3 text-center">
                             {p.errores.length > 0 ? (
-                              <span title={p.errores.join(' | ')} className="inline-flex items-center gap-1 text-[9px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-black uppercase cursor-help">
+                              <span title={p.errores.join(' | ')} className="inline-flex items-center gap-1 text-[9px] bg-error-container text-on-error-container px-2 py-0.5 rounded-full font-black uppercase cursor-help">
                                 <span className="material-symbols-outlined text-[10px]">error</span> Revisar
                               </span>
                             ) : p.existe ? (
-                              <span className="inline-flex items-center gap-1 text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase">
+                              <span className="inline-flex items-center gap-1 text-[9px] bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-full font-black uppercase">
                                 <span className="material-symbols-outlined text-[10px]">check_circle</span> Ya existe
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">
+                              <span className="inline-flex items-center gap-1 text-[9px] bg-success-container text-on-success-container px-2 py-0.5 rounded-full font-black uppercase">
                                 <span className="material-symbols-outlined text-[10px]">add_circle</span> Nuevo
                               </span>
                             )}
@@ -686,15 +686,15 @@ export default function ModalCargaMasivaVentas({
               </div>
 
               {conProblemas.length > 0 && (
-                <details className="px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                <details className="px-4 py-3 rounded-2xl bg-warning-container border border-warning/30 text-xs text-on-warning-container">
                   <summary className="font-black cursor-pointer">
                     {conProblemas.length} venta(s) no se importarán — revisa los detalles
                   </summary>
                   <ul className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-2">
                     {conProblemas.map(p => (
-                      <li key={p.clave} className="bg-white/70 rounded-xl px-3 py-2">
+                      <li key={p.clave} className="bg-surface-container-lowest/70 rounded-xl px-3 py-2">
                         <span className="font-bold">Folio {p.folio || '—'} · {p.cliente}</span>
-                        <ul className="list-disc list-inside mt-1 text-amber-700">
+                        <ul className="list-disc list-inside mt-1 text-on-warning-container">
                           {p.existe && <li>Ya existe una venta con este Folio en la misma fecha.</li>}
                           {p.errores.map((e, i) => <li key={i}>{e}</li>)}
                         </ul>
@@ -708,13 +708,13 @@ export default function ModalCargaMasivaVentas({
         </div>
 
         <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50">
-          <button onClick={onClose} className="px-6 py-2 rounded-full font-bold text-slate-600 hover:bg-slate-200/50 transition-colors">
+          <button onClick={onClose} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high/50 transition-colors">
             Cancelar
           </button>
           <button
             onClick={confirmar}
             disabled={aImportar.length === 0 || cargando}
-            className="px-6 py-2 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-sm">cloud_upload</span>
             Importar {aImportar.length} ventas

@@ -44,7 +44,7 @@ export default function ERPPromociones() {
           <p className="text-on-surface-variant mt-1 text-sm">Crea promociones que se aplican al registrar ventas.</p>
         </div>
         <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-5 py-3 bg-tertiary text-white rounded-2xl font-bold text-sm shadow-lg shadow-tertiary/20 hover:scale-105 transition-transform">
+          className="flex items-center gap-2 px-5 py-3 bg-tertiary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-tertiary/20 hover:scale-105 transition-transform">
           <span className="material-symbols-outlined text-lg">add_circle</span>
           Nueva Promocion
         </button>
@@ -69,7 +69,7 @@ export default function ERPPromociones() {
                   <h3 className="font-black text-on-surface">{p.nombre}</h3>
                   <p className="text-xs text-on-surface-variant mt-1">{producto?.nombre || 'Toda la tienda'}</p>
                 </div>
-                <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold shrink-0', activa ? 'bg-emerald-100 text-emerald-700' : 'bg-surface-container-high text-on-surface-variant')}>
+                <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold shrink-0', activa ? 'bg-success-container text-on-success-container' : 'bg-surface-container-high text-on-surface-variant')}>
                   Activa
                 </span>
               </div>
@@ -141,7 +141,7 @@ export default function ERPPromociones() {
             <div className="px-6 pb-6 flex gap-3 shrink-0">
               <button onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
               <button onClick={guardar} disabled={!nuevo.nombre.trim() || !nuevo.valor || !nuevo.fechaFin}
-                className="flex-1 py-3 rounded-2xl bg-tertiary text-white font-bold shadow-lg shadow-tertiary/20 disabled:opacity-50">Guardar</button>
+                className="flex-1 py-3 rounded-2xl bg-tertiary text-inverse-on-surface font-bold shadow-lg shadow-tertiary/20 disabled:opacity-50">Guardar</button>
             </div>
           </div>
         </div>

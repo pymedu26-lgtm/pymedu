@@ -85,7 +85,7 @@ export default function ERPCobrar() {
                     <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
                     <td className="p-4">
                       <button onClick={() => setAbonoVentaId(v.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-secondary text-white text-xs font-bold hover:bg-secondary/80 transition-colors">
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-secondary text-inverse-on-surface text-xs font-bold hover:bg-secondary/80 transition-colors">
                         <span className="material-symbols-outlined text-sm">payments</span>
                         Cobrar
                       </button>
@@ -136,7 +136,7 @@ export default function ERPCobrar() {
               <div className="px-6 pb-6 flex gap-3">
                 <button onClick={() => setAbonoVentaId(null)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
                 <button onClick={registrarAbono} disabled={!form.monto || Number(form.monto) <= 0}
-                  className={cn('flex-1 py-3 rounded-2xl bg-secondary text-white font-bold disabled:opacity-50')}>
+                  className={cn('flex-1 py-3 rounded-2xl bg-secondary text-inverse-on-surface font-bold disabled:opacity-50')}>
                   Registrar Cobro
                 </button>
               </div>

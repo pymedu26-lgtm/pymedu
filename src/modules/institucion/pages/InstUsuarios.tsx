@@ -3,10 +3,10 @@ import { api } from '../../../lib/api';
 import { useAuth } from '../../../context/AuthContext';
 
 const rolConfig: Record<string, { label: string; color: string; icon: string }> = {
-  coordinador: { label: 'Coordinador', color: 'bg-purple-100 text-purple-700', icon: 'supervisor_account' },
-  mentor: { label: 'Mentor', color: 'bg-teal-100 text-teal-700', icon: 'school' },
-  emprendedor: { label: 'Emprendedor', color: 'bg-blue-100 text-blue-700', icon: 'storefront' },
-  dueño: { label: 'Dueño', color: 'bg-green-100 text-green-700', icon: 'storefront' },
+  coordinador: { label: 'Coordinador', color: 'bg-info-container text-on-info-container', icon: 'supervisor_account' },
+  mentor: { label: 'Mentor', color: 'bg-teal-container text-on-teal-container', icon: 'school' },
+  emprendedor: { label: 'Emprendedor', color: 'bg-info-container text-on-info-container', icon: 'storefront' },
+  dueño: { label: 'Dueño', color: 'bg-success-container text-on-success-container', icon: 'storefront' },
 };
 
 interface SolicitudVinculacion {
@@ -169,7 +169,7 @@ export default function InstUsuarios() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-purple-500">group</span>
+          <span className="material-symbols-outlined text-3xl text-info">group</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Usuarios de la Institución</h1>
             <p className="text-on-surface-variant">{stats.total} usuarios</p>
@@ -183,10 +183,10 @@ export default function InstUsuarios() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-indigo-500">person_add</span>
+              <span className="material-symbols-outlined text-info">person_add</span>
               <h2 className="font-extrabold text-on-surface">Solicitudes de vinculación</h2>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">{solicitudes.length} pendientes</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-info-container text-on-info-container">{solicitudes.length} pendientes</span>
           </div>
           <div className="divide-y divide-outline-variant/30">
             {solicitudes.length === 0 ? (
@@ -197,7 +197,7 @@ export default function InstUsuarios() {
               <div key={sol.id} className="p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 text-sm font-extrabold">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-info-container text-on-info-container text-sm font-extrabold">
                       {sol.perfil?.nombre_completo?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) ?? '?'}
                     </div>
                     <div className="min-w-0">
@@ -209,14 +209,14 @@ export default function InstUsuarios() {
                     <button
                       onClick={() => responderSolicitud(sol.id, true)}
                       disabled={gestionando}
-                      className="px-3 py-1.5 text-xs font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs font-bold bg-success text-inverse-on-surface rounded-lg hover:bg-success disabled:opacity-50"
                     >
                       Aprobar
                     </button>
                     <button
                       onClick={() => responderSolicitud(sol.id, false)}
                       disabled={gestionando}
-                      className="px-3 py-1.5 text-xs font-bold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs font-bold bg-error-container text-on-error-container rounded-lg hover:bg-error-container disabled:opacity-50"
                     >
                       Rechazar
                     </button>
@@ -234,7 +234,7 @@ export default function InstUsuarios() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-teal-500">card_membership</span>
+              <span className="material-symbols-outlined text-teal">card_membership</span>
               <h2 className="font-extrabold text-on-surface">Códigos de invitación</h2>
             </div>
             <p className="text-xs text-on-surface-variant mt-1">
@@ -243,9 +243,9 @@ export default function InstUsuarios() {
           </div>
           <div className="p-4 space-y-4">
             {ultimoCodigo && (
-              <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 text-sm font-bold flex items-center justify-between gap-2">
+              <div className="p-3 rounded-xl bg-teal-container border border-teal/30 text-on-teal-container text-sm font-bold flex items-center justify-between gap-2">
                 <span>Nuevo código: <span className="font-black tracking-widest">{ultimoCodigo}</span></span>
-                <button onClick={() => copiarCodigo(ultimoCodigo)} className="px-2 py-1 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700">
+                <button onClick={() => copiarCodigo(ultimoCodigo)} className="px-2 py-1 rounded-lg bg-teal text-inverse-on-surface text-xs font-bold hover:bg-teal/90">
                   Copiar
                 </button>
               </div>
@@ -279,7 +279,7 @@ export default function InstUsuarios() {
               <button
                 type="submit"
                 disabled={gestionando}
-                className="w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 text-sm"
+                className="w-full py-3 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 text-sm"
               >
                 Generar código
               </button>
@@ -291,10 +291,10 @@ export default function InstUsuarios() {
                 <div key={c.id} className="p-3 flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className={`font-black tracking-widest text-sm ${c.activo ? 'text-teal-600' : 'text-on-surface-variant line-through'}`}>
+                      <span className={`font-black tracking-widest text-sm ${c.activo ? 'text-teal' : 'text-on-surface-variant line-through'}`}>
                         {c.codigo}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${!c.activo ? 'bg-slate-100 text-slate-500' : c.usos_actuales >= c.usos_max ? 'bg-amber-100 text-amber-700' : 'bg-teal-100 text-teal-700'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${!c.activo ? 'bg-surface-container text-on-surface-variant' : c.usos_actuales >= c.usos_max ? 'bg-warning-container text-on-warning-container' : 'bg-teal-container text-on-teal-container'}`}>
                         {c.usos_actuales}/{c.usos_max}
                       </span>
                     </div>
@@ -305,8 +305,8 @@ export default function InstUsuarios() {
                       <span className="material-symbols-outlined text-sm text-on-surface-variant">content_copy</span>
                     </button>
                     {c.activo && (
-                      <button onClick={() => desactivarCodigo(c.id)} title="Desactivar" className="p-1.5 rounded-lg hover:bg-red-50">
-                        <span className="material-symbols-outlined text-sm text-red-500">block</span>
+                      <button onClick={() => desactivarCodigo(c.id)} title="Desactivar" className="p-1.5 rounded-lg hover:bg-error-container">
+                        <span className="material-symbols-outlined text-sm text-error">block</span>
                       </button>
                     )}
                   </div>
@@ -320,13 +320,13 @@ export default function InstUsuarios() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Coordinadores', value: stats.coordinadores, icon: 'supervisor_account', color: 'bg-purple-500' },
-          { label: 'Mentores', value: stats.mentores, icon: 'school', color: 'bg-teal-500' },
-          { label: 'Emprendedores', value: stats.emprendedores, icon: 'storefront', color: 'bg-blue-500' },
+          { label: 'Coordinadores', value: stats.coordinadores, icon: 'supervisor_account', color: 'bg-info' },
+          { label: 'Mentores', value: stats.mentores, icon: 'school', color: 'bg-teal' },
+          { label: 'Emprendedores', value: stats.emprendedores, icon: 'storefront', color: 'bg-info' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-white`}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
@@ -357,7 +357,7 @@ export default function InstUsuarios() {
                 key={opt.value}
                 onClick={() => setFiltroRol(opt.value)}
                 className={`px-3 py-2 text-xs font-bold transition-colors ${
-                  filtroRol === opt.value ? 'bg-primary text-white' : 'hover:bg-surface-container-high text-on-surface-variant'
+                  filtroRol === opt.value ? 'bg-primary text-inverse-on-surface' : 'hover:bg-surface-container-high text-on-surface-variant'
                 }`}
               >
                 {opt.label}
@@ -376,13 +376,13 @@ export default function InstUsuarios() {
             <div key={user.id as string} className="p-4 hover:bg-surface-container-low/50 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-purple-100 text-purple-600 text-sm font-extrabold shrink-0">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-info-container text-on-info-container text-sm font-extrabold shrink-0">
                     {(user.nombre_completo as string)?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-on-surface">{user.nombre_completo as string}</p>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${rolConfig[user.rol as string]?.color ?? 'bg-slate-100 text-slate-600'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${rolConfig[user.rol as string]?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
                         {rolConfig[user.rol as string]?.label ?? user.rol as string}
                       </span>
                     </div>

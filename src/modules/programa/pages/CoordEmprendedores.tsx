@@ -30,10 +30,10 @@ const emprendedores: Emprendedor[] = [
 const cohortes = ['Todas', 'Emprendimiento Juvenil 2026', 'Innovacion Digital', 'Sostenibilidad Local'];
 
 const estadoConfig: Record<EstadoEmprendedor, { label: string; color: string }> = {
-  activo: { label: 'Activo', color: 'bg-green-100 text-green-700' },
-  riesgo: { label: 'En riesgo', color: 'bg-red-100 text-red-700' },
-  completado: { label: 'Completado', color: 'bg-blue-100 text-blue-700' },
-  inactivo: { label: 'Inactivo', color: 'bg-slate-100 text-slate-600' },
+  activo: { label: 'Activo', color: 'bg-success-container text-on-success-container' },
+  riesgo: { label: 'En riesgo', color: 'bg-error-container text-on-error-container' },
+  completado: { label: 'Completado', color: 'bg-info-container text-on-info-container' },
+  inactivo: { label: 'Inactivo', color: 'bg-surface-container text-on-surface-variant' },
 };
 
 export default function CoordEmprendedores() {
@@ -51,10 +51,10 @@ export default function CoordEmprendedores() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-green-500">groups</span>
+          <span className="material-symbols-outlined text-3xl text-success">groups</span>
           <h1 className="text-2xl font-extrabold text-on-surface">Emprendedores</h1>
         </div>
-        <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors">
+        <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
           <span className="material-symbols-outlined text-lg">person_add</span>
           Agregar Emprendedor
         </button>
@@ -76,7 +76,7 @@ export default function CoordEmprendedores() {
               onClick={() => setCohorteFiltro(c)}
               className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${
                 cohorteFiltro === c
-                  ? 'bg-primary text-white'
+                  ? 'bg-primary text-inverse-on-surface'
                   : 'bg-surface-container-high text-on-surface-variant hover:bg-primary/10'
               }`}
             >
@@ -89,10 +89,10 @@ export default function CoordEmprendedores() {
       {/* Estadisticas rapidas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Activos', value: emprendedores.filter(e => e.estado === 'activo').length, color: 'text-green-600' },
-          { label: 'En riesgo', value: emprendedores.filter(e => e.estado === 'riesgo').length, color: 'text-red-600' },
-          { label: 'Completados', value: emprendedores.filter(e => e.estado === 'completado').length, color: 'text-blue-600' },
-          { label: 'Con documentos pend.', value: emprendedores.filter(e => e.documentosPendientes > 0).length, color: 'text-amber-600' },
+          { label: 'Activos', value: emprendedores.filter(e => e.estado === 'activo').length, color: 'text-success' },
+          { label: 'En riesgo', value: emprendedores.filter(e => e.estado === 'riesgo').length, color: 'text-error' },
+          { label: 'Completados', value: emprendedores.filter(e => e.estado === 'completado').length, color: 'text-info' },
+          { label: 'Con documentos pend.', value: emprendedores.filter(e => e.documentosPendientes > 0).length, color: 'text-warning' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant/30 text-center">
             <p className={`text-2xl font-extrabold ${stat.color}`}>{stat.value}</p>
@@ -108,7 +108,7 @@ export default function CoordEmprendedores() {
             <div key={empre.id} className="p-5 hover:bg-surface-container-low/50 transition-colors">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-600 text-sm font-extrabold">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-success-container text-on-success-container text-sm font-extrabold">
                     {empre.nombre[0]}
                   </div>
                   <div>
@@ -128,7 +128,7 @@ export default function CoordEmprendedores() {
                 </div>
                 <div>
                   <p className="text-[10px] font-extrabold uppercase tracking-wider text-outline">Mentor</p>
-                  <p className={`font-bold truncate ${empre.mentor === 'Sin asignar' ? 'text-amber-600' : 'text-on-surface'}`}>{empre.mentor}</p>
+                  <p className={`font-bold truncate ${empre.mentor === 'Sin asignar' ? 'text-warning' : 'text-on-surface'}`}>{empre.mentor}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-extrabold uppercase tracking-wider text-outline">Cursos</p>
@@ -136,7 +136,7 @@ export default function CoordEmprendedores() {
                 </div>
                 <div>
                   <p className="text-[10px] font-extrabold uppercase tracking-wider text-outline">Docs. pendientes</p>
-                  <p className={`font-bold ${empre.documentosPendientes > 0 ? 'text-amber-600' : 'text-green-600'}`}>{empre.documentosPendientes}</p>
+                  <p className={`font-bold ${empre.documentosPendientes > 0 ? 'text-warning' : 'text-success'}`}>{empre.documentosPendientes}</p>
                 </div>
               </div>
 
@@ -147,7 +147,7 @@ export default function CoordEmprendedores() {
                   <span className="font-bold text-on-surface">{empre.avance}%</span>
                 </div>
                 <div className="w-full bg-surface-container-high rounded-full h-1.5">
-                  <div className={`h-1.5 rounded-full ${empre.estado === 'riesgo' ? 'bg-red-500' : empre.estado === 'completado' ? 'bg-blue-500' : 'bg-green-500'}`} style={{ width: `${empre.avance}%` }} />
+                  <div className={`h-1.5 rounded-full ${empre.estado === 'riesgo' ? 'bg-error' : empre.estado === 'completado' ? 'bg-info' : 'bg-success'}`} style={{ width: `${empre.avance}%` }} />
                 </div>
               </div>
 
@@ -166,7 +166,7 @@ export default function CoordEmprendedores() {
                 <span className="text-xs text-on-surface-variant">Ultima actividad: {empre.ultimaActividad}</span>
                 <div className="flex gap-2">
                   {empre.mentor === 'Sin asignar' && (
-                    <button className="px-3 py-1.5 text-xs font-bold text-amber-600 border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors">
+                    <button className="px-3 py-1.5 text-xs font-bold text-warning border border-warning/30 rounded-lg hover:bg-warning-container transition-colors">
                       Asignar mentor
                     </button>
                   )}

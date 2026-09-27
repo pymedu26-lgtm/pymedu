@@ -69,7 +69,7 @@ export default function ERPClientes() {
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus clientes y su deuda pendiente.</p>
         </div>
         <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+          className="flex items-center gap-2 px-5 py-3 bg-primary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
           <span className="material-symbols-outlined text-lg">person_add</span>
           Nuevo Cliente
         </button>
@@ -127,7 +127,7 @@ export default function ERPClientes() {
                     </td>
                     <td className="p-4 font-bold text-on-surface">{c.ventas}</td>
                     <td className="p-4">
-                      <span className={cn('font-extrabold', saldoReal > 0 ? 'text-secondary' : 'text-emerald-600')}>
+                      <span className={cn('font-extrabold', saldoReal > 0 ? 'text-secondary' : 'text-success')}>
                         {fmt(saldoReal)}
                       </span>
                     </td>
@@ -138,7 +138,7 @@ export default function ERPClientes() {
                           {c.deuda >= c.limite_credito && c.limite_credito > 0 ? (
                             <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-error/10 px-2 py-0.5 text-[10px] font-black text-error uppercase tracking-wide">Límite alcanzado</span>
                           ) : c.deuda >= c.limite_credito * 0.85 && c.limite_credito > 0 ? (
-                            <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-black text-amber-600 uppercase tracking-wide">Cerca del límite</span>
+                            <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-black text-warning uppercase tracking-wide">Cerca del límite</span>
                           ) : null}
                         </div>
                       ) : '—'}
@@ -194,7 +194,7 @@ export default function ERPClientes() {
             </div>
             <div className="px-6 pb-6 flex gap-3 shrink-0">
               <button onClick={() => { setShowModal(false); setRutError(''); }} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20 disabled:opacity-50">Guardar Cliente</button>
+              <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50">Guardar Cliente</button>
             </div>
           </div>
         </div>

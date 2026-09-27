@@ -76,16 +76,16 @@ function formatCurrency(value: number) {
 
 function StatusBadge({ value }: { value: EstadoOportunidad }) {
   const tone: Record<EstadoOportunidad, string> = {
-    Abierta: 'bg-emerald-100 text-emerald-700',
-    'Por cerrar': 'bg-amber-100 text-amber-700',
-    'En evaluacion': 'bg-slate-100 text-slate-600',
+    Abierta: 'bg-success-container text-on-success-container',
+    'Por cerrar': 'bg-warning-container text-on-warning-container',
+    'En evaluacion': 'bg-surface-container text-on-surface-variant',
   };
   return <span className={cn('rounded-full px-3 py-1 text-xs font-extrabold', tone[value])}>{value}</span>;
 }
 
 function FitBadge({ value }: { value: CalceOportunidad }) {
   const tone: Record<CalceOportunidad, string> = {
-    Alto: 'bg-primary text-white',
+    Alto: 'bg-primary text-inverse-on-surface',
     Medio: 'bg-secondary-container text-primary',
     Explorar: 'bg-surface-container-high text-on-surface-variant',
   };
@@ -235,7 +235,7 @@ export default function ERPMercadosPublicos() {
           <h1 className="text-3xl font-black text-primary">Mercados Públicos</h1>
           <div className="flex items-center gap-3">
             {lastUpdate && <span className="text-xs font-bold text-outline">Última actualización: {lastUpdate.toLocaleTimeString()}</span>}
-            <button onClick={fetchLicitaciones} disabled={loading} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary-container disabled:opacity-50">
+            <button onClick={fetchLicitaciones} disabled={loading} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-black text-inverse-on-surface shadow-lg shadow-primary/20 transition-all hover:bg-primary-container disabled:opacity-50">
               <span className={cn('material-symbols-outlined text-lg', loading && 'animate-spin')}>refresh</span>
               Refrescar Licitaciones
             </button>
@@ -312,7 +312,7 @@ export default function ERPMercadosPublicos() {
                           <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-outline">Monto estimado</p>
                           <p className="mt-1 text-xl font-black text-primary">{item.montoEstimado ? formatCurrency(item.montoEstimado) : 'Consultar bases'}</p>
                         </div>
-                        <a href={`https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idLicitacion=${item.codigo}`} target="_blank" rel="noreferrer" className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-white"><span className="material-symbols-outlined text-lg">open_in_new</span></a>
+                        <a href={`https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idLicitacion=${item.codigo}`} target="_blank" rel="noreferrer" className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-inverse-on-surface"><span className="material-symbols-outlined text-lg">open_in_new</span></a>
                       </div>
                     </div>
                     <p className="relative z-10 mt-4 rounded-2xl bg-surface-container/70 px-4 py-3 text-sm font-semibold leading-6 text-on-surface-variant">Siguiente paso: {item.accion}</p>
@@ -324,7 +324,7 @@ export default function ERPMercadosPublicos() {
                   <div className="flex items-center gap-1">
                     <button onClick={() => handlePageChange(Math.max(1, paginaActual - 1))} disabled={paginaActual === 1} className="flex h-10 w-10 items-center justify-center rounded-xl text-primary transition-colors hover:bg-secondary-container disabled:opacity-20"><span className="material-symbols-outlined">chevron_left</span></button>
                     {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(page => (
-                      <button key={page} onClick={() => handlePageChange(page)} className={cn('flex h-10 w-10 items-center justify-center rounded-xl text-sm font-black transition-all', paginaActual === page ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110' : 'text-outline hover:bg-secondary-container hover:text-primary')}>{page}</button>
+                      <button key={page} onClick={() => handlePageChange(page)} className={cn('flex h-10 w-10 items-center justify-center rounded-xl text-sm font-black transition-all', paginaActual === page ? 'bg-primary text-inverse-on-surface shadow-lg shadow-primary/30 scale-110' : 'text-outline hover:bg-secondary-container hover:text-primary')}>{page}</button>
                     ))}
                     <button onClick={() => handlePageChange(Math.min(totalPaginas, paginaActual + 1))} disabled={paginaActual === totalPaginas} className="flex h-10 w-10 items-center justify-center rounded-xl text-primary transition-colors hover:bg-secondary-container disabled:opacity-20"><span className="material-symbols-outlined">chevron_right</span></button>
                   </div>
@@ -352,7 +352,7 @@ export default function ERPMercadosPublicos() {
                     <div className="rounded-[24px] border border-outline-variant/40 bg-surface-container-low p-4">
                       <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-outline">Carpeta ({carpetaPostulacion.length})</p>
                       {carpetasCreadas[selectedOpportunity.id] && (
-                        <div className="mt-3 flex items-center gap-2 rounded-2xl bg-emerald-100 px-3 py-2 text-xs font-black text-emerald-700">
+                        <div className="mt-3 flex items-center gap-2 rounded-2xl bg-success-container px-3 py-2 text-xs font-black text-on-success-container">
                           <span className="material-symbols-outlined text-base">folder_special</span>
                           Carpeta creada el {new Date(carpetasCreadas[selectedOpportunity.id]).toLocaleDateString('es-CL')}
                         </div>
@@ -360,11 +360,11 @@ export default function ERPMercadosPublicos() {
                       <div className="mt-4 space-y-2">{carpetaPostulacion.map(doc => <div key={doc.nombre} className="rounded-2xl border border-outline-variant/30 bg-surface-container-low p-3"><div className="flex justify-between"><div><p className="text-sm font-black text-primary">{doc.nombre}</p><p className="text-xs text-on-surface-variant">{doc.responsable}</p></div><span className="text-[10px] font-black">{doc.estado}</span></div></div>)}</div>
                     </div>
                     {carpetasCreadas[selectedOpportunity.id] ? (
-                      <button disabled className="w-full rounded-2xl bg-emerald-100 px-5 py-3 text-sm font-black text-emerald-700 cursor-default">
+                      <button disabled className="w-full rounded-2xl bg-success-container px-5 py-3 text-sm font-black text-on-success-container cursor-default">
                         <span className="material-symbols-outlined text-base align-middle">check_circle</span> Carpeta lista para postular
                       </button>
                     ) : (
-                      <button onClick={() => setCarpetasCreadas(prev => ({ ...prev, [selectedOpportunity.id]: new Date().toISOString() }))} className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-black text-white shadow-lg shadow-primary/20 hover:bg-primary-container transition-colors">
+                      <button onClick={() => setCarpetasCreadas(prev => ({ ...prev, [selectedOpportunity.id]: new Date().toISOString() }))} className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-black text-inverse-on-surface shadow-lg shadow-primary/20 hover:bg-primary-container transition-colors">
                         Crear carpeta
                       </button>
                     )}
@@ -381,7 +381,7 @@ export default function ERPMercadosPublicos() {
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               {metodoPostulacion.map(item => (
                 <div key={item.paso} className="rounded-[24px] border border-outline-variant/45 bg-surface-container-low p-4">
-                  <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-sm font-black text-white">{item.paso}</span><span className="material-symbols-outlined text-primary">{item.icon}</span></div>
+                  <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-sm font-black text-inverse-on-surface">{item.paso}</span><span className="material-symbols-outlined text-primary">{item.icon}</span></div>
                   <h3 className="mt-4 text-base font-black text-on-surface">{item.titulo}</h3>
                   <p className="mt-2 text-sm text-on-surface-variant">{item.detalle}</p>
                 </div>

@@ -10,9 +10,9 @@ import {
 } from '../../../lib/roles';
 
 const permisoConfig: Record<NivelPermiso, { label: string; color: string; descripcion: string }> = {
-  rwd: { label: 'RWD', color: 'bg-green-100 text-green-700', descripcion: 'Lectura, escritura y eliminación' },
-  rw: { label: 'RW', color: 'bg-blue-100 text-blue-700', descripcion: 'Lectura y escritura' },
-  r: { label: 'R', color: 'bg-slate-100 text-slate-600', descripcion: 'Solo lectura' },
+  rwd: { label: 'RWD', color: 'bg-success-container text-on-success-container', descripcion: 'Lectura, escritura y eliminación' },
+  rw: { label: 'RW', color: 'bg-info-container text-on-info-container', descripcion: 'Lectura y escritura' },
+  r: { label: 'R', color: 'bg-surface-container text-on-surface-variant', descripcion: 'Solo lectura' },
   none: { label: '—', color: 'bg-surface-container-high text-on-surface-variant/40', descripcion: 'Sin acceso' },
 };
 
@@ -23,40 +23,40 @@ const origenLabel: Record<string, string> = {
 };
 
 const origenColor: Record<string, string> = {
-  sistema: 'bg-slate-100 text-slate-600',
-  inst_admin: 'bg-purple-100 text-purple-700',
-  pyme_admin: 'bg-emerald-100 text-emerald-700',
+  sistema: 'bg-surface-container text-on-surface-variant',
+  inst_admin: 'bg-info-container text-on-info-container',
+  pyme_admin: 'bg-success-container text-on-success-container',
 };
 
 function GrupoArbol() {
   return (
     <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6">
       <div className="flex items-center gap-2 mb-4">
-        <span className="material-symbols-outlined text-indigo-500">account_tree</span>
+        <span className="material-symbols-outlined text-info">account_tree</span>
         <h3 className="font-extrabold text-on-surface">Estructura de roles (guía ESTRUCTURA_ROLES.txt)</h3>
       </div>
       <div className="space-y-1 text-sm">
-        <NodoRol color="bg-red-500" label="SUPERADMIN" nivel={0} />
+        <NodoRol color="bg-error" label="SUPERADMIN" nivel={0} />
         <div className="pl-5 border-l-2 border-outline-variant/40 ml-3 space-y-1">
-          <NodoRol color="bg-purple-500" label="ADMINISTRADOR INSTITUCIONAL (1…3)" nivel={1} />
+          <NodoRol color="bg-info" label="ADMINISTRADOR INSTITUCIONAL (1…3)" nivel={1} />
           <div className="pl-5 border-l-2 border-outline-variant/40 ml-3 space-y-1">
-            <NodoRol color="bg-blue-500" label="COORDINADOR" nivel={2} />
+            <NodoRol color="bg-info" label="COORDINADOR" nivel={2} />
             <div className="pl-5 border-l-2 border-outline-variant/40 ml-3 space-y-1">
-              <NodoRol color="bg-teal-500" label="MENTOR" nivel={3} />
+              <NodoRol color="bg-teal" label="MENTOR" nivel={3} />
               <div className="pl-5 border-l-2 border-outline-variant/40 ml-3 space-y-1">
-                <NodoRol color="bg-green-500" label="EMPRENDEDOR" nivel={4} />
+                <NodoRol color="bg-success" label="EMPRENDEDOR" nivel={4} />
               </div>
             </div>
           </div>
-          <NodoRol color="bg-green-500" label="EMPRENDEDOR (independiente)" nivel={1} />
+          <NodoRol color="bg-success" label="EMPRENDEDOR (independiente)" nivel={1} />
         </div>
         <div className="pl-5 border-l-2 border-outline-variant/40 ml-3 space-y-1">
-          <NodoRol color="bg-emerald-600" label="PYME / PEQUEÑA EMPRESA" nivel={1} />
+          <NodoRol color="bg-success" label="PYME / PEQUEÑA EMPRESA" nivel={1} />
           <div className="pl-5 border-l-2 border-outline-variant/40 ml-3 space-y-1">
-            <NodoRol color="bg-emerald-600" label="Dueño (Administrador de la PYME)" nivel={2} />
-            <NodoRol color="bg-orange-500" label="Vendedor / Cajero" nivel={2} tag="VAR1" />
-            <NodoRol color="bg-cyan-500" label="Gestor" nivel={2} tag="VAR2" />
-            <NodoRol color="bg-pink-500" label="Enc. RRHH · Empleado · Contador externo" nivel={2} tag="VAR3" />
+            <NodoRol color="bg-success" label="Dueño (Administrador de la PYME)" nivel={2} />
+            <NodoRol color="bg-warning" label="Vendedor / Cajero" nivel={2} tag="VAR1" />
+            <NodoRol color="bg-teal" label="Gestor" nivel={2} tag="VAR2" />
+            <NodoRol color="bg-info" label="Enc. RRHH · Empleado · Contador externo" nivel={2} tag="VAR3" />
           </div>
         </div>
       </div>
@@ -71,7 +71,7 @@ function NodoRol({ color, label, nivel, tag }: { color: string; label: string; n
       <span className={`h-2.5 w-2.5 rounded-full ${color} shrink-0`} />
       <span className="font-bold text-on-surface">{label}</span>
       {tag && (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700 uppercase tracking-wide">
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-info-container text-on-info-container uppercase tracking-wide">
           {tag}
         </span>
       )}
@@ -94,7 +94,7 @@ export default function SuperAdminRoles() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-indigo-500">admin_panel_settings</span>
+        <span className="material-symbols-outlined text-3xl text-info">admin_panel_settings</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Roles y Permisos Maestros</h1>
           <p className="text-on-surface-variant">Jerarquía institucional, roles de PYME y matriz de permisos de la plataforma</p>
@@ -104,12 +104,12 @@ export default function SuperAdminRoles() {
       <GrupoArbol />
 
       {/* Nota sobre los roles PYME */}
-      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+      <div className="bg-success-container border border-success/30 rounded-2xl p-5">
         <div className="flex items-start gap-3">
-          <span className="material-symbols-outlined text-emerald-600 text-xl mt-0.5">storefront</span>
+          <span className="material-symbols-outlined text-success text-xl mt-0.5">storefront</span>
           <div>
-            <p className="font-extrabold text-emerald-800">PYME / Pequeña Empresa — roles definibles por el dueño</p>
-            <p className="text-sm text-emerald-700/90 mt-1">
+            <p className="font-extrabold text-on-success-container">PYME / Pequeña Empresa — roles definibles por el dueño</p>
+            <p className="text-sm text-on-success-container/90 mt-1">
               Cada negocio (Dueño o Emprendedor) cuenta con roles operativos que su administrador puede crear y asignar al equipo.
               En la guía son los tipos <b>VAR1</b> (roles comerciales: Vendedor/Cajero), <b>VAR2</b> (gestión: Gestor) y{' '}
               <b>VAR3</b> (administración y finanzas: Enc. RRHH, Empleado, Contador externo). Estos roles se gestionan desde el ERP
@@ -147,7 +147,7 @@ export default function SuperAdminRoles() {
                         <p className="font-bold text-on-surface text-sm flex items-center gap-1.5">
                           {r.label}
                           {r.guia && (
-                            <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase tracking-wide">
+                            <span className="px-1.5 py-0.5 rounded-full bg-info-container text-on-info-container text-[9px] font-black uppercase tracking-wide">
                               {r.guia}
                             </span>
                           )}
@@ -170,7 +170,7 @@ export default function SuperAdminRoles() {
               <span className={`h-4 w-4 rounded-full ${rol.color}`} />
               <h2 className="text-xl font-extrabold text-on-surface">{rol.label}</h2>
               {rol.guia && (
-                <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wide">
+                <span className="px-2 py-0.5 rounded-full bg-info-container text-on-info-container text-[10px] font-black uppercase tracking-wide">
                   {rol.guia}
                 </span>
               )}
@@ -189,7 +189,7 @@ export default function SuperAdminRoles() {
           {/* Matriz de permisos */}
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
             <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-              <span className="material-symbols-outlined text-indigo-500">lock</span>
+              <span className="material-symbols-outlined text-info">lock</span>
               <h3 className="font-extrabold text-on-surface">Matriz de Permisos — {rol.label}</h3>
             </div>
             <div className="overflow-x-auto">
@@ -285,7 +285,7 @@ export default function SuperAdminRoles() {
               <div className="flex items-center gap-2 mb-1">
                 <span className={`h-2.5 w-2.5 rounded-full ${r.color}`} />
                 <span className="font-bold text-on-surface text-sm">{r.label}</span>
-                {r.guia && <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase">{r.guia}</span>}
+                {r.guia && <span className="px-1.5 py-0.5 rounded-full bg-info-container text-on-info-container text-[9px] font-black uppercase">{r.guia}</span>}
               </div>
               <p className="text-xs text-on-surface-variant">{r.descripcion}</p>
             </div>

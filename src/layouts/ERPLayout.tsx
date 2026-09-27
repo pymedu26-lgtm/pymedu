@@ -296,9 +296,9 @@ name: 'Mi institución',
   };
 
   const membresiaConfig = {
-    free: { label: 'Gratuito', cls: 'bg-slate-200/20 text-slate-300' },
-    pro: { label: 'Pro', cls: 'bg-amber-400/20 text-amber-300' },
-    premium: { label: 'Premium', cls: 'bg-indigo-400/20 text-indigo-200' },
+    free: { label: 'Gratuito', cls: 'bg-on-primary-container/15 text-on-primary-container' },
+    pro: { label: 'Pro', cls: 'bg-on-primary-container/25 text-on-primary-container' },
+    premium: { label: 'Premium', cls: 'bg-on-primary-container/15 text-on-primary-container' },
   }[perfil?.membresia_nivel ?? 'free'];
 
   const negocioNombre = perfil?.negocio_nombre ?? 'Negocio actual';
@@ -320,7 +320,7 @@ name: 'Mi institución',
       {/* ── Sidebar ── */}
       <aside
         className={cn(
-          'sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-slate-900/20 transition-all duration-300',
+          'sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300',
           sidebarOpen ? 'w-[248px]' : 'w-[64px]'
         )}
       >
@@ -336,7 +336,7 @@ name: 'Mi institución',
 
           {sidebarOpen && (
             <div className="min-w-0">
-              <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-indigo-200/60">
+              <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-on-primary-container/60">
                 ERP local
               </p>
               <h1 className="truncate text-lg font-black leading-none tracking-tight text-white">
@@ -376,7 +376,7 @@ name: 'Mi institución',
                 className={cn(
                   'relative mb-2.5 transition-all duration-200',
                   sidebarOpen
-                    ? 'rounded-2xl border border-white/10 bg-white/[0.04] p-2.5 shadow-inner shadow-slate-950/10'
+                    ? 'rounded-2xl border border-white/10 bg-white/[0.04] p-2.5 shadow-inner shadow-shadow/10'
                     : 'flex w-full justify-center'
                 )}
               >
@@ -400,7 +400,7 @@ name: 'Mi institución',
 
                     {sidebarOpen && (
                       <div className="min-w-0 text-left">
-                        <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-indigo-200/55">
+                        <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-on-primary-container/55">
                           {group.label}
                         </p>
                         <p className="text-[13px] font-semibold text-white/95">
@@ -413,11 +413,11 @@ name: 'Mi institución',
                   {sidebarOpen && (
                     <div className="flex items-center gap-2">
                       {anyBadge > 0 && (
-                        <span className="min-w-[18px] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[10px] font-extrabold text-white">
+                        <span className="min-w-[18px] rounded-full bg-error px-1.5 py-0.5 text-center text-[10px] font-extrabold text-inverse-on-surface">
                           {anyBadge}
                         </span>
                       )}
-                      <span className="material-symbols-outlined text-sm text-indigo-100/45">
+                      <span className="material-symbols-outlined text-sm text-on-primary-container/45">
                         {isOpen ? 'expand_less' : 'expand_more'}
                       </span>
                     </div>
@@ -441,11 +441,11 @@ name: 'Mi institución',
                     >
                       {!sidebarOpen && (
                         <div className="mb-6 mt-2 flex items-center gap-3 border-b border-white/10 pb-4">
-                          <span className="material-symbols-outlined text-2xl text-indigo-200/80">
+                          <span className="material-symbols-outlined text-2xl text-on-primary-container/80">
                             {group.icon}
                           </span>
                           <div>
-                            <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-indigo-200/55">
+                            <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-on-primary-container/55">
                               Seccion
                             </p>
                             <p className="text-lg font-black text-white">{group.label}</p>
@@ -465,7 +465,7 @@ name: 'Mi institución',
                               'group flex items-center gap-3 transition-all duration-150 rounded-2xl border px-3 py-2.5',
                               active
                                 ? 'border-white/20 bg-white/[0.15] text-white'
-                                : 'border-transparent text-indigo-100/75 hover:border-white/10 hover:bg-white/[0.1] hover:text-white',
+                                : 'border-transparent text-on-primary-container/75 hover:border-white/10 hover:bg-white/[0.1] hover:text-white',
                               item.lock ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
                             )}
                           >
@@ -473,8 +473,8 @@ name: 'Mi institución',
                               className={cn(
                                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
                                 active
-                                  ? 'bg-primary text-white'
-                                  : 'bg-white/10 text-indigo-100/70 group-hover:bg-white/15'
+                                  ? 'bg-primary text-inverse-on-surface'
+                                  : 'bg-white/10 text-on-primary-container/70 group-hover:bg-white/15'
                               )}
                             >
                               <span
@@ -487,7 +487,7 @@ name: 'Mi institución',
 
 <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className={cn('truncate text-[13px] font-bold', item.lock && 'text-indigo-100/70')}>{item.name}</span>
+                                <span className={cn('truncate text-[13px] font-bold', item.lock && 'text-on-primary-container/70')}>{item.name}</span>
                                 {item.lock && (
                                   <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white/80">
                                     <span className="material-symbols-outlined text-[10px]">lock</span> Próximamente
@@ -498,9 +498,9 @@ name: 'Mi institución',
                                     className={cn(
                                       'min-w-[20px] rounded-full px-2 py-0.5 text-center text-[10px] font-extrabold',
                                       item.path.includes('cobrar') && cxcUrgente
-                                        ? 'bg-red-500 text-white'
+                                        ? 'bg-error text-inverse-on-surface'
                                         : item.path.includes('pagar') && cxpUrgente
-                                          ? 'bg-amber-500 text-white'
+                                          ? 'bg-warning text-inverse-on-surface'
                                           : 'bg-white/20 text-white'
                                     )}
                                   >
@@ -508,7 +508,7 @@ name: 'Mi institución',
                                   </span>
                                 )}
                               </div>
-                              <p className={cn('mt-0.5 text-[11px] leading-4 text-indigo-100/60', item.lock && 'text-indigo-100/40')}>
+                              <p className={cn('mt-0.5 text-[11px] leading-4 text-on-primary-container/60', item.lock && 'text-on-primary-container/40')}>
                                 {item.hint}
                               </p>
                             </div>
@@ -544,7 +544,7 @@ name: 'Mi institución',
 
           <div className="ml-auto flex items-center gap-3">
             {(cxcCount + cxpCount) > 0 && (
-              <div className="flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 cursor-default">
+              <div className="flex items-center gap-1.5 rounded-full border border-error/30 bg-error-container px-3 py-1.5 text-xs font-bold text-on-error-container cursor-default">
                 <span className="material-symbols-outlined text-sm">payments</span>
                 {cxcCount + cxpCount} pendientes
               </div>
@@ -562,7 +562,7 @@ name: 'Mi institución',
 
             <div className="relative rounded-full p-2 transition-colors hover:bg-surface-container cursor-default">
               <span className="material-symbols-outlined text-xl text-on-surface-variant">notifications</span>
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface-container-lowest bg-red-500" />
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface-container-lowest bg-error" />
             </div>
 
             <div className="h-7 w-px bg-outline-variant" />
@@ -572,7 +572,7 @@ name: 'Mi institución',
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 rounded-full p-1 pr-3 transition-colors hover:bg-surface-container"
               >
-                <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-primary text-[10px] font-extrabold text-white">
+                <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-primary text-[10px] font-extrabold text-inverse-on-surface">
                   {perfilAvatarUrl ? (
                     <img
                       src={perfilAvatarUrl}
@@ -606,14 +606,14 @@ name: 'Mi institución',
                       <span className="material-symbols-outlined text-xl">settings</span>
 Configuración
                     </Link>
-                    <Link to="/erp/suscripcion" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-amber-600 transition-colors hover:bg-amber-50 cursor-pointer">
+                    <Link to="/erp/suscripcion" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-warning transition-colors hover:bg-warning-container cursor-pointer">
                       <span className="material-symbols-outlined text-xl">workspace_premium</span>
                       Mi plan y suscripción
                     </Link>
                     <div className="my-2 border-t border-surface-container-high" />
                     <button
                       onClick={handleLogout}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-error transition-colors hover:bg-error-container hover:text-on-error-container"
                     >
                       <span className="material-symbols-outlined text-xl">logout</span>
 Cerrar sesión

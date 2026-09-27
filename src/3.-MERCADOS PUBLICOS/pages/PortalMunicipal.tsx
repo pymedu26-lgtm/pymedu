@@ -155,29 +155,29 @@ const alertasInstitucionales = [
     titulo: 'Brecha laboral y documental',
     detalle: 'Segmentos con contratos o expedientes bajo 60%. Conviene activar clinic laboral y checklist guiado.',
     impacto: 'Reduce riesgo operativo y mejora empleabilidad formal.',
-    tono: 'bg-amber-50 border-amber-200 text-amber-800',
+    tono: 'bg-warning-container border-warning/30 text-on-warning-container',
   },
   {
     titulo: 'Nuevos empleos sin acompanamiento',
     detalle: 'Los negocios que contrataron por primera vez requieren ruta simple de contratos, liquidaciones y vacaciones.',
     impacto: 'Mejora continuidad del empleo y uso efectivo de la licencia.',
-    tono: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+    tono: 'bg-success-container border-success/30 text-on-success-container',
   },
   {
     titulo: 'Oportunidad de compras publicas',
     detalle: 'Comunas con adopcion digital alta pueden preparar carpeta para licitaciones locales y programas de fomento.',
     impacto: 'Abre nuevas ventas sin exponer informacion privada del negocio.',
-    tono: 'bg-sky-50 border-sky-200 text-sky-800',
+    tono: 'bg-info-container border-info/30 text-on-info-container',
   },
 ];
 
 function PriorityBadge({ value }: { value: Prioridad }) {
   const tone =
     value === 'Alta'
-      ? 'bg-red-100 text-red-700'
+      ? 'bg-error-container text-on-error-container'
       : value === 'Media'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-emerald-100 text-emerald-700';
+        ? 'bg-warning-container text-on-warning-container'
+        : 'bg-success-container text-on-success-container';
 
   return <span className={cn('rounded-full px-3 py-1 text-xs font-bold', tone)}>{value}</span>;
 }
@@ -185,10 +185,10 @@ function PriorityBadge({ value }: { value: Prioridad }) {
 function ProgramBadge({ value }: { value: EstadoPrograma }) {
   const tone =
     value === 'Activo'
-      ? 'bg-emerald-100 text-emerald-700'
+      ? 'bg-success-container text-on-success-container'
       : value === 'En implementacion'
-        ? 'bg-sky-100 text-sky-700'
-        : 'bg-slate-100 text-slate-600';
+        ? 'bg-info-container text-on-info-container'
+        : 'bg-surface-container text-on-surface-variant';
 
   return <span className={cn('rounded-full px-3 py-1 text-xs font-bold', tone)}>{value}</span>;
 }
@@ -233,7 +233,7 @@ export default function PortalMunicipal() {
                 El municipio ve rezagos, avance documental, cobertura territorial y adopcion operativa. No se muestran facturacion, margenes ni datos nominativos de emprendedores.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
-                <button className="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-slate-100">
+                <button className="rounded-2xl bg-surface-container-lowest px-5 py-3 text-sm font-bold text-on-surface transition-colors hover:bg-surface-container">
                   Solicitar demo institucional
                 </button>
                 <button className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-white/5">
@@ -252,7 +252,7 @@ export default function PortalMunicipal() {
                 ].map(item => (
                   <div key={item} className="flex gap-3 rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
                     <span className="material-symbols-outlined text-on-primary-container">verified_user</span>
-                    <p className="text-sm leading-6 text-slate-200">{item}</p>
+                    <p className="text-sm leading-6 text-on-primary-container/85">{item}</p>
                   </div>
                 ))}
               </div>
@@ -272,7 +272,7 @@ export default function PortalMunicipal() {
               onClick={() => setTab(value)}
               className={cn(
                 'whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition-all',
-                tab === value ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                tab === value ? 'bg-primary text-inverse-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
               )}
             >
               {label}
@@ -285,11 +285,11 @@ export default function PortalMunicipal() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
               {[
                 { label: 'Negocios monitoreados', value: totalNegocios.toString(), tone: 'text-on-surface bg-surface-container-lowest' },
-                { label: 'Empleos nuevos', value: empleosNuevosTotal.toString(), tone: 'text-emerald-700 bg-emerald-50' },
-                { label: 'Formalizacion laboral', value: `${promedioFormalizacion}%`, tone: 'text-emerald-700 bg-emerald-50' },
-                { label: 'Adopcion operativa', value: `${promedioAdopcion}%`, tone: 'text-sky-700 bg-sky-50' },
-                { label: 'Expediente contractual', value: `${promedioExpediente}%`, tone: 'text-amber-700 bg-amber-50' },
-                { label: 'Alertas priorizadas', value: alertasCriticas.toString(), tone: 'text-red-700 bg-red-50' },
+                { label: 'Empleos nuevos', value: empleosNuevosTotal.toString(), tone: 'text-on-success-container bg-success-container' },
+                { label: 'Formalizacion laboral', value: `${promedioFormalizacion}%`, tone: 'text-on-success-container bg-success-container' },
+                { label: 'Adopcion operativa', value: `${promedioAdopcion}%`, tone: 'text-on-info-container bg-info-container' },
+                { label: 'Expediente contractual', value: `${promedioExpediente}%`, tone: 'text-on-warning-container bg-warning-container' },
+                { label: 'Alertas priorizadas', value: alertasCriticas.toString(), tone: 'text-on-error-container bg-error-container' },
               ].map(card => (
                 <div key={card.label} className={cn('rounded-[28px] border border-outline-variant/45 p-5 shadow-sm dark-card', card.tone)}>
                   <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-outline">{card.label}</p>
@@ -384,7 +384,7 @@ export default function PortalMunicipal() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 rounded-[24px] bg-emerald-50 px-4 py-4 text-sm leading-6 text-emerald-800">
+                <div className="mt-4 rounded-[24px] bg-success-container px-4 py-4 text-sm leading-6 text-on-success-container">
                   Esta vista intencionalmente no muestra ventas, utilidades ni nombres de negocios. El valor institucional esta en la capacidad de activar apoyo con datos seguros.
                 </div>
               </section>
@@ -441,11 +441,11 @@ export default function PortalMunicipal() {
                         <p className="mt-1 text-xs text-on-surface-variant">{item.segmento}</p>
                       </td>
                       <td className="px-4 py-4 font-semibold text-on-surface-variant">{item.negocios} negocios</td>
-                      <td className="px-4 py-4 font-black text-emerald-700">{item.empleosNuevos}</td>
-                      <td className="px-4 py-4 font-black text-emerald-700">{item.formalizacion}%</td>
-                      <td className="px-4 py-4 font-black text-sky-700">{item.adopcion}%</td>
-                      <td className="px-4 py-4 font-black text-amber-700">{item.expedienteLaboral}%</td>
-                      <td className="px-4 py-4 font-bold text-red-600">{item.alertas}</td>
+                      <td className="px-4 py-4 font-black text-success">{item.empleosNuevos}</td>
+                      <td className="px-4 py-4 font-black text-success">{item.formalizacion}%</td>
+                      <td className="px-4 py-4 font-black text-info">{item.adopcion}%</td>
+                      <td className="px-4 py-4 font-black text-warning">{item.expedienteLaboral}%</td>
+                      <td className="px-4 py-4 font-bold text-error">{item.alertas}</td>
                       <td className="px-4 py-4"><PriorityBadge value={item.prioridad} /></td>
                       <td className="px-4 py-4 text-on-surface-variant">{item.accion}</td>
                     </tr>
@@ -500,7 +500,7 @@ export default function PortalMunicipal() {
                   ].map(item => (
                     <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
                       <span className="material-symbols-outlined text-emerald-300">task_alt</span>
-                      <p className="text-sm leading-6 text-slate-200">{item}</p>
+                      <p className="text-sm leading-6 text-on-primary-container/85">{item}</p>
                     </div>
                   ))}
                 </div>
@@ -512,7 +512,7 @@ export default function PortalMunicipal() {
                 <p className="mt-3 text-sm leading-6 text-on-surface-variant">
                   Ideal para municipios que quieren ordenar acompanamiento productivo, mejorar formalizacion y justificar impacto sin montar un sistema propio.
                 </p>
-                <button className="mt-5 w-full rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-primary-container">
+                <button className="mt-5 w-full rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-inverse-on-surface transition-colors hover:bg-primary-container">
                   Preparar propuesta institucional
                 </button>
               </div>
@@ -534,17 +534,17 @@ export default function PortalMunicipal() {
               </div>
 
               {campanaEnviada ? (
-                <div className="mt-6 rounded-[28px] bg-emerald-50 p-8 text-center">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
-                    <span className="material-symbols-outlined text-3xl text-emerald-600">check_circle</span>
+                <div className="mt-6 rounded-[28px] bg-success-container p-8 text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
+                    <span className="material-symbols-outlined text-3xl text-on-success-container">check_circle</span>
                   </div>
-                  <h3 className="mt-4 text-xl font-black text-emerald-800">Campana lista para distribucion</h3>
-                  <p className="mt-2 text-sm leading-6 text-emerald-700">
+                  <h3 className="mt-4 text-xl font-black text-on-success-container">Campana lista para distribucion</h3>
+                  <p className="mt-2 text-sm leading-6 text-on-success-container">
                     El mensaje quedo orientado a segmentos agregados. No se incluyeron ventas, utilidades ni fichas individuales.
                   </p>
                   <button
                     onClick={() => setCampanaEnviada(false)}
-                    className="mt-5 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
+                    className="mt-5 rounded-2xl bg-success px-5 py-3 text-sm font-bold text-inverse-on-surface transition-colors hover:bg-success/90"
                   >
                     Crear otra campana
                   </button>
@@ -593,7 +593,7 @@ export default function PortalMunicipal() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => setCampanaEnviada(true)}
-                      className="rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-primary-container"
+                      className="rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-inverse-on-surface transition-colors hover:bg-primary-container"
                     >
                       Preparar distribucion
                     </button>
@@ -627,9 +627,9 @@ export default function PortalMunicipal() {
                 </div>
               </div>
 
-              <div className="rounded-[32px] border border-amber-200 bg-amber-50 p-6 shadow-sm">
-                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700">Regla de resguardo</p>
-                <p className="mt-3 text-sm leading-6 text-amber-800">
+              <div className="rounded-[32px] border border-warning/30 bg-warning-container p-6 shadow-sm">
+                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-on-warning-container">Regla de resguardo</p>
+                <p className="mt-3 text-sm leading-6 text-on-warning-container">
                   Toda campana municipal se construye sobre segmentos y niveles de acompanamiento. No se incluyen ganancias, ventas, margenes ni datos personales en esta capa institucional.
                 </p>
               </div>

@@ -137,29 +137,29 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+    <div className="fixed inset-0 bg-scrim/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <div className="bg-surface-container-lowest rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+        <div className="px-6 py-4 border-b border-outline-variant/30 flex justify-between items-center bg-surface-container-low">
           <div>
-            <h3 className="text-xl font-bold text-red-600">Sincronización de Compras (SII)</h3>
-            <p className="text-xs text-slate-500 mt-1">Registra tus gastos trayendo las facturas de proveedores desde el SII.</p>
+            <h3 className="text-xl font-bold text-error">Sincronización de Compras (SII)</h3>
+            <p className="text-xs text-on-surface-variant mt-1">Registra tus gastos trayendo las facturas de proveedores desde el SII.</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition-colors">
+          <button onClick={onClose} className="text-outline hover:text-error transition-colors">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <div className="flex bg-slate-100 p-1 m-6 mb-0 rounded-2xl w-fit shrink-0">
+        <div className="flex bg-surface-container p-1 m-6 mb-0 rounded-2xl w-fit shrink-0">
           <button 
             onClick={() => { setActiveMode('manual'); setPreview([]); }}
-            className={`px-6 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeMode === 'manual' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeMode === 'manual' ? 'bg-surface-container-lowest text-error shadow-sm' : 'text-on-surface-variant hover:text-on-surface-variant'}`}
           >
             <span className="material-symbols-outlined text-sm">upload_file</span>
             CARGA MANUAL (CSV)
           </button>
           <button 
             onClick={() => { setActiveMode('auto'); setPreview([]); }}
-            className={`px-6 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeMode === 'auto' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-6 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeMode === 'auto' ? 'bg-surface-container-lowest text-error shadow-sm' : 'text-on-surface-variant hover:text-on-surface-variant'}`}
           >
             <span className="material-symbols-outlined text-sm">smart_toy</span>
             AUTOMÁTICO (BETA)
@@ -169,15 +169,15 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
         <div className="p-6 overflow-y-auto flex-grow space-y-6">
           {activeMode === 'auto' && preview.length === 0 && (
             <div className="text-center py-12 space-y-6">
-              <div className="bg-red-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto border-4 border-red-100">
-                <span className={`material-symbols-outlined text-5xl text-red-500 ${loading ? 'animate-spin' : ''}`}>
+              <div className="bg-error-container w-24 h-24 rounded-full flex items-center justify-center mx-auto border-4 border-error/30">
+                <span className={`material-symbols-outlined text-5xl text-error ${loading ? 'animate-spin' : ''}`}>
                   {loading ? 'sync' : 'shopping_cart'}
                 </span>
               </div>
               
               <div className="max-w-md mx-auto">
-                <h4 className="text-lg font-bold text-slate-800">Sincronización de Facturas</h4>
-                <p className="text-sm text-slate-500 mt-2">
+                <h4 className="text-lg font-bold text-on-surface">Sincronización de Facturas</h4>
+                <p className="text-sm text-on-surface-variant mt-2">
                   {loading 
                     ? syncStatus 
                     : 'Descargaremos automáticamente tus facturas de compra del mes actual desde el portal SII.'}
@@ -187,7 +187,7 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
               {!loading && (
                 <button 
                   onClick={handleAutoSync}
-                  className="px-8 py-3 bg-red-600 text-white rounded-full font-bold shadow-lg shadow-red-600/20 hover:scale-105 transition-transform flex items-center gap-2 mx-auto"
+                  className="px-8 py-3 bg-error text-inverse-on-surface rounded-full font-bold shadow-lg shadow-error/25 hover:scale-105 transition-transform flex items-center gap-2 mx-auto"
                 >
                   <span className="material-symbols-outlined">bolt</span>
                   Sincronizar Compras SII
@@ -199,11 +199,11 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
           {activeMode === 'manual' && !file && preview.length === 0 && (
             <div 
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center hover:bg-red-50 hover:border-red-200 transition-all cursor-pointer group"
+              className="border-2 border-dashed border-outline-variant/30 rounded-3xl p-12 text-center hover:bg-error-container hover:border-error/30 transition-all cursor-pointer group"
             >
-              <span className="material-symbols-outlined text-5xl text-slate-300 group-hover:text-red-500 transition-colors">upload_file</span>
-              <p className="mt-4 text-slate-600 font-medium">Sube el CSV de Compras del SII</p>
-              <p className="text-xs text-slate-400 mt-2">RCV Compras -&gt; Descargar Detalle</p>
+              <span className="material-symbols-outlined text-5xl text-outline group-hover:text-error transition-colors">upload_file</span>
+              <p className="mt-4 text-on-surface-variant font-medium">Sube el CSV de Compras del SII</p>
+              <p className="text-xs text-outline mt-2">RCV Compras -&gt; Descargar Detalle</p>
               <input 
                 type="file" 
                 ref={fileInputRef}
@@ -216,29 +216,29 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
 
           {preview.length > 0 && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <div className="flex justify-between items-center bg-surface-container-low p-4 rounded-2xl border border-outline-variant/30">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-red-500">
+                  <span className="material-symbols-outlined text-error">
                     {activeMode === 'auto' ? 'smart_toy' : 'description'}
                   </span>
                   <div>
-                    <p className="text-sm font-bold text-slate-800">
+                    <p className="text-sm font-bold text-on-surface">
                       {activeMode === 'auto' ? 'Facturas obtenidas' : file?.name}
                     </p>
-                    <p className="text-xs text-slate-500">{preview.length} compras encontradas</p>
+                    <p className="text-xs text-on-surface-variant">{preview.length} compras encontradas</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => { setFile(null); setPreview([]); }} 
-                  className="text-xs font-bold text-red-600 hover:underline"
+                  className="text-xs font-bold text-error hover:underline"
                 >
                   {activeMode === 'auto' ? 'Reiniciar' : 'Cambiar archivo'}
                 </button>
               </div>
 
-              <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+              <div className="border border-outline-variant/30 rounded-2xl overflow-hidden shadow-sm">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-500 font-bold text-[10px] uppercase tracking-wider">
+                  <thead className="bg-surface-container-low text-on-surface-variant font-bold text-[10px] uppercase tracking-wider">
                     <tr>
                       <th className="px-4 py-3">Folio</th>
                       <th className="px-4 py-3">Fecha</th>
@@ -247,20 +247,20 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
                       <th className="px-4 py-3 text-center">Estado</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-outline-variant/20">
                     {preview.map((row, i) => (
-                      <tr key={i} className={`hover:bg-slate-50/50 transition-colors ${row.existe ? 'bg-slate-50/30' : ''}`}>
-                        <td className="px-4 py-3 font-bold text-red-600">{row.folio}</td>
-                        <td className="px-4 py-3 text-slate-600">{row.fecha}</td>
+                      <tr key={i} className={`hover:bg-surface-container-low/50 transition-colors ${row.existe ? 'bg-surface-container-low/30' : ''}`}>
+                        <td className="px-4 py-3 font-bold text-error">{row.folio}</td>
+                        <td className="px-4 py-3 text-on-surface-variant">{row.fecha}</td>
                         <td className="px-4 py-3 truncate max-w-[200px] font-medium" title={row.proveedor}>{row.proveedor}</td>
-                        <td className="px-4 py-3 text-right font-black text-slate-800">${row.monto.toLocaleString('es-CL')}</td>
+                        <td className="px-4 py-3 text-right font-black text-on-surface">${row.monto.toLocaleString('es-CL')}</td>
                         <td className="px-4 py-3 text-center">
                           {row.existe ? (
-                            <span className="inline-flex items-center gap-1 text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase">
+                            <span className="inline-flex items-center gap-1 text-[9px] bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-full font-black uppercase">
                               <span className="material-symbols-outlined text-[10px]">check_circle</span> Registrado
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">
+                            <span className="inline-flex items-center gap-1 text-[9px] bg-success-container text-on-success-container px-2 py-0.5 rounded-full font-black uppercase">
                               <span className="material-symbols-outlined text-[10px]">add_circle</span> Nuevo
                             </span>
                           )}
@@ -274,14 +274,14 @@ export default function ModalSincronizacionSIICompras({ isOpen, onClose, onImpor
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-          <button onClick={onClose} className="px-6 py-2 rounded-full font-bold text-slate-600 hover:bg-slate-200 transition-colors">
+        <div className="px-6 py-4 border-t border-outline-variant/30 flex justify-end gap-3 bg-surface-container-low">
+          <button onClick={onClose} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
             Cancelar
           </button>
           <button 
             onClick={handleConfirm}
             disabled={!preview.some(p => !p.existe)}
-            className="px-6 py-2 bg-red-600 text-white rounded-full font-bold shadow-lg shadow-red-600/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-2 bg-error text-inverse-on-surface rounded-full font-bold shadow-lg shadow-error/25 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-sm">sync</span>
             Importar {preview.filter(p => !p.existe).length} Compras

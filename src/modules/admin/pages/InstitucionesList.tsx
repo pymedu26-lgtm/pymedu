@@ -10,11 +10,11 @@ const organizaciones = [
 ];
 
 const tipoConfig: Record<string, { color: string; icon: string }> = {
-  Municipalidad: { color: 'bg-blue-100 text-blue-700', icon: 'location_city' },
-  Incubadora: { color: 'bg-green-100 text-green-700', icon: 'rocket_launch' },
-  Universidad: { color: 'bg-purple-100 text-purple-700', icon: 'school' },
-  Fundación: { color: 'bg-amber-100 text-amber-700', icon: 'volunteer_activism' },
-  Empresa: { color: 'bg-teal-100 text-teal-700', icon: 'business' },
+  Municipalidad: { color: 'bg-info-container text-on-info-container', icon: 'location_city' },
+  Incubadora: { color: 'bg-success-container text-on-success-container', icon: 'rocket_launch' },
+  Universidad: { color: 'bg-info-container text-on-info-container', icon: 'school' },
+  Fundación: { color: 'bg-warning-container text-on-warning-container', icon: 'volunteer_activism' },
+  Empresa: { color: 'bg-teal-container text-on-teal-container', icon: 'business' },
 };
 
 export default function InstitucionesList() {
@@ -41,7 +41,7 @@ export default function InstitucionesList() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-purple-500">apartment</span>
+          <span className="material-symbols-outlined text-3xl text-info">apartment</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Organizaciones</h1>
             <p className="text-on-surface-variant">{stats.total} organizaciones · {stats.activas} activas · {stats.suspendidas} suspendidas</p>
@@ -49,7 +49,7 @@ export default function InstitucionesList() {
         </div>
         <button
           onClick={() => setShowCrear(!showCrear)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors"
         >
           <span className="material-symbols-outlined text-lg">add_business</span>
           Nueva Organización
@@ -59,14 +59,14 @@ export default function InstitucionesList() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total', value: stats.total, icon: 'apartment', color: 'bg-purple-500' },
-          { label: 'Activas', value: stats.activas, icon: 'check_circle', color: 'bg-green-500' },
-          { label: 'Suspendidas', value: stats.suspendidas, icon: 'block', color: 'bg-red-500' },
-          { label: 'Usuarios', value: stats.usuarios, icon: 'group', color: 'bg-blue-500' },
+          { label: 'Total', value: stats.total, icon: 'apartment', color: 'bg-info' },
+          { label: 'Activas', value: stats.activas, icon: 'check_circle', color: 'bg-success' },
+          { label: 'Suspendidas', value: stats.suspendidas, icon: 'block', color: 'bg-error' },
+          { label: 'Usuarios', value: stats.usuarios, icon: 'group', color: 'bg-info' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-white`}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
@@ -130,7 +130,7 @@ export default function InstitucionesList() {
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowCrear(false)} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">Cancelar</button>
-            <button className="px-5 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">Crear Organización</button>
+            <button className="px-5 py-2 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">Crear Organización</button>
           </div>
         </div>
       )}
@@ -170,7 +170,7 @@ export default function InstitucionesList() {
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-extrabold text-on-surface">{org.nombre}</h3>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      org.estado === 'activa' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      org.estado === 'activa' ? 'bg-success-container text-on-success-container' : 'bg-error-container text-on-error-container'
                     }`}>
                       {org.estado}
                     </span>
@@ -196,22 +196,22 @@ export default function InstitucionesList() {
                   <span className="material-symbols-outlined text-on-surface-variant">extension</span>
                 </button>
                 {org.estado === 'activa' ? (
-                  <button className="p-2 rounded-lg hover:bg-amber-50 transition-colors" title="Suspender">
-                    <span className="material-symbols-outlined text-amber-500">block</span>
+                  <button className="p-2 rounded-lg hover:bg-warning-container transition-colors" title="Suspender">
+                    <span className="material-symbols-outlined text-warning">block</span>
                   </button>
                 ) : (
-                  <button className="p-2 rounded-lg hover:bg-green-50 transition-colors" title="Reactivar">
-                    <span className="material-symbols-outlined text-green-500">check_circle</span>
+                  <button className="p-2 rounded-lg hover:bg-success-container transition-colors" title="Reactivar">
+                    <span className="material-symbols-outlined text-success">check_circle</span>
                   </button>
                 )}
-                <button className="p-2 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar">
-                  <span className="material-symbols-outlined text-red-500">delete</span>
+                <button className="p-2 rounded-lg hover:bg-error-container transition-colors" title="Eliminar">
+                  <span className="material-symbols-outlined text-error">delete</span>
                 </button>
               </div>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {org.modulos.map((mod) => (
-                <span key={mod} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-700">{mod}</span>
+                <span key={mod} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-container text-on-teal-container">{mod}</span>
               ))}
             </div>
           </div>

@@ -17,11 +17,11 @@ interface Alerta {
 }
 
 const tipoEstilo: Record<AlertaTipo, { border: string; bg: string; icon_bg: string; icon_color: string; badge: string }> = {
-  critica:     { border: 'border-error/40',      bg: 'bg-error/5',        icon_bg: 'bg-error/10',       icon_color: 'text-error',        badge: 'bg-error text-white' },
-  advertencia: { border: 'border-amber-500/40',  bg: 'bg-amber-500/5',    icon_bg: 'bg-amber-500/15',   icon_color: 'text-amber-500',    badge: 'bg-amber-500 text-white' },
-  tributaria:  { border: 'border-violet-500/40', bg: 'bg-violet-500/5',   icon_bg: 'bg-violet-500/15',  icon_color: 'text-violet-500',   badge: 'bg-violet-500 text-white' },
-  info:        { border: 'border-primary/30',     bg: 'bg-primary/5',      icon_bg: 'bg-primary/10',     icon_color: 'text-primary',      badge: 'bg-primary text-white' },
-  exito:       { border: 'border-emerald-500/40',bg: 'bg-emerald-500/5',  icon_bg: 'bg-emerald-500/15', icon_color: 'text-emerald-500',  badge: 'bg-emerald-500 text-white' },
+  critica:     { border: 'border-error/40',      bg: 'bg-error/5',        icon_bg: 'bg-error/10',       icon_color: 'text-error',       badge: 'bg-error text-inverse-on-surface' },
+  advertencia: { border: 'border-warning/40',  bg: 'bg-warning/5',      icon_bg: 'bg-warning/15',     icon_color: 'text-warning',      badge: 'bg-warning text-inverse-on-surface' },
+  tributaria:  { border: 'border-violet/40', bg: 'bg-violet/5',   icon_bg: 'bg-violet/15',  icon_color: 'text-violet',   badge: 'bg-violet text-inverse-on-surface' },
+  info:        { border: 'border-primary/30',     bg: 'bg-primary/5',      icon_bg: 'bg-primary/10',     icon_color: 'text-primary',      badge: 'bg-primary text-inverse-on-surface' },
+  exito:       { border: 'border-success/40',   bg: 'bg-success/5',       icon_bg: 'bg-success/15',      icon_color: 'text-success',      badge: 'bg-success text-inverse-on-surface' },
 };
 
 const origenLabel: Record<AlertaOrigen, string> = {
@@ -227,10 +227,10 @@ export default function ERPAlertas() {
   const kpis: { tipo: AlertaTipo | 'todas'; label: string; icon: string; cls: string; count: number }[] = [
     { tipo: 'todas', label: 'Todas', icon: 'all_inclusive', cls: 'bg-surface-container text-on-surface', count: alertas.length },
     { tipo: 'critica', label: 'Críticas', icon: 'error', cls: 'bg-error/10 text-error', count: conteos.critica },
-    { tipo: 'advertencia', label: 'Avisos', icon: 'warning', cls: 'bg-amber-500/15 text-amber-500', count: conteos.advertencia },
-    { tipo: 'tributaria', label: 'Tributarias', icon: 'account_balance', cls: 'bg-violet-500/15 text-violet-500', count: conteos.tributaria },
+    { tipo: 'advertencia', label: 'Avisos', icon: 'warning', cls: 'bg-warning/15 text-warning', count: conteos.advertencia },
+    { tipo: 'tributaria', label: 'Tributarias', icon: 'account_balance', cls: 'bg-violet/15 text-violet', count: conteos.tributaria },
     { tipo: 'info', label: 'Informativas', icon: 'info', cls: 'bg-primary/10 text-primary', count: conteos.info },
-    { tipo: 'exito', label: 'Positivas', icon: 'trending_up', cls: 'bg-emerald-500/15 text-emerald-500', count: conteos.exito },
+    { tipo: 'exito', label: 'Positivas', icon: 'trending_up', cls: 'bg-success/15 text-success', count: conteos.exito },
   ];
 
   return (
@@ -242,7 +242,7 @@ export default function ERPAlertas() {
             <span className="material-symbols-outlined text-4xl">notifications_active</span>
             Centro de alertas
             {noLeidas > 0 && (
-              <span className="bg-error text-white text-sm px-3 py-1 rounded-full font-bold">
+              <span className="bg-error text-inverse-on-surface text-sm px-3 py-1 rounded-full font-bold">
                 {noLeidas} nuevas
               </span>
             )}

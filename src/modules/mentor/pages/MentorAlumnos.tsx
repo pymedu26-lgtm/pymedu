@@ -18,7 +18,7 @@ export default function MentorAlumnos() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-teal-500">groups</span>
+        <span className="material-symbols-outlined text-3xl text-teal">groups</span>
         <h1 className="text-2xl font-extrabold text-on-surface">Mis Emprendedores</h1>
       </div>
 
@@ -37,7 +37,7 @@ export default function MentorAlumnos() {
               onClick={() => setFiltro(f)}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                 filtro === f
-                  ? 'bg-primary text-white'
+                  ? 'bg-primary text-inverse-on-surface'
                   : 'bg-surface-container-high text-on-surface-variant hover:bg-primary/10'
               }`}
             >
@@ -63,7 +63,7 @@ export default function MentorAlumnos() {
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-teal-600 text-sm font-extrabold">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-container text-on-teal-container text-sm font-extrabold">
                       {empre.nombre[0]}
                     </div>
                     <div>
@@ -73,7 +73,7 @@ export default function MentorAlumnos() {
                   </div>
                   <div className="flex items-center gap-2">
                     {empre.alertas > 0 && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-error-container text-on-error-container">
                         {empre.alertas}
                       </span>
                     )}
@@ -91,7 +91,7 @@ export default function MentorAlumnos() {
                 </div>
                 <div className="mt-2 w-full bg-surface-container-high rounded-full h-1.5">
                   <div
-                    className={`h-1.5 rounded-full ${empre.riesgo === 'alto' ? 'bg-red-500' : empre.riesgo === 'medio' ? 'bg-amber-500' : 'bg-teal-500'}`}
+                    className={`h-1.5 rounded-full ${empre.riesgo === 'alto' ? 'bg-error' : empre.riesgo === 'medio' ? 'bg-warning' : 'bg-teal'}`}
                     style={{ width: `${empre.avance}%` }}
                   />
                 </div>
@@ -105,7 +105,7 @@ export default function MentorAlumnos() {
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden h-fit lg:sticky lg:top-6">
             <div className="p-5 border-b border-outline-variant/30">
               <div className="flex items-center gap-3 mb-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-100 text-teal-600 font-extrabold text-lg">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-container text-on-teal-container font-extrabold text-lg">
                   {seleccionado.nombre[0]}
                 </div>
                 <div>
@@ -145,7 +145,7 @@ export default function MentorAlumnos() {
                   <span className="font-bold">{seleccionado.avance}%</span>
                 </div>
                 <div className="w-full bg-surface-container-high rounded-full h-2">
-                  <div className="bg-teal-500 h-2 rounded-full" style={{ width: `${seleccionado.avance}%` }} />
+                  <div className="bg-teal h-2 rounded-full" style={{ width: `${seleccionado.avance}%` }} />
                 </div>
               </div>
 
@@ -161,7 +161,7 @@ export default function MentorAlumnos() {
                 <ul className="space-y-1">
                   {seleccionado.metas.map((meta, i) => (
                     <li key={i} className="flex items-center gap-2 text-sm">
-                      <span className={`material-symbols-outlined text-lg ${meta.includes('✓') ? 'text-green-500' : 'text-outline'}`}>
+                      <span className={`material-symbols-outlined text-lg ${meta.includes('✓') ? 'text-success' : 'text-outline'}`}>
                         {meta.includes('✓') ? 'check_circle' : 'radio_button_unchecked'}
                       </span>
                       <span className={meta.includes('✓') ? 'text-on-surface-variant line-through' : 'text-on-surface'}>{meta}</span>
@@ -187,7 +187,7 @@ export default function MentorAlumnos() {
             <div className="p-4 border-t border-outline-variant/30">
               <button
                 onClick={() => navigate(`/mentor/seguimiento/${seleccionado.id}`)}
-                className="w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors"
+                className="w-full py-3 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors"
               >
                 Ver seguimiento completo
               </button>

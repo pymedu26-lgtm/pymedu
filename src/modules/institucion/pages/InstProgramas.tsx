@@ -51,7 +51,7 @@ export default function InstProgramas() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-teal-500">school</span>
+          <span className="material-symbols-outlined text-3xl text-teal">school</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Programas y Cohortes</h1>
             <p className="text-on-surface-variant">{stats.total} programas · {stats.cohortes} cohortes activas</p>
@@ -59,7 +59,7 @@ export default function InstProgramas() {
         </div>
         <button
           onClick={() => setShowNuevo(!showNuevo)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors"
         >
           <span className="material-symbols-outlined text-lg">add</span>
           Nuevo Programa
@@ -69,14 +69,14 @@ export default function InstProgramas() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Programas', value: stats.total, icon: 'school', color: 'bg-teal-500' },
-          { label: 'Activos', value: stats.activos, icon: 'check_circle', color: 'bg-green-500' },
-          { label: 'Cohortes', value: stats.cohortes, icon: 'group_work', color: 'bg-blue-500' },
-          { label: 'Emprendedores', value: stats.emprendedores, icon: 'groups', color: 'bg-purple-500' },
+          { label: 'Programas', value: stats.total, icon: 'school', color: 'bg-teal' },
+          { label: 'Activos', value: stats.activos, icon: 'check_circle', color: 'bg-success' },
+          { label: 'Cohortes', value: stats.cohortes, icon: 'group_work', color: 'bg-info' },
+          { label: 'Emprendedores', value: stats.emprendedores, icon: 'groups', color: 'bg-info' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-white`}>
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
@@ -122,7 +122,7 @@ export default function InstProgramas() {
             <button onClick={() => setShowNuevo(false)} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
               Cancelar
             </button>
-            <button className="px-5 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
+            <button className="px-5 py-2 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
               Crear Programa
             </button>
           </div>
@@ -153,7 +153,7 @@ export default function InstProgramas() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-extrabold text-on-surface">{prog.nombre}</h3>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-container text-on-success-container">
                       {prog.estado}
                     </span>
                   </div>
@@ -197,12 +197,12 @@ export default function InstProgramas() {
                 {/* Módulos */}
                 <div>
                   <h4 className="text-sm font-extrabold text-on-surface mb-2 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm text-teal-500">view_module</span>
+                    <span className="material-symbols-outlined text-sm text-teal">view_module</span>
                     Módulos del Programa
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {prog.modulos.map((mod, i) => (
-                      <span key={i} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-100 text-teal-700 border border-teal-200">
+                      <span key={i} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-container text-on-teal-container border border-teal/30">
                         {mod}
                       </span>
                     ))}
@@ -216,7 +216,7 @@ export default function InstProgramas() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-extrabold text-on-surface flex items-center gap-2">
-                      <span className="material-symbols-outlined text-sm text-blue-500">group_work</span>
+                      <span className="material-symbols-outlined text-sm text-info">group_work</span>
                       Cohortes
                     </h4>
                     <button className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-primary/30 text-primary hover:bg-primary/5 transition-colors">
@@ -231,7 +231,7 @@ export default function InstProgramas() {
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-on-surface text-sm">{coh.nombre}</span>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              coh.estado === 'activa' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+                              coh.estado === 'activa' ? 'bg-success-container text-on-success-container' : 'bg-surface-container text-on-surface-variant'
                             }`}>
                               {coh.estado}
                             </span>
@@ -240,7 +240,7 @@ export default function InstProgramas() {
                         </div>
                         <div className="w-full bg-surface-container-high rounded-full h-2 mb-2">
                           <div
-                            className={`h-2 rounded-full ${coh.avance >= 80 ? 'bg-green-500' : coh.avance >= 50 ? 'bg-blue-500' : 'bg-amber-500'}`}
+                            className={`h-2 rounded-full ${coh.avance >= 80 ? 'bg-success' : coh.avance >= 50 ? 'bg-info' : 'bg-warning'}`}
                             style={{ width: `${coh.avance}%` }}
                           />
                         </div>

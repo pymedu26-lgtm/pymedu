@@ -119,7 +119,7 @@ function RoleNavSidebar() {
   };
 
   return (
-    <aside className={`sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-slate-900/20 transition-all duration-300 ${collapsed ? 'w-[64px]' : 'w-[216px]'}`}>
+    <aside className={`sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300 ${collapsed ? 'w-[64px]' : 'w-[216px]'}`}>
       <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-3.5 shrink-0">
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -131,7 +131,7 @@ function RoleNavSidebar() {
         </button>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-indigo-200/60">PymEdu</p>
+            <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-on-primary-container/60">PymEdu</p>
             <h1 className="text-base font-black leading-none tracking-tight text-white capitalize truncate">
               {perfil?.rol?.replace('_', ' ')}
             </h1>
@@ -152,7 +152,7 @@ function RoleNavSidebar() {
               } text-[13px] font-bold ${
                 active
                   ? 'bg-white/15 text-white border border-white/20'
-                  : 'text-indigo-100/70 hover:bg-white/10 hover:text-white border border-transparent'
+                  : 'text-on-primary-container/70 hover:bg-white/10 hover:text-white border border-transparent'
               }`}
             >
               <span className="material-symbols-outlined text-lg shrink-0">{item.icon}</span>
@@ -166,7 +166,7 @@ function RoleNavSidebar() {
         <button
           onClick={handleLogout}
           title={collapsed ? 'Cerrar sesion' : undefined}
-          className={`flex w-full items-center gap-2.5 rounded-xl text-[13px] font-bold text-indigo-100/60 hover:bg-white/10 hover:text-white transition-all ${
+          className={`flex w-full items-center gap-2.5 rounded-xl text-[13px] font-bold text-on-primary-container/60 hover:bg-white/10 hover:text-white transition-all ${
             collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
           }`}
         >

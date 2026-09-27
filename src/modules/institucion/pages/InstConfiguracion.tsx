@@ -13,7 +13,7 @@ export default function InstConfiguracion() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-slate-500">settings</span>
+        <span className="material-symbols-outlined text-3xl text-on-surface-variant">settings</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Configuración Institucional</h1>
           <p className="text-on-surface-variant">Administra los ajustes de tu institución</p>
@@ -88,7 +88,7 @@ export default function InstConfiguracion() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <button className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
+                <button className="px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
                   Guardar Cambios
                 </button>
               </div>
@@ -138,7 +138,7 @@ export default function InstConfiguracion() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <button className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
+                <button className="px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
                   Guardar Cambios
                 </button>
               </div>
@@ -183,7 +183,7 @@ export default function InstConfiguracion() {
                 ))}
               </div>
               <div className="flex justify-end">
-                <button className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
+                <button className="px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
                   Guardar Cambios
                 </button>
               </div>
@@ -218,7 +218,7 @@ export default function InstConfiguracion() {
                 ))}
               </div>
               <div className="flex justify-end">
-                <button className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
+                <button className="px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
                   Guardar Cambios
                 </button>
               </div>

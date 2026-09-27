@@ -23,23 +23,23 @@ const MEMBRESIAS = [
 ] as const;
 
 const membresiaConfig: Record<string, { label: string; color: string }> = {
-  free: { label: 'Gratis', color: 'bg-slate-100 text-slate-600' },
-  pro: { label: 'Pro', color: 'bg-amber-100 text-amber-700' },
-  premium: { label: 'Premium', color: 'bg-indigo-100 text-indigo-700' },
+  free: { label: 'Gratis', color: 'bg-surface-container text-on-surface-variant' },
+  pro: { label: 'Pro', color: 'bg-warning-container text-on-warning-container' },
+  premium: { label: 'Premium', color: 'bg-info-container text-on-info-container' },
 };
 
 const rolConfig: Record<string, { label: string; color: string; icon: string }> = {
-  superadmin: { label: 'Super Admin', color: 'bg-red-100 text-red-700', icon: 'shield' },
-  admin_institucional: { label: 'Admin Institucional', color: 'bg-purple-100 text-purple-700', icon: 'admin_panel_settings' },
-  coordinador: { label: 'Coordinador', color: 'bg-blue-100 text-blue-700', icon: 'supervisor_account' },
-  mentor: { label: 'Mentor', color: 'bg-teal-100 text-teal-700', icon: 'school' },
-  emprendedor: { label: 'Emprendedor', color: 'bg-green-100 text-green-700', icon: 'storefront' },
-  dueño: { label: 'Dueño', color: 'bg-green-100 text-green-700', icon: 'storefront' },
-  vendedor: { label: 'Vendedor', color: 'bg-orange-100 text-orange-700', icon: 'point_of_sale' },
-  gestor: { label: 'Gestor', color: 'bg-cyan-100 text-cyan-700', icon: 'manage_accounts' },
-  encargado_rrhh: { label: 'Enc. RRHH', color: 'bg-pink-100 text-pink-700', icon: 'badge' },
-  empleado: { label: 'Empleado', color: 'bg-slate-100 text-slate-700', icon: 'person' },
-  contador_externo: { label: 'Contador', color: 'bg-amber-100 text-amber-700', icon: 'calculate' },
+  superadmin: { label: 'Super Admin', color: 'bg-error-container text-on-error-container', icon: 'shield' },
+  admin_institucional: { label: 'Admin Institucional', color: 'bg-info-container text-on-info-container', icon: 'admin_panel_settings' },
+  coordinador: { label: 'Coordinador', color: 'bg-info-container text-on-info-container', icon: 'supervisor_account' },
+  mentor: { label: 'Mentor', color: 'bg-teal-container text-on-teal-container', icon: 'school' },
+  emprendedor: { label: 'Emprendedor', color: 'bg-success-container text-on-success-container', icon: 'storefront' },
+  dueño: { label: 'Dueño', color: 'bg-success-container text-on-success-container', icon: 'storefront' },
+  vendedor: { label: 'Vendedor', color: 'bg-warning-container text-on-warning-container', icon: 'point_of_sale' },
+  gestor: { label: 'Gestor', color: 'bg-teal-container text-on-teal-container', icon: 'manage_accounts' },
+  encargado_rrhh: { label: 'Enc. RRHH', color: 'bg-info-container text-on-info-container', icon: 'badge' },
+  empleado: { label: 'Empleado', color: 'bg-surface-container text-on-surface-variant', icon: 'person' },
+  contador_externo: { label: 'Contador', color: 'bg-warning-container text-on-warning-container', icon: 'calculate' },
 };
 
 export default function UsuariosGlobales() {
@@ -157,7 +157,7 @@ export default function UsuariosGlobales() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-blue-500">group</span>
+          <span className="material-symbols-outlined text-3xl text-info">group</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Todos los Usuarios</h1>
             <p className="text-on-surface-variant">{total} usuarios en {instituciones.length} instituciones</p>
@@ -165,7 +165,7 @@ export default function UsuariosGlobales() {
         </div>
         <button
           onClick={() => { setError(''); setExito(''); setShowCrear(true); }}
-          className="flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+          className="flex items-center gap-2 px-5 py-3 bg-primary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
         >
           <span className="material-symbols-outlined text-lg">person_add</span>
           Crear usuario
@@ -232,7 +232,7 @@ export default function UsuariosGlobales() {
                 <tr key={u.id as string} className="hover:bg-surface-container-low/50 transition-colors">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-extrabold shrink-0">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-info-container text-on-info-container text-sm font-extrabold shrink-0">
                         {(u.nombre_completo as string)?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                       </div>
                       <div>
@@ -242,12 +242,12 @@ export default function UsuariosGlobales() {
                     </div>
                   </td>
                   <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${rolConfig[u.rol as string]?.color ?? 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${rolConfig[u.rol as string]?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
                       {rolConfig[u.rol as string]?.label ?? u.rol as string}
                     </span>
                   </td>
                   <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${membresiaConfig[(u.membresia_nivel as string) ?? 'free']?.color ?? 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${membresiaConfig[(u.membresia_nivel as string) ?? 'free']?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
                       {membresiaConfig[(u.membresia_nivel as string) ?? 'free']?.label ?? (u.membresia_nivel as string) ?? 'Gratis'}
                     </span>
                   </td>
@@ -256,7 +256,7 @@ export default function UsuariosGlobales() {
                   </td>
                   <td className="p-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                      u.activo ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+                      u.activo ? 'bg-success-container text-on-success-container' : 'bg-surface-container text-on-surface-variant'
                     }`}>
                       {u.activo ? 'Activo' : 'Inactivo'}
                     </span>
@@ -321,12 +321,12 @@ export default function UsuariosGlobales() {
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
               {exito && (
-                <p className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 rounded-xl px-3 py-2">
+                <p className="flex items-center gap-1.5 text-xs font-bold text-on-success-container bg-success-container rounded-xl px-3 py-2">
                   <span className="material-symbols-outlined text-base">check_circle</span> {exito}
                 </p>
               )}
               {error && (
-                <p className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">
+                <p className="flex items-center gap-1.5 text-xs font-bold text-on-error-container bg-error-container rounded-xl px-3 py-2">
                   <span className="material-symbols-outlined text-base">error</span> {error}
                 </p>
               )}
@@ -397,7 +397,7 @@ export default function UsuariosGlobales() {
               <button
                 onClick={crearUsuario}
                 disabled={creando}
-                className="flex-1 py-3 rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20 disabled:opacity-50"
+                className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50"
               >
                 {creando ? 'Creando...' : 'Crear usuario'}
               </button>

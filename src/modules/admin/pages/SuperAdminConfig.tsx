@@ -27,7 +27,7 @@ export default function SuperAdminConfig() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-slate-500">settings</span>
+        <span className="material-symbols-outlined text-3xl text-on-surface-variant">settings</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Configuracion Global</h1>
           <p className="text-on-surface-variant">Integraciones, branding, APIs y plantillas de la plataforma</p>
@@ -106,7 +106,7 @@ export default function SuperAdminConfig() {
                   <div key={api.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-5">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-600">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-container text-on-success-container">
                           <span className="material-symbols-outlined">api</span>
                         </span>
                         <div>
@@ -114,7 +114,7 @@ export default function SuperAdminConfig() {
                           <code className="text-xs text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded">{api.endpoint}</code>
                         </div>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${api.estado === 'activa' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${api.estado === 'activa' ? 'bg-success-container text-on-success-container' : 'bg-error-container text-on-error-container'}`}>
                         {api.estado}
                       </span>
                     </div>
@@ -180,7 +180,7 @@ export default function SuperAdminConfig() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <button className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">Guardar Cambios</button>
+                <button className="px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">Guardar Cambios</button>
               </div>
             </div>
           )}
@@ -207,7 +207,7 @@ export default function SuperAdminConfig() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${plantilla.activa ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${plantilla.activa ? 'bg-success-container text-on-success-container' : 'bg-surface-container text-on-surface-variant'}`}>
                       {plantilla.activa ? 'Activa' : 'Inactiva'}
                     </span>
                     <button className="p-2 rounded-lg hover:bg-surface-container-high transition-colors">

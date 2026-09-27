@@ -3,10 +3,14 @@ import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SelectorFecha from '../components/SelectorFecha';
 import { cn } from '@/lib/utils';
+import { useColoresTema } from '@/lib/useColoresTema';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+
+const COLORES_CATEGORIA = ['primary', 'secondary', 'tertiary', 'teal', 'violet'] as const;
 
 export default function ERPInventario() {
   const { inventario, movimientosInventario, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
+  const c = useColoresTema();
   const [activeTab, setActiveTab] = useState<'lista' | 'movimientos' | 'herramientas' | 'toma'>('lista');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [showModal, setShowModal] = useState(false);
@@ -304,7 +308,7 @@ export default function ERPInventario() {
             Exportar
           </button>
           <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all">
+            className="flex items-center gap-2 px-6 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all">
             <span className="material-symbols-outlined text-lg">add_box</span>
             Nuevo Producto
           </button>
@@ -355,7 +359,7 @@ export default function ERPInventario() {
             {[
               { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20' },
               { label: 'Valorización Costo', value: `$${valorInventario.toLocaleString('es-CL')}`, icon: 'payments', color: 'text-on-surface', bg: 'bg-surface-container-low', border: 'border-outline-variant/30' },
-              { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+              { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-on-success-container', bg: 'bg-success-container', border: 'border-success/30' },
               { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant', bg: productosBajoStock > 0 ? 'bg-error/5' : 'bg-surface-container-low', border: productosBajoStock > 0 ? 'border-error/20' : 'border-outline-variant/30' },
             ].map(k => (
               <div key={k.label} className={cn('p-5 rounded-3xl border-2 transition-all hover:shadow-md', k.bg, k.border)}>
@@ -385,21 +389,21 @@ export default function ERPInventario() {
                       cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value"
                     >
                       {valorizacionPorCategoria.map((_entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#1B3022', '#C5A059', '#3F2427', '#777775', '#2E5037'][index % 5]} />
+                        <Cell key={`cell-${index}`} fill={c[COLORES_CATEGORIA[index % COLORES_CATEGORIA.length]]} />
                       ))}
                     </Pie>
-                    <RechartsTooltip 
-                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    <RechartsTooltip
+                      contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                       formatter={(value: number) => `$${value.toLocaleString('es-CL')}`}
                     />
-                    <Legend verticalAlign="middle" align="right" layout="vertical" />
+                    <Legend verticalAlign="middle" align="right" layout="vertical" wrapperStyle={{ color: c.onSurfaceVariant }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             {/* Consejo */}
-            <div className="bg-primary rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+            <div className="bg-primary rounded-3xl p-6 text-inverse-on-surface shadow-xl relative overflow-hidden">
               <div className="relative z-10">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-2">Consejo Logístico</p>
                 <h4 className="text-xl font-black mb-4 leading-tight">Optimiza tu capital de trabajo</h4>
@@ -501,7 +505,7 @@ export default function ERPInventario() {
                           <td className="px-6 py-4 text-right">
                             <span className={cn(
                               "px-2.5 py-1 rounded-lg text-[11px] font-black",
-                              margen > 30 ? "bg-emerald-100 text-emerald-700" : margen > 15 ? "bg-secondary/10 text-secondary" : "bg-error/10 text-error"
+                              margen > 30 ? "bg-success-container text-on-success-container" : margen > 15 ? "bg-secondary/10 text-secondary" : "bg-error/10 text-error"
                             )}>
                               {margen.toFixed(1)}%
                             </span>
@@ -554,15 +558,15 @@ export default function ERPInventario() {
                         producto.stock <= producto.stockMinimo ? "text-secondary" : "text-on-surface"
                       )}>{producto.stock} <span className="text-[10px] uppercase">{producto.unidadMedida}</span></p>
                     </div>
-                    <div className="flex-1 p-3 bg-emerald-50 rounded-2xl">
-                      <p className="text-[9px] font-black text-emerald-400 uppercase mb-1">Precio</p>
-                      <p className="text-xl font-black text-emerald-700">${producto.precio.toLocaleString('es-CL')}</p>
+                    <div className="flex-1 p-3 bg-success-container rounded-2xl">
+                      <p className="text-[9px] font-black text-on-success-container uppercase mb-1">Precio</p>
+                      <p className="text-xl font-black text-on-success-container">${producto.precio.toLocaleString('es-CL')}</p>
                     </div>
                   </div>
 
                   <div className="flex gap-2">
                     <button onClick={() => handleMovimientoClick(producto.id)}
-                      className="flex-1 py-2.5 bg-primary text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-primary/90 transition-all">
+                      className="flex-1 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-primary/90 transition-all">
                       <span className="material-symbols-outlined text-base">swap_horiz</span>
                       Ajustar Stock
                     </button>
@@ -617,7 +621,7 @@ export default function ERPInventario() {
                         <td className="px-6 py-4">
                           <span className={cn(
                             "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                            mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? "bg-emerald-100 text-emerald-600" :
+                            mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? "bg-success-container text-on-success-container" :
                             mov.tipo === 'salida' || mov.tipo === 'merma' ? "bg-error/10 text-error" : "bg-surface-container-high text-on-surface-variant"
                           )}>
                             {mov.tipo}
@@ -625,7 +629,7 @@ export default function ERPInventario() {
                         </td>
                         <td className={cn(
                           "px-6 py-4 text-right font-black",
-                          mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? "text-emerald-600" : "text-error"
+                          mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? "text-success" : "text-error"
                         )}>
                           {mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? '+' : '-'}{mov.cantidad}
                         </td>
@@ -643,7 +647,7 @@ export default function ERPInventario() {
       {/* Tab Toma de Inventario */}
       {activeTab === 'toma' && (
         <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="bg-primary rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+          <div className="bg-primary rounded-3xl p-8 text-inverse-on-surface shadow-xl relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row justify-between gap-6">
               <div className="max-w-xl">
                 <h3 className="text-2xl font-black mb-2 flex items-center gap-3">
@@ -680,7 +684,7 @@ export default function ERPInventario() {
                   Limpiar Todo
                 </button>
                 <button onClick={handleApplyAjustes}
-                  className="px-6 py-2 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all flex items-center gap-2">
+                  className="px-6 py-2 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all flex items-center gap-2">
                   <span className="material-symbols-outlined text-lg">sync_alt</span>
                   Aplicar Ajustes de Stock
                 </button>
@@ -712,7 +716,7 @@ export default function ERPInventario() {
                         </td>
                         <td className={cn(
                           "px-6 py-4 text-right font-black",
-                          diferencia > 0 ? "text-emerald-600" : diferencia < 0 ? "text-error" : "text-outline"
+                          diferencia > 0 ? "text-success" : diferencia < 0 ? "text-error" : "text-outline"
                         )}>
                           {diferencia > 0 ? '+' : ''}{diferencia}
                         </td>
@@ -720,7 +724,7 @@ export default function ERPInventario() {
                           <span className={cn(
                             "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
                             diferencia === 0 ? "bg-surface-container-high text-outline" : 
-                            diferencia > 0 ? "bg-emerald-100 text-emerald-600" : "bg-error/10 text-error"
+                            diferencia > 0 ? "bg-success-container text-on-success-container" : "bg-error/10 text-error"
                           )}>
                             {diferencia === 0 ? 'Correcto' : diferencia > 0 ? 'Sobrante' : 'Faltante'}
                           </span>
@@ -766,7 +770,7 @@ export default function ERPInventario() {
               <div className="relative">
                 <input type="file" accept=".csv" onChange={importFromCSV} className="hidden" id="import-file" />
                 <label htmlFor="import-file"
-                  className="w-full py-4 bg-primary text-white rounded-2xl font-black text-sm shadow-xl hover:bg-primary/90 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  className="w-full py-4 bg-primary text-inverse-on-surface rounded-2xl font-black text-sm shadow-xl hover:bg-primary/90 transition-all flex items-center justify-center gap-2 cursor-pointer">
                   <span className="material-symbols-outlined text-lg">publish</span>
                   Subir Archivo de Inventario
                 </label>
@@ -816,7 +820,7 @@ export default function ERPInventario() {
               </div>
 
               <button onClick={handleBulkUpdate} disabled={bulkPercentage === 0}
-                className="w-full py-4 bg-on-surface text-white rounded-2xl font-black text-sm shadow-xl hover:bg-on-surface/80 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                className="w-full py-4 bg-on-surface text-surface rounded-2xl font-black text-sm shadow-xl hover:bg-on-surface/80 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
                 <span className="material-symbols-outlined text-lg">published_with_changes</span>
                 Aplicar Actualización Masiva
               </button>
@@ -982,7 +986,7 @@ export default function ERPInventario() {
               <button onClick={() => { setShowModal(false); setEditingId(null); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 Cancelar
               </button>
-              <button onClick={handleGuardar} className="px-6 py-2 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+              <button onClick={handleGuardar} className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
                 {editingId ? 'Guardar Cambios' : 'Guardar Producto'}
               </button>
             </div>
@@ -1049,7 +1053,7 @@ export default function ERPInventario() {
               <button onClick={() => setShowMovimientoModal(false)} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 Cancelar
               </button>
-              <button onClick={handleGuardarMovimiento} className="px-6 py-2 bg-primary text-white rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+              <button onClick={handleGuardarMovimiento} className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
                 Registrar
               </button>
             </div>
@@ -1089,7 +1093,7 @@ export default function ERPInventario() {
                       <td className="px-6 py-4 text-on-surface-variant">{new Date(mov.fecha).toLocaleDateString('es-CL')}</td>
                       <td className="px-6 py-4">
                         <span className={cn('px-2 py-1 rounded-md text-xs font-bold capitalize',
-                          mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? 'bg-emerald-100 text-emerald-700' :
+                          mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? 'bg-success-container text-on-success-container' :
                           mov.tipo === 'salida' ? 'bg-secondary/20 text-secondary' :
                           mov.tipo === 'merma' ? 'bg-error/10 text-error' :
                           'bg-surface-container-high text-on-surface'
@@ -1098,7 +1102,7 @@ export default function ERPInventario() {
                         </span>
                       </td>
                       <td className={cn('px-6 py-4 text-right font-bold',
-                        mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? 'text-emerald-600' :
+                        mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? 'text-success' :
                         mov.tipo === 'salida' || mov.tipo === 'merma' ? 'text-error' :
                         'text-on-surface'
                       )}>

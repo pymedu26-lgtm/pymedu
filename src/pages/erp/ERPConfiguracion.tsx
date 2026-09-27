@@ -196,7 +196,7 @@ export default function ERPConfiguracion() {
         </div>
         {mensaje && (
           <div className={cn('flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm',
-            mensaje.tipo === 'ok' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-error/15 text-error')}>
+            mensaje.tipo === 'ok' ? 'bg-success/15 text-success' : 'bg-error/15 text-error')}>
             <span className="material-symbols-outlined">{mensaje.tipo === 'ok' ? 'check_circle' : 'error'}</span>
             {mensaje.texto}
           </div>
@@ -208,7 +208,7 @@ export default function ERPConfiguracion() {
         {TABS.map(({ id, icono, label }) => (
           <button key={id} onClick={() => setTab(id)}
             className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap',
-              tab === id ? 'bg-primary text-white shadow-md' : 'text-on-surface-variant hover:text-on-surface')}>
+              tab === id ? 'bg-primary text-inverse-on-surface shadow-md' : 'text-on-surface-variant hover:text-on-surface')}>
             <span className="material-symbols-outlined text-base">{icono}</span>
             {label}
           </button>
@@ -309,7 +309,7 @@ export default function ERPConfiguracion() {
           </div>
 
           <button onClick={guardarNegocio} disabled={guardando}
-            className="w-full py-4 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
+            className="w-full py-4 bg-primary text-inverse-on-surface font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
             {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
@@ -380,7 +380,7 @@ export default function ERPConfiguracion() {
           </div>
 
           <button onClick={guardarCuenta} disabled={guardando}
-            className="w-full py-4 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
+            className="w-full py-4 bg-primary text-inverse-on-surface font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
             {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
@@ -432,8 +432,8 @@ export default function ERPConfiguracion() {
                           </td>
                           <td className="px-8 py-4">
                             <span className={cn('flex items-center gap-1.5 text-[10px] font-black uppercase',
-                              m.activo ? 'text-emerald-500' : 'text-error')}>
-                              <span className={cn('w-1.5 h-1.5 rounded-full', m.activo ? 'bg-emerald-500' : 'bg-error')}></span>
+                              m.activo ? 'text-success' : 'text-error')}>
+                              <span className={cn('w-1.5 h-1.5 rounded-full', m.activo ? 'bg-success' : 'bg-error')}></span>
                               {m.activo ? 'Activo' : 'Inactivo'}
                             </span>
                           </td>
@@ -496,11 +496,11 @@ export default function ERPConfiguracion() {
               ))}
             </div>
 
-            <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+            <div className="p-4 rounded-2xl border border-warning/30 bg-warning/10">
               <div className="flex gap-3">
-                <span className="material-symbols-outlined text-amber-500">security</span>
+                <span className="material-symbols-outlined text-warning">security</span>
                 <div>
-                  <p className="text-xs font-bold text-amber-600 uppercase tracking-tight">Seguridad de tus datos</p>
+                  <p className="text-xs font-bold text-warning uppercase tracking-tight">Seguridad de tus datos</p>
                   <p className="text-[11px] text-on-surface-variant mt-1 leading-relaxed">
                     No almacenamos tu clave tributaria. Los parámetros se guardan de forma local y segura para el cálculo de tus declaraciones.
                   </p>
@@ -523,7 +523,7 @@ export default function ERPConfiguracion() {
                 onChange={e => setPpm(e.target.value)}
                 className="flex-1 px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm font-bold focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
               <button onClick={guardarPpm}
-                className="px-6 py-3 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+                className="px-6 py-3 bg-primary text-inverse-on-surface rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
                 {ppmGuardado ? 'Guardado' : 'Guardar'}
               </button>
             </div>
@@ -544,14 +544,14 @@ export default function ERPConfiguracion() {
           </h3>
 
           <div className={cn('p-5 rounded-2xl mb-6 border-2',
-            perfil.membresia_nivel === 'free' ? 'bg-surface-container border-outline-variant/40' : 'bg-emerald-500/10 border-emerald-500/40')}>
+            perfil.membresia_nivel === 'free' ? 'bg-surface-container border-outline-variant/40' : 'bg-success/10 border-success/40')}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">Plan Actual</p>
                 <h4 className="text-xl font-extrabold text-on-surface capitalize">{perfil.membresia_nivel ?? 'free'}</h4>
               </div>
               <span className={cn('material-symbols-outlined text-4xl',
-                perfil.membresia_nivel === 'free' ? 'text-on-surface-variant/50' : 'text-emerald-500')}>
+                perfil.membresia_nivel === 'free' ? 'text-on-surface-variant/50' : 'text-success')}>
                 workspace_premium
               </span>
             </div>
@@ -562,7 +562,7 @@ export default function ERPConfiguracion() {
 
           {perfil.membresia_nivel === 'free' ? (
             <Link to="/erp/suscripcion"
-              className="w-full flex items-center justify-center gap-2 py-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl text-base transition-colors shadow-lg shadow-amber-500/20">
+              className="w-full flex items-center justify-center gap-2 py-4 bg-warning hover:bg-warning/90 text-inverse-on-surface font-bold rounded-2xl text-base transition-colors shadow-lg shadow-warning/25">
               <span className="material-symbols-outlined">rocket_launch</span>
               Pasarse a Premium — $10.000/mes
             </Link>

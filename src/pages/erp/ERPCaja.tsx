@@ -33,9 +33,9 @@ export default function ERPCaja() {
           <p className="text-[10px] font-black uppercase tracking-widest text-primary">Saldo actual</p>
           <p className="text-3xl font-black text-primary mt-1">{fmt(saldoActual)}</p>
         </div>
-        <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-200">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Ingresos totales</p>
-          <p className="text-3xl font-black text-emerald-700 mt-1">{fmt(totalIngresos)}</p>
+        <div className="bg-success-container p-5 rounded-2xl border border-success/30">
+          <p className="text-[10px] font-black uppercase tracking-widest text-on-success-container">Ingresos totales</p>
+          <p className="text-3xl font-black text-on-success-container mt-1">{fmt(totalIngresos)}</p>
         </div>
         <div className="bg-error/5 p-5 rounded-2xl border border-error/20">
           <p className="text-[10px] font-black uppercase tracking-widest text-error">Egresos totales</p>
@@ -66,12 +66,12 @@ export default function ERPCaja() {
                   <td className="p-4 text-on-surface-variant whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-CL')}</td>
                   <td className="p-4 font-bold text-on-surface">{m.concepto}</td>
                   <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${m.tipo === 'Ingreso' ? 'bg-emerald-100 text-emerald-700' : 'bg-error/10 text-error'}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${m.tipo === 'Ingreso' ? 'bg-success-container text-on-success-container' : 'bg-error/10 text-error'}`}>
                       {m.tipo}
                     </span>
                   </td>
                   <td className="p-4 text-on-surface-variant text-xs capitalize">{m.metodo_pago || '—'}</td>
-                  <td className={`p-4 font-extrabold text-right ${m.tipo === 'Ingreso' ? 'text-emerald-700' : 'text-error'}`}>
+                  <td className={`p-4 font-extrabold text-right ${m.tipo === 'Ingreso' ? 'text-success' : 'text-error'}`}>
                     {m.tipo === 'Ingreso' ? '+' : '−'}{fmt(m.monto)}
                   </td>
                 </tr>

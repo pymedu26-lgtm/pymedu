@@ -40,15 +40,15 @@ export default function TarjetasResumen({
       </div>
       <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
         <p className="text-on-surface-variant text-[10px] font-black uppercase tracking-[0.2em] mb-1">Meta de Ventas al 35%</p>
-        <h3 className={cn('text-3xl font-extrabold', enNumerosVerdes ? 'text-emerald-600' : 'text-secondary')}>{monto(meta)}</h3>
+        <h3 className={cn('text-3xl font-extrabold', enNumerosVerdes ? 'text-success' : 'text-secondary')}>{monto(meta)}</h3>
         <div className="flex items-center gap-2 mt-2">
           <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
             <div
-              className={cn('h-full transition-all duration-500', enNumerosVerdes ? 'bg-emerald-500' : 'bg-secondary')}
+              className={cn('h-full transition-all duration-500', enNumerosVerdes ? 'bg-success' : 'bg-secondary')}
               style={{ width: `${Math.min(100, porcentajeMeta)}%` }}
             />
           </div>
-          <span className={cn('text-[10px] font-black', enNumerosVerdes ? 'text-emerald-600' : 'text-secondary')}>{porcentajeMeta}%</span>
+          <span className={cn('text-[10px] font-black', enNumerosVerdes ? 'text-success' : 'text-secondary')}>{porcentajeMeta}%</span>
         </div>
       </div>
     </div>

@@ -177,24 +177,24 @@ export default function MiInstitucion() {
       ) : (
         <div className="space-y-6">
           {errorMsg && (
-            <div className="flex items-center justify-between gap-3 p-4 bg-red-50 text-red-700 rounded-2xl text-sm font-bold">
+            <div className="flex items-center justify-between gap-3 p-4 bg-error-container text-on-error-container rounded-2xl text-sm font-bold">
               <span className="flex items-center gap-2">
                 <span className="material-symbols-outlined">error_outline</span>
                 {errorMsg}
               </span>
-              <button onClick={() => setErrorMsg('')} className="text-red-500 hover:text-red-700">
+              <button onClick={() => setErrorMsg('')} className="text-error hover:text-on-error-container">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center justify-between gap-3 p-4 bg-green-50 text-green-700 rounded-2xl text-sm font-bold">
+            <div className="flex items-center justify-between gap-3 p-4 bg-success-container text-on-success-container rounded-2xl text-sm font-bold">
               <span className="flex items-center gap-2">
                 <span className="material-symbols-outlined">check_circle</span>
                 {successMsg}
               </span>
-              <button onClick={() => setSuccessMsg('')} className="text-green-500 hover:text-green-700">
+              <button onClick={() => setSuccessMsg('')} className="text-success hover:text-on-success-container">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -237,13 +237,13 @@ export default function MiInstitucion() {
 
           {/* ── Solicitud pendiente ── */}
           {!vinculado && pendiente && (
-            <div className="bg-amber-500/10 dark-card rounded-3xl shadow-sm p-7 border border-amber-500/20">
+            <div className="bg-warning/10 dark-card rounded-3xl shadow-sm p-7 border border-warning/20">
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-500">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-warning/15 text-warning">
                   <span className="material-symbols-outlined text-2xl">hourglass_top</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-extrabold uppercase tracking-widest text-amber-500 mb-1">
+                  <p className="text-xs font-extrabold uppercase tracking-widest text-warning mb-1">
                     Solicitud en revisión
                   </p>
                   <h3 className="text-lg font-extrabold text-on-surface">
@@ -258,7 +258,7 @@ export default function MiInstitucion() {
                   <button
                     onClick={cancelarSolicitud}
                     disabled={trabajando}
-                    className="mt-4 px-4 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors disabled:opacity-50"
+                    className="mt-4 px-4 py-2 text-sm font-bold text-on-error-container bg-error-container hover:bg-error/10 rounded-xl transition-colors disabled:opacity-50"
                   >
                     Cancelar solicitud
                   </button>
@@ -271,7 +271,7 @@ export default function MiInstitucion() {
           {!vinculado && !pendiente && (
             <div className="space-y-6">
               {rechazada && (
-                <div className="p-4 bg-red-50 text-red-700 rounded-2xl flex items-center gap-3 text-sm font-bold">
+                <div className="p-4 bg-error-container text-on-error-container rounded-2xl flex items-center gap-3 text-sm font-bold">
                   <span className="material-symbols-outlined">block</span>
                   Tu solicitud a {vinculacion?.solicitud_institucion_nombre ?? 'la institución'} fue rechazada.
                 </div>
@@ -343,7 +343,7 @@ export default function MiInstitucion() {
                   <button
                     onClick={solicitarVinculacion}
                     disabled={trabajando}
-                    className="mt-4 w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 text-sm transition-colors"
+                    className="mt-4 w-full py-3 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 text-sm transition-colors"
                   >
                     Enviar solicitud de vinculación
                   </button>
@@ -359,7 +359,7 @@ export default function MiInstitucion() {
               {/* Canjear código */}
               <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-7">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="material-symbols-outlined text-teal-500">card_membership</span>
+                  <span className="material-symbols-outlined text-teal">card_membership</span>
                   <h3 className="text-base font-extrabold text-on-surface">Tengo un código de invitación</h3>
                 </div>
                 <p className="text-sm text-on-surface-variant mb-5">
@@ -376,7 +376,7 @@ export default function MiInstitucion() {
                   <button
                     type="submit"
                     disabled={trabajando || !codigoInput.trim()}
-                    className="px-6 py-4 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 disabled:opacity-50 text-sm transition-colors"
+                    className="px-6 py-4 bg-teal text-inverse-on-surface font-bold rounded-xl hover:bg-teal/90 disabled:opacity-50 text-sm transition-colors"
                   >
                     Canjear código
                   </button>

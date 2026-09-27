@@ -91,11 +91,11 @@ export default function Landing() {
                 {theme === 'light' ? 'dark_mode' : 'light_mode'}
               </span>
             </button>
-            <Link to="/register" className="px-5 py-2 bg-primary text-white rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:shadow-xl hover:scale-105 transition-all">
+            <Link to="/register" className="px-5 py-2 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:shadow-xl hover:scale-105 transition-all">
               Comenzar gratis
             </Link>
           </nav>
-          <Link to="/register" className="md:hidden px-4 py-2 bg-primary text-white rounded-full text-xs font-bold">
+          <Link to="/register" className="md:hidden px-4 py-2 bg-primary text-inverse-on-surface rounded-full text-xs font-bold">
             Gratis
           </Link>
         </div>
@@ -150,9 +150,9 @@ export default function Landing() {
             <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between px-4">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-400" />
-                <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                <div className="w-2 h-2 rounded-full bg-green-400" />
+                <div className="w-2 h-2 rounded-full bg-error" />
+                <div className="w-2 h-2 rounded-full bg-warning" />
+                <div className="w-2 h-2 rounded-full bg-success" />
               </div>
               <span className="text-white/30 text-xs font-mono">pymedu.cl/dashboard</span>
             </div>
@@ -166,7 +166,7 @@ export default function Landing() {
                   <div key={k.label} className="bg-white/10 backdrop-blur rounded-xl p-3 md:p-4 text-left">
                     <p className="text-white/50 text-[10px] md:text-xs font-semibold uppercase tracking-wider">{k.label}</p>
                     <p className="text-white text-sm md:text-lg font-extrabold mt-1">{k.value}</p>
-                    <p className={`text-[10px] md:text-xs font-bold flex items-center gap-0.5 mt-0.5 ${k.up ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <p className={`text-[10px] md:text-xs font-bold flex items-center gap-0.5 mt-0.5 ${k.up ? 'text-success' : 'text-error'}`}>
                       <span className="material-symbols-outlined text-xs">{k.up ? 'trending_up' : 'trending_down'}</span>
                       {k.up ? '+12%' : '-3%'}
                     </p>
@@ -222,7 +222,7 @@ export default function Landing() {
                 }`}
               >
                 {plan.featured && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-inverse-on-surface text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
                     Recomendado
                   </div>
                 )}

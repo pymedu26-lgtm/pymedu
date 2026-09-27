@@ -63,29 +63,29 @@ export default function Dashboard() {
     });
   } else {
     if (diaDelMes <= 5) {
-      alertasQuick.push({ icon: 'badge', color: 'text-purple-600', bg: 'bg-purple-100', titulo: 'Paga sueldos antes del día 5', desc: 'Plazo legal del Código del Trabajo para pago de remuneraciones.', label: 'Ver CxP', url: '/erp/pagar' });
+      alertasQuick.push({ icon: 'badge', color: 'text-on-info-container', bg: 'bg-info-container', titulo: 'Paga sueldos antes del día 5', desc: 'Plazo legal del Código del Trabajo para pago de remuneraciones.', label: 'Ver CxP', url: '/erp/pagar' });
     }
     if (documentosPendientes.length > 0) {
       alertasQuick.push({ icon: 'receipt_long', color: 'text-primary', bg: 'bg-primary/10', titulo: `${documentosPendientes.length} documento(s) por revisar`, desc: 'Antes de cerrar IVA conviene resolver documentos pendientes u observados.', label: 'Preparar F29', url: '/erp/iva-mensual' });
     }
     if (pagosPOSSinVenta.length > 0 && alertasQuick.length < 3) {
-      alertasQuick.push({ icon: 'point_of_sale', color: 'text-amber-600', bg: 'bg-amber-100', titulo: `${pagosPOSSinVenta.length} pago(s) POS sin venta`, desc: 'Concílialos para que caja, ventas e IVA cuadren.', label: 'Ir a Ventas', url: '/erp/ventas' });
+      alertasQuick.push({ icon: 'point_of_sale', color: 'text-on-warning-container', bg: 'bg-warning-container', titulo: `${pagosPOSSinVenta.length} pago(s) POS sin venta`, desc: 'Concílialos para que caja, ventas e IVA cuadren.', label: 'Ir a Ventas', url: '/erp/ventas' });
     }
     if (productosStockBajo.length > 0) {
       const p = productosStockBajo[0];
-      alertasQuick.push({ icon: 'inventory_2', color: 'text-red-600', bg: 'bg-red-100', titulo: `Stock bajo: "${p.nombre}"`, desc: `Solo quedan ${p.stock} unidades (mínimo: ${p.stockMinimo}).`, label: 'Ver Inventario', url: '/erp/inventario' });
+      alertasQuick.push({ icon: 'inventory_2', color: 'text-on-error-container', bg: 'bg-error-container', titulo: `Stock bajo: "${p.nombre}"`, desc: `Solo quedan ${p.stock} unidades (mínimo: ${p.stockMinimo}).`, label: 'Ver Inventario', url: '/erp/inventario' });
     }
     if (diaDelMes >= 20) {
-      alertasQuick.push({ icon: 'account_balance', color: 'text-blue-600', bg: 'bg-blue-100', titulo: 'Cierre de mes SII próximo', desc: `El pago de IVA de ${nombreMes} vence el último día hábil del mes.`, label: 'Ver F29', url: '/erp/reportes' });
+      alertasQuick.push({ icon: 'account_balance', color: 'text-on-info-container', bg: 'bg-info-container', titulo: 'Cierre de mes SII próximo', desc: `El pago de IVA de ${nombreMes} vence el último día hábil del mes.`, label: 'Ver F29', url: '/erp/reportes' });
     }
     if (ventasPendientes.length > 0 && alertasQuick.length < 3) {
-      alertasQuick.push({ icon: 'request_quote', color: 'text-amber-600', bg: 'bg-amber-100', titulo: `${ventasPendientes.length} venta(s) sin cobrar`, desc: `Tienes ${fmt(totalCxC)} que aún no te han pagado.`, label: 'Ver CxC', url: '/erp/cobrar' });
+      alertasQuick.push({ icon: 'request_quote', color: 'text-on-warning-container', bg: 'bg-warning-container', titulo: `${ventasPendientes.length} venta(s) sin cobrar`, desc: `Tienes ${fmt(totalCxC)} que aún no te han pagado.`, label: 'Ver CxC', url: '/erp/cobrar' });
     }
     if (gastosPorPagar.length > 0 && alertasQuick.length < 3) {
-      alertasQuick.push({ icon: 'payments', color: 'text-orange-600', bg: 'bg-orange-100', titulo: `Debes ${fmt(totalCxP)} a proveedores`, desc: `${gastosPorPagar.length} pago(s) pendientes. Evita atrasos.`, label: 'Ver CxP', url: '/erp/pagar' });
+      alertasQuick.push({ icon: 'payments', color: 'text-on-warning-container', bg: 'bg-warning-container', titulo: `Debes ${fmt(totalCxP)} a proveedores`, desc: `${gastosPorPagar.length} pago(s) pendientes. Evita atrasos.`, label: 'Ver CxP', url: '/erp/pagar' });
     }
     if (alertasQuick.length === 0) {
-      alertasQuick.push({ icon: 'check_circle', color: 'text-emerald-600', bg: 'bg-emerald-100', titulo: '¡Todo en orden!', desc: 'No tienes alertas pendientes. Tu negocio está funcionando bien.', label: 'Centro de Alertas', url: '/erp/alertas' });
+      alertasQuick.push({ icon: 'check_circle', color: 'text-on-success-container', bg: 'bg-success-container', titulo: '¡Todo en orden!', desc: 'No tienes alertas pendientes. Tu negocio está funcionando bien.', label: 'Centro de Alertas', url: '/erp/alertas' });
     }
   }
 
@@ -95,8 +95,8 @@ export default function Dashboard() {
 
   const pasosOnboarding = [
     { n: 1, icon: 'inventory_2', titulo: 'Carga tu inventario', desc: 'Agrega los productos o servicios que vendes.', label: 'Ir a Inventario', url: '/erp/inventario', color: 'text-primary bg-primary/15' },
-    { n: 2, icon: 'point_of_sale', titulo: 'Anota tu primera venta', desc: 'Registra una venta para ver tus ingresos.', label: 'Ir a Ventas', url: '/erp/ventas', color: 'text-emerald-400 bg-emerald-500/15' },
-    { n: 3, icon: 'receipt_long', titulo: 'Registra un gasto', desc: 'Guarda tus compras y costos del negocio.', label: 'Ir a Gastos', url: '/erp/gastos', color: 'text-red-400 bg-red-500/15' },
+    { n: 2, icon: 'point_of_sale', titulo: 'Anota tu primera venta', desc: 'Registra una venta para ver tus ingresos.', label: 'Ir a Ventas', url: '/erp/ventas', color: 'text-success bg-success/15' },
+    { n: 3, icon: 'receipt_long', titulo: 'Registra un gasto', desc: 'Guarda tus compras y costos del negocio.', label: 'Ir a Gastos', url: '/erp/gastos', color: 'text-error bg-error/15' },
   ];
 
   return (
@@ -116,28 +116,28 @@ export default function Dashboard() {
           <div className="flex flex-col gap-2 bg-surface-container-low p-4 rounded-2xl border border-outline-variant/30 min-w-[280px]">
             <div className="flex justify-between items-center text-sm font-bold">
               <span className="text-on-surface-variant">Plan Básico (Gratis)</span>
-              <span className={progresoCuota > 80 ? 'text-red-500' : 'text-primary'}>
+              <span className={progresoCuota > 80 ? 'text-error' : 'text-primary'}>
                 {movimientosActuales} / {limitePlan} Usos
               </span>
             </div>
             <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all duration-500 ${progresoCuota > 80 ? 'bg-red-500' : 'bg-primary'}`}
+                className={`h-full transition-all duration-500 ${progresoCuota > 80 ? 'bg-error' : 'bg-primary'}`}
                 style={{ width: `${progresoCuota}%` }}
               />
             </div>
-            <Link to="/erp/suscripcion" className="mt-2 text-xs text-center font-bold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg py-2 transition-colors glow-amber">
+            <Link to="/erp/suscripcion" className="mt-2 text-xs text-center font-bold text-warning bg-warning/10 hover:bg-warning/20 rounded-lg py-2 transition-colors glow-amber">
               ⚡ Desbloquear uso ilimitado ($10.000)
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col items-start gap-1 bg-emerald-500/10 text-emerald-400 px-6 py-4 rounded-2xl shadow-sm border border-emerald-500/20 glow-emerald min-w-[280px]">
+          <div className="flex flex-col items-start gap-1 bg-success/10 text-success px-6 py-4 rounded-2xl shadow-sm border border-success/20 glow-emerald min-w-[280px]">
             <div className="flex items-center gap-2 font-bold">
               <span className="material-symbols-outlined text-2xl">workspace_premium</span>
               Plan {perfil?.membresia_nivel === 'pro' ? 'Pro' : 'Premium'} Activo
             </div>
             {perfil?.membresia_expira && (
-              <span className="text-xs font-semibold text-emerald-300/80">
+              <span className="text-xs font-semibold text-success/80">
                 Vence el {new Date(perfil.membresia_expira).toLocaleDateString('es-CL')}
               </span>
             )}
@@ -181,10 +181,10 @@ export default function Dashboard() {
       {/* KPIs del mes */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Ventas del mes', value: fmt(totalVentasMes), icon: 'trending_up', color: 'text-emerald-700', bg: 'bg-primary/5', border: 'border-primary/20', sub: `${ventasDelMes.length} operaciones` },
+          { label: 'Ventas del mes', value: fmt(totalVentasMes), icon: 'trending_up', color: 'text-success', bg: 'bg-primary/5', border: 'border-primary/20', sub: `${ventasDelMes.length} operaciones` },
           { label: 'Documentos del mes', value: String(documentosMes.length), icon: 'receipt_long', color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20', sub: `${documentosPendientes.length} por revisar` },
-          { label: 'IVA estimado', value: fmt(f29Actual.totalEstimado), icon: 'account_balance', color: 'text-blue-700', bg: 'bg-primary/5', border: 'border-primary/20', sub: `IVA ${fmt(f29Actual.diferenciaIva)} + PPM ${fmt(f29Actual.ppm)}` },
-          { label: 'Por cobrar', value: fmt(totalCxC), icon: 'request_quote', color: 'text-amber-700', bg: 'bg-primary/5', border: 'border-primary/20', sub: `${ventasPendientes.length} clientes deben` },
+          { label: 'IVA estimado', value: fmt(f29Actual.totalEstimado), icon: 'account_balance', color: 'text-info', bg: 'bg-primary/5', border: 'border-primary/20', sub: `IVA ${fmt(f29Actual.diferenciaIva)} + PPM ${fmt(f29Actual.ppm)}` },
+          { label: 'Por cobrar', value: fmt(totalCxC), icon: 'request_quote', color: 'text-warning', bg: 'bg-primary/5', border: 'border-primary/20', sub: `${ventasPendientes.length} clientes deben` },
         ].map(k => (
           <div key={k.label} className={`p-5 rounded-2xl border shadow-sm ${k.bg} ${k.border}`}>
             <div className="flex items-center justify-between mb-3">
@@ -204,22 +204,22 @@ export default function Dashboard() {
           {/* Hoy en tu negocio */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="bg-surface-container-lowest dark-card p-7 rounded-3xl shadow-sm hover:shadow-md transition-all hover:scale-[1.01] group">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 mb-5 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-success/15 flex items-center justify-center text-success mb-5 group-hover:scale-110 transition-transform">
                 <span className="material-symbols-outlined text-2xl">add_card</span>
               </div>
-              <p className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">Plata que entró hoy</p>
+              <p className="text-success text-xs font-bold uppercase tracking-widest mb-1">Plata que entró hoy</p>
               <h3 className="text-3xl font-extrabold text-on-surface mb-4">{fmt(ingresosHoy)}</h3>
-              <Link to="/erp/ventas" className="inline-flex items-center gap-1 text-sm font-bold text-emerald-400 hover:text-emerald-300 transition-colors">
+              <Link to="/erp/ventas" className="inline-flex items-center gap-1 text-sm font-bold text-success hover:text-success/80 transition-colors">
                 <span className="material-symbols-outlined text-lg">add_circle</span> Anotar venta
               </Link>
             </div>
             <div className="bg-surface-container-lowest dark-card p-7 rounded-3xl shadow-sm hover:shadow-md transition-all hover:scale-[1.01] group">
-              <div className="w-12 h-12 rounded-2xl bg-red-500/15 flex items-center justify-center text-red-400 mb-5 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-error/15 flex items-center justify-center text-error mb-5 group-hover:scale-110 transition-transform">
                 <span className="material-symbols-outlined text-2xl">shopping_cart_checkout</span>
               </div>
-              <p className="text-red-400 text-xs font-bold uppercase tracking-widest mb-1">Plata que salió hoy</p>
+              <p className="text-error text-xs font-bold uppercase tracking-widest mb-1">Plata que salió hoy</p>
               <h3 className="text-3xl font-extrabold text-on-surface mb-4">{fmt(egresosHoy)}</h3>
-              <Link to="/erp/gastos" className="inline-flex items-center gap-1 text-sm font-bold text-red-400 hover:text-red-300 transition-colors">
+              <Link to="/erp/gastos" className="inline-flex items-center gap-1 text-sm font-bold text-error hover:text-error/80 transition-colors">
                 <span className="material-symbols-outlined text-lg">add_circle</span> Anotar gasto
               </Link>
             </div>
@@ -229,7 +229,7 @@ export default function Dashboard() {
           <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm overflow-hidden">
             <div className="p-5 border-b border-outline-variant/30 flex justify-between items-center bg-surface-container-low/50">
               <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-400">notifications_active</span>
+                <span className="material-symbols-outlined text-warning">notifications_active</span>
                 Tu negocio te avisa
               </h3>
               <Link to="/erp/alertas" className="text-xs font-bold text-primary hover:underline">
@@ -261,10 +261,10 @@ export default function Dashboard() {
             <h3 className="text-base font-bold text-on-surface mb-4">Acciones rápidas</h3>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
               {[
-                { icon: 'point_of_sale', label: 'Venta', url: '/erp/ventas', color: 'text-emerald-400 bg-emerald-500/15', glow: 'glow-emerald' },
-                { icon: 'receipt_long', label: 'Gasto', url: '/erp/gastos', color: 'text-red-400 bg-red-500/15', glow: 'glow-red' },
+                { icon: 'point_of_sale', label: 'Venta', url: '/erp/ventas', color: 'text-success bg-success/15', glow: 'glow-emerald' },
+                { icon: 'receipt_long', label: 'Gasto', url: '/erp/gastos', color: 'text-error bg-error/15', glow: 'glow-red' },
                 { icon: 'inventory_2', label: 'Stock', url: '/erp/inventario', color: 'text-primary bg-primary/15', glow: 'glow-primary' },
-                { icon: 'people', label: 'Clientes', url: '/erp/clientes', color: 'text-purple-400 bg-purple-500/15', glow: 'glow-purple' },
+                { icon: 'people', label: 'Clientes', url: '/erp/clientes', color: 'text-info bg-info/15', glow: 'glow-purple' },
                 { icon: 'bar_chart', label: 'Reportes', url: '/erp/reportes', color: 'text-secondary bg-secondary/15', glow: 'glow-secondary' },
               ].map(a => (
                 <Link key={a.url} to={a.url}
@@ -288,16 +288,16 @@ export default function Dashboard() {
             <p className="text-xs text-on-surface-variant mb-3">Venta objetivo: {fmt(metaVentas)} ({fmt(totalGastosMes)} de gastos + 35%)</p>
             <div className="flex items-end justify-between mb-2">
               <p className="text-2xl font-black text-on-surface">{fmt(totalVentasMes)}</p>
-              <span className={`text-xs font-black ${metaCumplida ? 'text-emerald-600' : 'text-secondary'}`}>{metaProgreso}%</span>
+              <span className={`text-xs font-black ${metaCumplida ? 'text-success' : 'text-secondary'}`}>{metaProgreso}%</span>
             </div>
             <div className="h-2.5 w-full bg-surface-container-high rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all duration-500 ${metaCumplida ? 'bg-emerald-500' : 'bg-secondary'}`}
+                className={`h-full transition-all duration-500 ${metaCumplida ? 'bg-success' : 'bg-secondary'}`}
                 style={{ width: `${metaProgreso}%` }}
               />
             </div>
             {metaCumplida && (
-              <p className="mt-2 text-xs font-bold text-emerald-600 flex items-center gap-1">
+              <p className="mt-2 text-xs font-bold text-success flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm">check_circle</span> ¡Meta del mes cumplida!
               </p>
             )}
@@ -312,12 +312,12 @@ export default function Dashboard() {
                 { label: 'Pago sueldos', fecha: 'Día 5 del mes siguiente', urgente: diaDelMes <= 5 },
                 { label: 'Cotizaciones AFP/Salud', fecha: '10 del mes siguiente', urgente: diaDelMes >= 7 && diaDelMes <= 10 },
               ].map(t => (
-                <div key={t.label} className={`flex items-center justify-between p-3 rounded-xl ${t.urgente ? 'bg-amber-500/10 border border-amber-500/20 glow-amber' : 'bg-surface-container-low/50'}`}>
+                <div key={t.label} className={`flex items-center justify-between p-3 rounded-xl ${t.urgente ? 'bg-warning/10 border border-warning/20 glow-amber' : 'bg-surface-container-low/50'}`}>
                   <div>
-                    <p className={`text-sm font-bold ${t.urgente ? 'text-amber-400' : 'text-on-surface'}`}>{t.label}</p>
+                    <p className={`text-sm font-bold ${t.urgente ? 'text-warning' : 'text-on-surface'}`}>{t.label}</p>
                     <p className="text-xs text-outline mt-0.5">{t.fecha}</p>
                   </div>
-                  {t.urgente && <span className="text-xs font-bold text-amber-400 bg-amber-500/15 px-2 py-1 rounded-full">¡Pronto!</span>}
+                  {t.urgente && <span className="text-xs font-bold text-warning bg-warning/15 px-2 py-1 rounded-full">¡Pronto!</span>}
                 </div>
               ))}
             </div>
@@ -325,13 +325,13 @@ export default function Dashboard() {
 
           {/* CTA Premium */}
           {!esPremium && (
-            <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 dark-card rounded-3xl shadow-sm p-7 text-center">
-              <div className="w-14 h-14 bg-surface-container rounded-2xl shadow-sm flex items-center justify-center mx-auto text-amber-400 mb-4">
+            <div className="bg-gradient-to-br from-warning/10 to-warning/10 dark-card rounded-3xl shadow-sm p-7 text-center">
+              <div className="w-14 h-14 bg-surface-container rounded-2xl shadow-sm flex items-center justify-center mx-auto text-warning mb-4">
                 <span className="material-symbols-outlined text-3xl">rocket_launch</span>
               </div>
-              <h3 className="text-lg font-bold text-amber-400 mb-2">Crece sin límites</h3>
+              <h3 className="text-lg font-bold text-warning mb-2">Crece sin límites</h3>
               <p className="text-sm text-on-surface-variant mb-5 font-medium">Reportes SII, equipo ilimitado y mentorías premium por solo $10.000/mes.</p>
-              <Link to="/erp/suscripcion" className="w-full inline-block bg-amber-500 hover:bg-amber-400 text-surface font-bold py-3 px-4 rounded-2xl text-sm transition-all shadow-lg glow-amber">
+              <Link to="/erp/suscripcion" className="w-full inline-block bg-warning hover:bg-warning/90 text-surface font-bold py-3 px-4 rounded-2xl text-sm transition-all shadow-lg glow-amber">
                 Pásate a Premium
               </Link>
             </div>

@@ -51,7 +51,7 @@ export default function ERPReportes() {
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20">
           <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Margen bruto</p>
-          <p className={`text-2xl font-black mt-1 ${margenBruto >= 0 ? 'text-emerald-600' : 'text-error'}`}>{fmt(margenBruto)}</p>
+          <p className={`text-2xl font-black mt-1 ${margenBruto >= 0 ? 'text-success' : 'text-error'}`}>{fmt(margenBruto)}</p>
           <p className="text-[10px] font-bold text-on-surface-variant mt-1">{netos > 0 ? Math.round((margenBruto / netos) * 100) : 0}% de margen · sobre venta neta ({fmt(costoVendido)} de costo)</p>
         </div>
         <div className="bg-secondary/10 p-5 rounded-2xl border border-secondary/20">

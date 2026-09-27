@@ -53,7 +53,7 @@ const CourseCard = ({ course }: { course: any; key?: string }) => {
     primary: { bg: 'bg-primary/5', text: 'text-primary', badgeBg: 'bg-primary/10', badgeText: 'text-primary', progress: 'bg-primary' },
     secondary: { bg: 'bg-secondary/5', text: 'text-secondary', badgeBg: 'bg-secondary/10', badgeText: 'text-secondary', progress: 'bg-secondary' },
     emerald: { bg: 'bg-primary/5', text: 'text-primary', badgeBg: 'bg-primary/10', badgeText: 'text-primary', progress: 'bg-primary' },
-    amber: { bg: 'bg-amber-50', text: 'text-amber-600', badgeBg: 'bg-amber-100', badgeText: 'text-amber-700', progress: 'bg-amber-500' },
+    amber: { bg: 'bg-warning-container', text: 'text-on-warning-container', badgeBg: 'bg-warning-container', badgeText: 'text-on-warning-container', progress: 'bg-warning' },
     indigo: { bg: 'bg-primary/5', text: 'text-primary', badgeBg: 'bg-primary/10', badgeText: 'text-primary', progress: 'bg-primary' },
   };
 
@@ -65,7 +65,7 @@ const CourseCard = ({ course }: { course: any; key?: string }) => {
         <span className={cn("material-symbols-outlined text-5xl opacity-70 group-hover:opacity-100 transition-opacity", colors.text)}>
           {course.icon}
         </span>
-        <span className="absolute right-4 top-4 rounded-full bg-white/85 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-primary shadow-sm">
+        <span className="absolute right-4 top-4 rounded-full bg-surface-container-lowest/90 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-on-surface shadow-sm">
           {course.category === 'gratis' ? 'Acceso Libre' : 'Premium'}
         </span>
       </div>
@@ -96,7 +96,7 @@ const CourseCard = ({ course }: { course: any; key?: string }) => {
             <p className="text-xs text-outline font-bold">{course.progress}% completado</p>
             <button
               onClick={() => navigate(`/erp/academia/${course.category}/${course.id}`)}
-              className="inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-black text-white transition-colors hover:bg-primary/90"
+              className="inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-black text-inverse-on-surface transition-colors hover:bg-primary/90"
             >
               Empezar
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -124,7 +124,7 @@ const CourseSection = ({
   const toneClass = {
     primary: 'bg-primary/10 text-primary',
     secondary: 'bg-secondary/10 text-secondary',
-    amber: 'bg-amber-100 text-amber-700',
+    amber: 'bg-warning-container text-on-warning-container',
   }[tone];
 
   if (courses.length === 0) return null;
@@ -167,7 +167,7 @@ export default function ERPAcademia() {
           className={cn(
             "rounded-2xl px-5 py-4 text-left text-sm transition-all",
             activeTab === 'comercial'
-              ? "bg-primary text-white shadow-lg shadow-primary/15"
+              ? "bg-primary text-inverse-on-surface shadow-lg shadow-primary/15"
               : "bg-surface-container-low text-on-surface-variant hover:bg-primary/5 hover:text-primary"
           )}
         >
@@ -184,7 +184,7 @@ export default function ERPAcademia() {
           className={cn(
             "rounded-2xl px-5 py-4 text-left text-sm transition-all",
             activeTab === 'legal'
-              ? "bg-primary text-white shadow-lg shadow-primary/15"
+              ? "bg-primary text-inverse-on-surface shadow-lg shadow-primary/15"
               : "bg-surface-container-low text-on-surface-variant hover:bg-primary/5 hover:text-primary"
           )}
         >

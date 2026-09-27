@@ -24,15 +24,15 @@ const actividadReciente = [
 ];
 
 const prioridadConfig: Record<string, { color: string; dot: string }> = {
-  alta: { color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
-  media: { color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
-  baja: { color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+  alta: { color: 'bg-error-container text-on-error-container', dot: 'bg-error' },
+  media: { color: 'bg-warning-container text-on-warning-container', dot: 'bg-warning' },
+  baja: { color: 'bg-surface-container text-on-surface-variant', dot: 'bg-outline' },
 };
 
 const ticketEstadoConfig: Record<string, { color: string; label: string }> = {
-  abierto: { color: 'bg-red-100 text-red-700', label: 'Abierto' },
-  en_progreso: { color: 'bg-amber-100 text-amber-700', label: 'En progreso' },
-  resuelto: { color: 'bg-green-100 text-green-700', label: 'Resuelto' },
+  abierto: { color: 'bg-error-container text-on-error-container', label: 'Abierto' },
+  en_progreso: { color: 'bg-warning-container text-on-warning-container', label: 'En progreso' },
+  resuelto: { color: 'bg-success-container text-on-success-container', label: 'Resuelto' },
 };
 
 export default function SuperAdminDashboard() {
@@ -49,15 +49,15 @@ export default function SuperAdminDashboard() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-red-500">shield</span>
+          <span className="material-symbols-outlined text-3xl text-error">shield</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Panel Super Admin</h1>
             <p className="text-on-surface-variant">Bienvenido, {perfil?.nombre_completo} — Vista global de la plataforma</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-green-100 text-green-700 flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+          <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-success-container text-on-success-container flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
             Sistema operativo
           </span>
         </div>
@@ -66,14 +66,14 @@ export default function SuperAdminDashboard() {
       {/* KPIs globales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Organizaciones', value: totalOrgs.toString(), icon: 'apartment', color: 'bg-purple-500', sub: `${orgsActivas} activas`, trend: '+2 este mes' },
-          { label: 'Usuarios Totales', value: totalUsuarios.toLocaleString(), icon: 'group', color: 'bg-blue-500', sub: 'en todas las orgs', trend: '+48 este mes' },
-          { label: 'Emprendedores', value: totalEmprendedores.toLocaleString(), icon: 'storefront', color: 'bg-green-500', sub: 'registrados', trend: '+23 este mes' },
-          { label: 'MRR', value: `$${(mrr / 1000000).toFixed(1)}M`, icon: 'paid', color: 'bg-amber-500', sub: 'ingreso mensual recurrente', trend: '+$350K vs anterior' },
+          { label: 'Organizaciones', value: totalOrgs.toString(), icon: 'apartment', color: 'bg-info', sub: `${orgsActivas} activas`, trend: '+2 este mes' },
+          { label: 'Usuarios Totales', value: totalUsuarios.toLocaleString(), icon: 'group', color: 'bg-info', sub: 'en todas las orgs', trend: '+48 este mes' },
+          { label: 'Emprendedores', value: totalEmprendedores.toLocaleString(), icon: 'storefront', color: 'bg-success', sub: 'registrados', trend: '+23 este mes' },
+          { label: 'MRR', value: `$${(mrr / 1000000).toFixed(1)}M`, icon: 'paid', color: 'bg-warning', sub: 'ingreso mensual recurrente', trend: '+$350K vs anterior' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
             <div className="flex items-center gap-3 mb-3">
-              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-white`}>
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined">{stat.icon}</span>
               </span>
               <div>
@@ -92,18 +92,18 @@ export default function SuperAdminDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-green-500">monitor_heart</span>
+              <span className="material-symbols-outlined text-success">monitor_heart</span>
               <h2 className="font-extrabold text-on-surface">Salud del Sistema</h2>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Operativo</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-container text-on-success-container">Operativo</span>
           </div>
           <div className="p-5 space-y-4">
             {[
-              { label: 'Uptime', value: '99.97%', bar: 99.97, color: 'bg-green-500' },
-              { label: 'Tiempo respuesta API', value: '142ms', bar: 85, color: 'bg-blue-500' },
-              { label: 'Uso de CPU', value: '34%', bar: 34, color: 'bg-teal-500' },
-              { label: 'Almacenamiento', value: '67%', bar: 67, color: 'bg-amber-500' },
-              { label: 'Base de datos', value: '2.4GB', bar: 48, color: 'bg-purple-500' },
+              { label: 'Uptime', value: '99.97%', bar: 99.97, color: 'bg-success' },
+              { label: 'Tiempo respuesta API', value: '142ms', bar: 85, color: 'bg-info' },
+              { label: 'Uso de CPU', value: '34%', bar: 34, color: 'bg-teal' },
+              { label: 'Almacenamiento', value: '67%', bar: 67, color: 'bg-warning' },
+              { label: 'Base de datos', value: '2.4GB', bar: 48, color: 'bg-info' },
             ].map((metric) => (
               <div key={metric.label}>
                 <div className="flex items-center justify-between mb-1">
@@ -122,11 +122,11 @@ export default function SuperAdminDashboard() {
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-red-500">confirmation_number</span>
+              <span className="material-symbols-outlined text-error">confirmation_number</span>
               <h2 className="font-extrabold text-on-surface">Tickets de Soporte</h2>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">{ticketsAbiertos} abiertos</span>
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-error-container text-on-error-container">{ticketsAbiertos} abiertos</span>
               <Link to="/admin/soporte" className="text-xs font-bold text-primary hover:underline">Ver todos</Link>
             </div>
           </div>
@@ -162,7 +162,7 @@ export default function SuperAdminDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-purple-500">apartment</span>
+              <span className="material-symbols-outlined text-info">apartment</span>
               <h2 className="font-extrabold text-on-surface">Organizaciones</h2>
             </div>
             <Link to="/admin/instituciones" className="text-xs font-bold text-primary hover:underline">Gestionar</Link>
@@ -172,7 +172,7 @@ export default function SuperAdminDashboard() {
               <div key={org.id} className="p-4 hover:bg-surface-container-low/50 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 text-purple-600">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-info-container text-on-info-container">
                       <span className="material-symbols-outlined text-lg">apartment</span>
                     </div>
                     <div>
@@ -181,14 +181,14 @@ export default function SuperAdminDashboard() {
                     </div>
                   </div>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    org.estado === 'activa' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    org.estado === 'activa' ? 'bg-success-container text-on-success-container' : 'bg-error-container text-on-error-container'
                   }`}>
                     {org.estado}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-surface-container-high rounded-full h-1.5">
-                    <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${org.avance}%` }} />
+                    <div className="bg-info h-1.5 rounded-full" style={{ width: `${org.avance}%` }} />
                   </div>
                   <span className="text-[10px] font-bold text-on-surface-variant">{org.plan}</span>
                 </div>
@@ -201,7 +201,7 @@ export default function SuperAdminDashboard() {
         <div className="space-y-6">
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
             <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-              <span className="material-symbols-outlined text-blue-500">history</span>
+              <span className="material-symbols-outlined text-info">history</span>
               <h2 className="font-extrabold text-on-surface">Actividad Reciente</h2>
             </div>
             <div className="divide-y divide-outline-variant/30">

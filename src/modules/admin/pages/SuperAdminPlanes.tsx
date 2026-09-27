@@ -4,7 +4,7 @@ const planes = [
   {
     id: 'basico', nombre: 'Básico', precio: 0, periodo: 'Gratis',
     descripcion: 'Para organizaciones que están comenzando.',
-    color: 'border-slate-300', badgeColor: 'bg-slate-100 text-slate-700',
+    color: 'border-outline-variant/30', badgeColor: 'bg-surface-container text-on-surface-variant',
     modulos: ['Academia'],
     limites: { usuarios: 50, emprendedores: 25, mentores: 5, coordinadores: 2 },
     features: ['Acceso a cursos básicos', '1 coordinador', 'Soporte por email', 'Reportes básicos'],
@@ -12,7 +12,7 @@ const planes = [
   {
     id: 'profesional', nombre: 'Profesional', precio: 299000, periodo: '/mes',
     descripcion: 'Para instituciones en crecimiento con necesidades avanzadas.',
-    color: 'border-blue-400', badgeColor: 'bg-blue-100 text-blue-700',
+    color: 'border-info/30', badgeColor: 'bg-info-container text-on-info-container',
     modulos: ['Academia', 'ERP', 'Mentoría'],
     limites: { usuarios: 200, emprendedores: 100, mentores: 20, coordinadores: 5 },
     features: ['Todo lo del plan Básico', 'ERP completo', 'Mentoría ilimitada', 'Soporte prioritario', 'Reportes avanzados', 'API básica'],
@@ -21,7 +21,7 @@ const planes = [
   {
     id: 'premium', nombre: 'Premium', precio: 599000, periodo: '/mes',
     descripcion: 'Para grandes instituciones con acceso completo.',
-    color: 'border-purple-400', badgeColor: 'bg-purple-100 text-purple-700',
+    color: 'border-info/30', badgeColor: 'bg-info-container text-on-info-container',
     modulos: ['Academia', 'ERP', 'Mentoría', 'Comunidad', 'Laboratorio'],
     limites: { usuarios: -1, emprendedores: -1, mentores: -1, coordinadores: -1 },
     features: ['Todo lo del plan Profesional', 'Comunidad completa', 'Laboratorio de innovación', 'SSO / SAML', 'Soporte 24/7', 'API completa', 'Branding personalizado', 'SLA garantizado'],
@@ -43,7 +43,7 @@ export default function SuperAdminPlanes() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-amber-500">workspace_premium</span>
+          <span className="material-symbols-outlined text-3xl text-warning">workspace_premium</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Planes y Módulos</h1>
             <p className="text-on-surface-variant">Configura los planes de suscripción y módulos de la plataforma</p>
@@ -58,7 +58,7 @@ export default function SuperAdminPlanes() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-5 py-2.5 text-sm font-bold transition-colors ${
-              tab === t ? 'bg-primary text-white' : 'hover:bg-surface-container-high text-on-surface-variant'
+              tab === t ? 'bg-primary text-inverse-on-surface' : 'hover:bg-surface-container-high text-on-surface-variant'
             }`}
           >
             {t === 'planes' ? 'Planes de Suscripción' : 'Módulos Globales'}
@@ -73,7 +73,7 @@ export default function SuperAdminPlanes() {
             {planes.map((plan) => (
               <div key={plan.id} className={`bg-surface-container-lowest rounded-2xl p-5 border-2 ${plan.color} relative`}>
                 {plan.popular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500 text-white">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-info text-inverse-on-surface">
                     POPULAR
                   </span>
                 )}
@@ -96,7 +96,7 @@ export default function SuperAdminPlanes() {
                   <p className="text-[10px] font-extrabold text-on-surface-variant uppercase tracking-wider mb-1">Módulos</p>
                   <div className="flex flex-wrap gap-1">
                     {plan.modulos.map(m => (
-                      <span key={m} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-700">{m}</span>
+                      <span key={m} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-container text-on-teal-container">{m}</span>
                     ))}
                   </div>
                 </div>
@@ -118,7 +118,7 @@ export default function SuperAdminPlanes() {
                   <ul className="space-y-1">
                     {plan.features.map((f, i) => (
                       <li key={i} className="flex items-center gap-1.5 text-xs text-on-surface-variant">
-                        <span className="material-symbols-outlined text-green-500 text-sm">check</span>
+                        <span className="material-symbols-outlined text-success text-sm">check</span>
                         {f}
                       </li>
                     ))}

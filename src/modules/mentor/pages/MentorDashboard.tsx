@@ -87,21 +87,21 @@ const sesionesProximas = [
 ];
 
 const estadoConfig = {
-  en_curso: { label: 'En curso', color: 'bg-blue-100 text-blue-700' },
-  riesgo: { label: 'En riesgo', color: 'bg-red-100 text-red-700' },
-  cerrado: { label: 'Cerrado', color: 'bg-slate-100 text-slate-600' },
+  en_curso: { label: 'En curso', color: 'bg-info-container text-on-info-container' },
+  riesgo: { label: 'En riesgo', color: 'bg-error-container text-on-error-container' },
+  cerrado: { label: 'Cerrado', color: 'bg-surface-container text-on-surface-variant' },
 };
 
 const riesgoConfig = {
-  bajo: { label: 'Bajo', color: 'bg-green-100 text-green-700' },
-  medio: { label: 'Medio', color: 'bg-amber-100 text-amber-700' },
-  alto: { label: 'Alto', color: 'bg-red-100 text-red-700' },
+  bajo: { label: 'Bajo', color: 'bg-success-container text-on-success-container' },
+  medio: { label: 'Medio', color: 'bg-warning-container text-on-warning-container' },
+  alto: { label: 'Alto', color: 'bg-error-container text-on-error-container' },
 };
 
 const prioridadConfig = {
-  alta: { color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
-  media: { color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
-  baja: { color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+  alta: { color: 'bg-error-container text-on-error-container', dot: 'bg-error' },
+  media: { color: 'bg-warning-container text-on-warning-container', dot: 'bg-warning' },
+  baja: { color: 'bg-surface-container text-on-surface-variant', dot: 'bg-outline' },
 };
 
 export default function MentorDashboard() {
@@ -115,7 +115,7 @@ export default function MentorDashboard() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-teal-500">school</span>
+        <span className="material-symbols-outlined text-3xl text-teal">school</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Panel Mentor</h1>
           <p className="text-on-surface-variant">Bienvenido, {perfil?.nombre_completo}</p>
@@ -125,14 +125,14 @@ export default function MentorDashboard() {
       {/* Métricas principales */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label: 'Mis Emprendedores', value: totalEmprendedores.toString(), icon: 'groups', color: 'bg-teal-500', sub: 'asignados' },
-          { label: 'En Riesgo', value: enRiesgo.toString(), icon: 'warning', color: 'bg-red-500', sub: 'requieren atención' },
-          { label: 'Tareas Urgentes', value: tareasAlta.toString(), icon: 'task_alt', color: 'bg-amber-500', sub: 'prioridad alta' },
-          { label: 'Avance Promedio', value: `${avancePromedio}%`, icon: 'trending_up', color: 'bg-blue-500', sub: 'del grupo' },
+          { label: 'Mis Emprendedores', value: totalEmprendedores.toString(), icon: 'groups', color: 'bg-teal', sub: 'asignados' },
+          { label: 'En Riesgo', value: enRiesgo.toString(), icon: 'warning', color: 'bg-error', sub: 'requieren atención' },
+          { label: 'Tareas Urgentes', value: tareasAlta.toString(), icon: 'task_alt', color: 'bg-warning', sub: 'prioridad alta' },
+          { label: 'Avance Promedio', value: `${avancePromedio}%`, icon: 'trending_up', color: 'bg-info', sub: 'del grupo' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
             <div className="flex items-center gap-3 mb-3">
-              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-white`}>
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined">{stat.icon}</span>
               </span>
               <div>
@@ -149,7 +149,7 @@ export default function MentorDashboard() {
         {/* Emergencias y alertas */}
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-            <span className="material-symbols-outlined text-red-500">notifications_active</span>
+            <span className="material-symbols-outlined text-error">notifications_active</span>
             <h2 className="font-extrabold text-on-surface">Alertas y Casos en Riesgo</h2>
           </div>
           <div className="divide-y divide-outline-variant/30">
@@ -157,7 +157,7 @@ export default function MentorDashboard() {
               <div key={empre.id} className="p-4 hover:bg-surface-container-low/50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600 text-sm font-extrabold">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-error-container text-on-error-container text-sm font-extrabold">
                       {empre.nombre[0]}
                     </div>
                     <div>
@@ -166,7 +166,7 @@ export default function MentorDashboard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-error-container text-on-error-container">
                       {empre.alertas} alerta{empre.alertas > 1 ? 's' : ''}
                     </span>
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${riesgoConfig[empre.riesgo].color}`}>
@@ -181,7 +181,7 @@ export default function MentorDashboard() {
             ))}
             {emprendedores.filter(e => e.alertas > 0).length === 0 && (
               <div className="p-8 text-center">
-                <span className="material-symbols-outlined text-4xl text-green-400">check_circle</span>
+                <span className="material-symbols-outlined text-4xl text-success">check_circle</span>
                 <p className="mt-2 text-on-surface-variant font-bold">Sin alertas pendientes</p>
               </div>
             )}
@@ -191,14 +191,14 @@ export default function MentorDashboard() {
         {/* Próximas sesiones */}
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-500">event</span>
+            <span className="material-symbols-outlined text-info">event</span>
             <h2 className="font-extrabold text-on-surface">Próximas Sesiones</h2>
           </div>
           <div className="divide-y divide-outline-variant/30">
             {sesionesProximas.map((sesion) => (
               <div key={sesion.id} className="p-4 hover:bg-surface-container-low/50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-info-container text-on-info-container">
                     <span className="material-symbols-outlined">event</span>
                   </div>
                   <div>
@@ -217,10 +217,10 @@ export default function MentorDashboard() {
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
         <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-amber-500">task_alt</span>
+            <span className="material-symbols-outlined text-warning">task_alt</span>
             <h2 className="font-extrabold text-on-surface">Tareas Pendientes</h2>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-warning-container text-on-warning-container">
             {tareasPendientes.length} tareas
           </span>
         </div>
@@ -245,13 +245,13 @@ export default function MentorDashboard() {
       {/* Resumen de progreso del grupo */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-5">
         <div className="flex items-center gap-2 mb-4">
-          <span className="material-symbols-outlined text-teal-500">bar_chart</span>
+          <span className="material-symbols-outlined text-teal">bar_chart</span>
           <h2 className="font-extrabold text-on-surface">Progreso del Grupo</h2>
         </div>
         <div className="space-y-3">
           {emprendedores.filter(e => e.estado !== 'cerrado').map((empre) => (
             <div key={empre.id} className="flex items-center gap-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100 text-teal-600 text-sm font-extrabold shrink-0">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-container text-on-teal-container text-sm font-extrabold shrink-0">
                 {empre.nombre[0]}
               </div>
               <div className="flex-1 min-w-0">
@@ -261,7 +261,7 @@ export default function MentorDashboard() {
                 </div>
                 <div className="w-full bg-surface-container-high rounded-full h-1.5">
                   <div
-                    className={`h-1.5 rounded-full ${empre.riesgo === 'alto' ? 'bg-red-500' : empre.riesgo === 'medio' ? 'bg-amber-500' : 'bg-teal-500'}`}
+                    className={`h-1.5 rounded-full ${empre.riesgo === 'alto' ? 'bg-error' : empre.riesgo === 'medio' ? 'bg-warning' : 'bg-teal'}`}
                     style={{ width: `${empre.avance}%` }}
                   />
                 </div>

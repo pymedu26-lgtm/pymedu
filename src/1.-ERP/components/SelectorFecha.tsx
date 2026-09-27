@@ -184,7 +184,7 @@ export default function SelectorFecha({
                   className={cn(
                     'h-8 rounded-lg text-xs font-bold transition-colors',
                     seleccionado
-                      ? 'bg-primary text-white shadow-sm'
+                      ? 'bg-primary text-inverse-on-surface shadow-sm'
                       : ok
                         ? cn(
                             'text-on-surface hover:bg-surface-container-low',

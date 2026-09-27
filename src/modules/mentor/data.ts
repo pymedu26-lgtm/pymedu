@@ -77,13 +77,13 @@ export const emprendedores: Emprendedor[] = [
 ];
 
 export const estadoConfig: Record<EstadoCaso, { label: string; color: string }> = {
-  en_curso: { label: 'En curso', color: 'bg-blue-100 text-blue-700' },
-  riesgo: { label: 'En riesgo', color: 'bg-red-100 text-red-700' },
-  cerrado: { label: 'Cerrado', color: 'bg-slate-100 text-slate-600' },
+  en_curso: { label: 'En curso', color: 'bg-info-container text-on-info-container' },
+  riesgo: { label: 'En riesgo', color: 'bg-error-container text-on-error-container' },
+  cerrado: { label: 'Cerrado', color: 'bg-surface-container text-on-surface-variant' },
 };
 
 export const riesgoConfig = {
-  bajo: { label: 'Bajo', color: 'bg-green-100 text-green-700' },
-  medio: { label: 'Medio', color: 'bg-amber-100 text-amber-700' },
-  alto: { label: 'Alto', color: 'bg-red-100 text-red-700' },
+  bajo: { label: 'Bajo', color: 'bg-success-container text-on-success-container' },
+  medio: { label: 'Medio', color: 'bg-warning-container text-on-warning-container' },
+  alto: { label: 'Alto', color: 'bg-error-container text-on-error-container' },
 };

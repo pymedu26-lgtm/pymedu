@@ -27,16 +27,16 @@ const tareasPendientes = [
 ];
 
 const tipoEventoConfig: Record<string, { color: string; icon: string }> = {
-  webinar: { color: 'bg-blue-100 text-blue-700', icon: 'videocam' },
-  reunion: { color: 'bg-purple-100 text-purple-700', icon: 'groups' },
-  taller: { color: 'bg-green-100 text-green-700', icon: 'handyman' },
-  evento: { color: 'bg-amber-100 text-amber-700', icon: 'celebration' },
+  webinar: { color: 'bg-info-container text-on-info-container', icon: 'videocam' },
+  reunion: { color: 'bg-info-container text-on-info-container', icon: 'groups' },
+  taller: { color: 'bg-success-container text-on-success-container', icon: 'handyman' },
+  evento: { color: 'bg-warning-container text-on-warning-container', icon: 'celebration' },
 };
 
 const prioridadConfig: Record<string, { color: string; dot: string }> = {
-  alta: { color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
-  media: { color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
-  baja: { color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+  alta: { color: 'bg-error-container text-on-error-container', dot: 'bg-error' },
+  media: { color: 'bg-warning-container text-on-warning-container', dot: 'bg-warning' },
+  baja: { color: 'bg-surface-container text-on-surface-variant', dot: 'bg-outline' },
 };
 
 export default function CoordDashboard() {
@@ -49,7 +49,7 @@ export default function CoordDashboard() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-blue-500">group_work</span>
+        <span className="material-symbols-outlined text-3xl text-info">group_work</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Panel Coordinador</h1>
           <p className="text-on-surface-variant">Bienvenido, {perfil?.nombre_completo}</p>
@@ -59,14 +59,14 @@ export default function CoordDashboard() {
       {/* Metricas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label: 'Emprendedores', value: totalEmprendedores.toString(), icon: 'groups', color: 'bg-green-500', sub: 'en 3 cohortes' },
-          { label: 'Mentores', value: totalMentores.toString(), icon: 'school', color: 'bg-teal-500', sub: 'asignados' },
-          { label: 'Alertas Activas', value: alertas.length.toString(), icon: 'warning', color: 'bg-red-500', sub: `${alertasAltas} alta prioridad` },
-          { label: 'Eventos esta semana', value: '3', icon: 'event', color: 'bg-blue-500', sub: 'proximos' },
+          { label: 'Emprendedores', value: totalEmprendedores.toString(), icon: 'groups', color: 'bg-success', sub: 'en 3 cohortes' },
+          { label: 'Mentores', value: totalMentores.toString(), icon: 'school', color: 'bg-teal', sub: 'asignados' },
+          { label: 'Alertas Activas', value: alertas.length.toString(), icon: 'warning', color: 'bg-error', sub: `${alertasAltas} alta prioridad` },
+          { label: 'Eventos esta semana', value: '3', icon: 'event', color: 'bg-info', sub: 'proximos' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
             <div className="flex items-center gap-3 mb-3">
-              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-white`}>
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-inverse-on-surface`}>
                 <span className="material-symbols-outlined">{stat.icon}</span>
               </span>
               <div>
@@ -83,7 +83,7 @@ export default function CoordDashboard() {
         {/* Alertas */}
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-            <span className="material-symbols-outlined text-red-500">notifications_active</span>
+            <span className="material-symbols-outlined text-error">notifications_active</span>
             <h2 className="font-extrabold text-on-surface">Alertas y Casos Criticos</h2>
           </div>
           <div className="divide-y divide-outline-variant/30">
@@ -93,9 +93,9 @@ export default function CoordDashboard() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                        alerta.tipo === 'riesgo' ? 'bg-red-100 text-red-700' :
-                        alerta.tipo === 'vencimiento' ? 'bg-amber-100 text-amber-700' :
-                        'bg-blue-100 text-blue-700'
+                        alerta.tipo === 'riesgo' ? 'bg-error-container text-on-error-container' :
+                        alerta.tipo === 'vencimiento' ? 'bg-warning-container text-on-warning-container' :
+                        'bg-info-container text-on-info-container'
                       }`}>
                         {alerta.tipo}
                       </span>
@@ -118,7 +118,7 @@ export default function CoordDashboard() {
         {/* Eventos proximos */}
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-500">event</span>
+            <span className="material-symbols-outlined text-info">event</span>
             <h2 className="font-extrabold text-on-surface">Proximos Eventos</h2>
           </div>
           <div className="divide-y divide-outline-variant/30">
@@ -143,10 +143,10 @@ export default function CoordDashboard() {
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
         <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-green-500">school</span>
+            <span className="material-symbols-outlined text-success">school</span>
             <h2 className="font-extrabold text-on-surface">Cohortes Activas</h2>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{cohortes.length} activas</span>
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-container text-on-success-container">{cohortes.length} activas</span>
         </div>
         <div className="divide-y divide-outline-variant/30">
           {cohortes.map((cohorte) => (
@@ -156,7 +156,7 @@ export default function CoordDashboard() {
                 <span className="text-sm font-bold text-on-surface-variant">{cohorte.avance}%</span>
               </div>
               <div className="w-full bg-surface-container-high rounded-full h-2 mb-2">
-                <div className="bg-green-500 h-2 rounded-full" style={{ width: `${cohorte.avance}%` }} />
+                <div className="bg-success h-2 rounded-full" style={{ width: `${cohorte.avance}%` }} />
               </div>
               <div className="flex items-center gap-4 text-xs text-on-surface-variant">
                 <span>{cohorte.emprendedores} emprendedores</span>
@@ -171,7 +171,7 @@ export default function CoordDashboard() {
       {/* Tareas pendientes */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
         <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-          <span className="material-symbols-outlined text-amber-500">task_alt</span>
+          <span className="material-symbols-outlined text-warning">task_alt</span>
           <h2 className="font-extrabold text-on-surface">Tareas Pendientes</h2>
         </div>
         <div className="divide-y divide-outline-variant/30">
