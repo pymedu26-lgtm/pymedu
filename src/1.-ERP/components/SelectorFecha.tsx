@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { cn, formatFecha } from '@/lib/utils';
 
 const MESES = [
@@ -6,6 +7,12 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 const DIAS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+/** Medidas del calendario: ancho fijo y alto aproximado para decidir si abre hacia arriba. */
+const ANCHO_CALENDARIO = 280;
+const ALTO_CALENDARIO = 336;
+const SEPARACION = 4;
+const MARGEN_VENTANA = 8;
 
 /** Fecha local en ISO 'YYYY-MM-DD'; se evita toISOString() por el corrimiento de zona horaria. */
 const aIso = (d: Date) =>
@@ -31,6 +38,11 @@ interface SelectorFechaProps {
 /**
  * Calendario propio con los tokens de tema del ERP. El <input type="date"> nativo
  * abre el selector del sistema operativo, que no se puede alinear con la pagina.
+ *
+ * El calendario se dibuja en un portal sobre document.body: dentro de un modal el
+ * ancestro declarativo con overflow-hidden o overflow-auto lo recortaba, y el
+ * backdrop-filter del overlay convierte al overlay en contenedor de position:fixed.
+ * Como portal queda al margen de ambos problemas.
  */
 export default function SelectorFecha({
   value,
@@ -43,17 +55,45 @@ export default function SelectorFecha({
 }: SelectorFechaProps) {
   const [abierto, setAbierto] = useState(false);
   const [cursor, setCursor] = useState(() => (value ? desdeIso(value) : new Date()));
+  const [rect, setRect] = useState<DOMRect | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
+  const botonRef = useRef<HTMLButtonElement>(null);
+  const calendarioRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (value) setCursor(desdeIso(value));
   }, [value]);
 
+  /** Reubica el calendario si el modal se desplaza o cambia el tamaño de la ventana. */
+  const medir = useCallback(() => {
+    const el = botonRef.current;
+    if (el) setRect(el.getBoundingClientRect());
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!abierto) {
+      setRect(null);
+      return;
+    }
+    medir();
+    // Con captura=true tambien se capturan los scroll de los contenedores internos del modal.
+    window.addEventListener('resize', medir);
+    window.addEventListener('scroll', medir, true);
+    return () => {
+      window.removeEventListener('resize', medir);
+      window.removeEventListener('scroll', medir, true);
+    };
+  }, [abierto, medir]);
+
   useEffect(() => {
     if (!abierto) return;
 
     const onPointerDown = (e: MouseEvent) => {
-      if (!contenedorRef.current?.contains(e.target as Node)) setAbierto(false);
+      const destino = e.target as Node;
+      const dentroDelCampo = contenedorRef.current?.contains(destino);
+      // El calendario vive en el portal, asi que se comprueba aparte.
+      const dentroDelCalendario = calendarioRef.current?.contains(destino);
+      if (!dentroDelCampo && !dentroDelCalendario) setAbierto(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setAbierto(false);
@@ -66,6 +106,24 @@ export default function SelectorFecha({
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [abierto]);
+
+  /** Coloca el calendario dentro de la ventana: abre arriba si no cabe abajo. */
+  const posicion = useMemo(() => {
+    if (!rect) return null;
+    const espacioAbajo = window.innerHeight - rect.bottom - SEPARACION;
+    const espacioArriba = rect.top - SEPARACION;
+    const abreArriba = espacioAbajo < ALTO_CALENDARIO && espacioArriba > espacioAbajo;
+    const disponible = Math.max(160, (abreArriba ? espacioArriba : espacioAbajo) - MARGEN_VENTANA);
+    const maxHeight = Math.min(ALTO_CALENDARIO, disponible);
+    const top = abreArriba
+      ? Math.max(MARGEN_VENTANA, rect.top - SEPARACION - maxHeight)
+      : rect.bottom + SEPARACION;
+    const left = Math.min(
+      Math.max(MARGEN_VENTANA, rect.left),
+      Math.max(MARGEN_VENTANA, window.innerWidth - ANCHO_CALENDARIO - MARGEN_VENTANA)
+    );
+    return { top, left, maxHeight };
+  }, [rect]);
 
   const dias = useMemo(() => {
     const primero = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -97,6 +155,7 @@ export default function SelectorFecha({
   return (
     <div ref={contenedorRef} className={cn('relative', className)}>
       <button
+        ref={botonRef}
         type="button"
         onClick={() => setAbierto(a => !a)}
         aria-haspopup="dialog"
@@ -121,10 +180,18 @@ export default function SelectorFecha({
         )}
       </button>
 
-      {abierto && (
+      {abierto && posicion && createPortal(
         <div
+          ref={calendarioRef}
           role="dialog"
-          className="absolute z-50 mt-1 w-[17.5rem] rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-3 shadow-xl shadow-shadow/10"
+          aria-label="Calendario"
+          style={{
+            top: posicion.top,
+            left: posicion.left,
+            width: ANCHO_CALENDARIO,
+            maxHeight: posicion.maxHeight
+          }}
+          className="fixed z-[70] overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-3 shadow-xl shadow-shadow/10"
         >
           <div className="flex items-center justify-between mb-2">
             <button
@@ -207,7 +274,8 @@ export default function SelectorFecha({
           >
             Hoy
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

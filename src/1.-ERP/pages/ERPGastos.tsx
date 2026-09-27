@@ -337,7 +337,7 @@ export default function ERPGastos() {
 
       {showModal && (
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
               <h3 className="text-lg font-bold text-error">{editingId ? 'Editar Gasto' : 'Registrar Gasto'}</h3>
               <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
@@ -357,8 +357,8 @@ export default function ERPGastos() {
                     className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" placeholder="$0" />
                 </div>
                 <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
-              <SelectorFecha value={nuevoGasto.fecha} onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha: fecha })} />
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
+                  <SelectorFecha value={nuevoGasto.fecha} onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha: fecha })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -396,11 +396,11 @@ export default function ERPGastos() {
 
               {nuevoGasto.estado === 'Por Pagar' && (
                 <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha de Vencimiento</label>
-              <SelectorFecha
-                value={nuevoGasto.fecha_vencimiento || ''}
-                onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha_vencimiento: fecha })}
-              />
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha de Vencimiento</label>
+                  <SelectorFecha
+                    value={nuevoGasto.fecha_vencimiento || ''}
+                    onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha_vencimiento: fecha })}
+                  />
                 </div>
               )}
 
