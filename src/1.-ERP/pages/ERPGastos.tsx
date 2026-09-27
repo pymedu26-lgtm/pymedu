@@ -208,13 +208,13 @@ export default function ERPGastos() {
         </div>
         <div className="flex gap-3">
           <button onClick={() => setShowCargaMasiva(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-2xl font-bold text-sm shadow-sm hover:bg-primary/5 transition-colors">
-            <span className="material-symbols-outlined text-lg">cloud_upload</span>
+            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={() => { setEditingId(null); setShowModal(true); }}
-            className="flex items-center gap-2 px-5 py-3 bg-error text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-error/20 hover:scale-105 transition-transform">
-            <span className="material-symbols-outlined text-lg">add_circle</span>
+            className="px-6 py-3 bg-error text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">add</span>
             Registrar Gasto
           </button>
         </div>
