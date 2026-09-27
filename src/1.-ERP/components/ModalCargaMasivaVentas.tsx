@@ -363,6 +363,8 @@ export default function ModalCargaMasivaVentas({
             costoUnitario: producto?.costo ?? 0,
             descuentoTipo: descuento > 0 ? 'porcentaje' : 'ninguno',
             descuentoValor: descuento > 0 ? descuento : 0,
+            /** Mismo valor por defecto que la carga manual. */
+            categoria: producto?.categoria || 'Sin categoria',
             subtotal: calculo.subtotal,
             iva: calculo.iva,
             total: calculo.total,

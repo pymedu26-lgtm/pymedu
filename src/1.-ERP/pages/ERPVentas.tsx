@@ -203,6 +203,8 @@ const stockInsuficiente = productoSeleccionado
       costoUnitario: esInventario ? (productoSeleccionado?.costo ?? 0) : 0,
       descuentoTipo: 'ninguno',
       descuentoValor: 0,
+      /** Sin categoria informada queda 'Sin categoria', no cadena vacia. */
+      categoria: productoActual.categoria.trim() || 'Sin categoria',
       subtotal: totales.subtotal,
       iva: totales.iva,
       total: totales.total,
@@ -386,7 +388,7 @@ const stockInsuficiente = productoSeleccionado
     ventasFiltradas.forEach(v => {
       v.productos.forEach(p => {
         const producto = inventario.find(inv => inv.id === p.productoId);
-        const cat = producto?.categoria || 'General';
+        const cat = p.categoria || producto?.categoria || 'Sin categoria';
         ventasPorCat[cat] = (ventasPorCat[cat] || 0) + p.total;
       });
     });
@@ -903,9 +905,14 @@ const stockInsuficiente = productoSeleccionado
                       type="text"
                       value={productoActual.categoria}
                       onChange={(e) => setProductoActual({...productoActual, categoria: e.target.value})}
-                      placeholder="Ej: Alimentacion, Servicio..."
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
+                      placeholder="Sin categoria"
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/50" 
                     />
+                    {!productoActual.categoria.trim() && (
+                      <p className="mt-1 text-[10px] text-on-surface-variant/70">
+                        Si lo dejas vacío se guardará como <span className="font-bold">Sin categoria</span>.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio unitario ($)</label>

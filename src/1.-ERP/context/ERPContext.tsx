@@ -47,6 +47,8 @@ export interface VentaProducto {
   costoUnitario: number;
   descuentoTipo?: 'porcentaje' | 'monto' | 'ninguno';
   descuentoValor?: number;
+  /** Categoria del item al momento de la venta; si no se informo queda 'Sin categoria'. */
+  categoria?: string;
   subtotal: number;
   iva: number;
   total: number;
