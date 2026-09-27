@@ -79,7 +79,7 @@ function FiltroPeriodoMes({ periodo, etiqueta, rango, onPeriodo, onRango }: {
 }
 
 export default function ERPInventario() {
-  const { inventario, movimientosInventario, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
+  const { inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
   // La matriz de roles define quien escribe en cada modulo, pero hasta ahora solo se
   // dibujaba en la pantalla de administracion y ninguna pagina la consultaba.
   const { perfil } = useAuth();
@@ -226,15 +226,31 @@ export default function ERPInventario() {
   /** El stock a mostrar: el del cierre del periodo, o el actual si no hay nada que revertir. */
   const stockMostrado = (p: Producto): number => (stockAlCierre ? stockAlCierre(p) : p.stock);
 
-  /** Top productos por valorizacion: los que mas pesan en la bodega. */
-  const topProductosPorValor = useMemo(() => {
+  /**
+   * Productos y servicios mas solicitados en el periodo. Se cuenta por cantidad, que
+   * es la medida de demanda, y no por valor: un producto caro pedido una vez no es mas
+   * solicitado que uno barato pedido cien veces. Entra cualquier item del catalogo,
+   * asi que los servicios aparecen igual que los productos; el texto libre de una
+   * venta no cuenta porque no es un producto ni un servicio.
+   */
+  const topMasSolicitados = useMemo(() => {
+    const porProducto = new Map<string, number>();
+    const { fechaInicio, fechaFin } = rangoMovimientos;
+    ventas.forEach(v => {
+      const fecha = (v.fecha || '').slice(0, 10);
+      if (fechaInicio && fecha < fechaInicio) return;
+      if (fechaFin && fecha > fechaFin) return;
+      v.productos.forEach(item => {
+        porProducto.set(item.productoId, (porProducto.get(item.productoId) ?? 0) + item.cantidad);
+      });
+    });
     return inventario
-      .filter(p => p.tipo === 'producto')
-      .map(p => ({ nombre: p.nombre, valor: Math.max(0, stockMostrado(p)) * p.costo }))
-      .filter(x => x.valor > 0)
-      .sort((a, b) => b.valor - a.valor)
+      .filter(p => porProducto.has(p.id))
+      .map(p => ({ nombre: p.nombre, solicitudes: porProducto.get(p.id) ?? 0 }))
+      .filter(x => x.solicitudes > 0)
+      .sort((a, b) => b.solicitudes - a.solicitudes || a.nombre.localeCompare(b.nombre))
       .slice(0, 5);
-  }, [inventario, stockAlCierre]);
+  }, [ventas, inventario, rangoMovimientos]);
 
   const [nuevoProducto, setNuevoProducto] = useState<Partial<Producto>>({
     nombre: '',
@@ -551,28 +567,29 @@ export default function ERPInventario() {
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
               <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary text-xl">trophy</span>
-                Top 5 por Valorizacion
+                Top 5 Mas Solicitados
               </h3>
               <p className="text-[11px] text-outline font-medium mb-4">
-                Productos que mas peso tienen en la bodega, a costo
+                Productos y servicios con mas demanda en el periodo · {etiquetaRangoMovimientos}
               </p>
-              {topProductosPorValor.length === 0 ? (
+              {topMasSolicitados.length === 0 ? (
                 <div className="h-[260px] flex flex-col items-center justify-center text-center">
-                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">inventory_2</span>
-                  <p className="text-on-surface-variant text-sm font-bold">Sin productos con stock valorizado</p>
+                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">shopping_cart</span>
+                  <p className="text-on-surface-variant text-sm font-bold">Sin solicitudes en el periodo</p>
+                  <p className="text-outline text-xs mt-1">Aqui apareceran los productos y servicios mas pedidos.</p>
                 </div>
               ) : (
                 <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topProductosPorValor} layout="vertical" margin={{ left: 8, right: 16 }}>
+                    <BarChart data={topMasSolicitados} layout="vertical" margin={{ left: 8, right: 16 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.outlineVariant} />
-                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString('es-CL')}`} />
+                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} allowDecimals={false} />
                       <YAxis type="category" dataKey="nombre" axisLine={false} tickLine={false} width={110} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
                       <RechartsTooltip
                         contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value: number) => [`$${value.toLocaleString('es-CL')}`, 'Valorizacion']}
+                        formatter={(value: number) => [`${value.toLocaleString('es-CL')} uds`, 'Solicitudes']}
                       />
-                      <Bar dataKey="valor" fill={c.tertiary} radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="solicitudes" fill={c.tertiary} radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
