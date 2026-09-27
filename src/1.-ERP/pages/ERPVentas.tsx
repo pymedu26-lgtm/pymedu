@@ -113,8 +113,8 @@ export default function ERPVentas() {
     fechaFin: '',
     estado: 'Todos',
     cliente: '',
-    montoMin: '',
-    montoMax: ''
+    categoria: '',
+    realizadoPor: ''
   });
 
   const handleImportMasivo = (nuevasVentas: Omit<Venta, 'id'>[]) => {
@@ -430,17 +430,65 @@ const stockInsuficiente = productoSeleccionado
     rangoDisponible
   );
 
+  /* ══ Categorias y autores: alimentan los filtros y la columna Categoria ══ */
+
+  /** Categoria del inventario por id de producto: respaldo cuando el item no la trae. */
+  const categoriaPorProducto = useMemo(() => {
+    const mapa: Record<string, string> = {};
+    inventario.forEach(p => {
+      if (p.categoria) mapa[p.id] = p.categoria;
+    });
+    return mapa;
+  }, [inventario]);
+
+  /** Categorias distintas de los items de una venta, en el orden en que aparecen. */
+  const categoriasDeVenta = (venta: Venta): string[] => {
+    const cats = new Set<string>();
+    venta.productos.forEach(p => {
+      cats.add(p.categoria || categoriaPorProducto[p.productoId] || 'Sin categoria');
+    });
+    return Array.from(cats);
+  };
+
+  /** Resueltas una vez por venta (sobre todas, no solo las filtradas: el filtro las necesita),
+   *  junto con la lista de categorias existentes, que es la que ofrece el filtro. */
+  const { categoriasPorVenta, categoriasDisponibles } = useMemo(() => {
+    const porVenta: Record<string, string[]> = {};
+    const existentes = new Set<string>();
+    ventas.forEach(v => {
+      const cats = categoriasDeVenta(v);
+      porVenta[v.id] = cats;
+      cats.forEach(c => existentes.add(c));
+    });
+    return {
+      categoriasPorVenta: porVenta,
+      categoriasDisponibles: Array.from(existentes).sort((a, b) => a.localeCompare(b)),
+    };
+  }, [ventas, categoriaPorProducto]);
+
+  /** Quien registro la venta, con el mismo fallback que muestra la tabla. */
+  const autorDeVenta = (venta: Venta): string =>
+    venta.creado_por || venta.creado_por_id?.slice(0, 6)?.toUpperCase() || 'Sistema';
+
+  /** Opciones del filtro Realizado por. */
+  const autoresDisponibles = useMemo<string[]>(() => {
+    const autores = new Set<string>();
+    ventas.forEach(v => autores.add(autorDeVenta(v)));
+    return Array.from(autores).sort((a, b) => a.localeCompare(b));
+  }, [ventas]);
+
   const ventasFiltradas = useMemo(() => {
     return ventas.filter(v => {
       const matchFechaInicio = !filtros.fechaInicio || v.fecha >= filtros.fechaInicio;
       const matchFechaFin = !filtros.fechaFin || v.fecha <= filtros.fechaFin;
       const matchEstado = filtros.estado === 'Todos' || v.estado === filtros.estado;
       const matchCliente = !filtros.cliente || v.cliente.toLowerCase().includes(filtros.cliente.toLowerCase());
-      const matchMontoMin = !filtros.montoMin || v.monto >= Number(filtros.montoMin);
-      const matchMontoMax = !filtros.montoMax || v.monto <= Number(filtros.montoMax);
-      return matchFechaInicio && matchFechaFin && matchEstado && matchCliente && matchMontoMin && matchMontoMax;
+      // La venta entra si al menos uno de sus items es de la categoria elegida.
+      const matchCategoria = !filtros.categoria || (categoriasPorVenta[v.id] ?? []).includes(filtros.categoria);
+      const matchAutor = !filtros.realizadoPor || autorDeVenta(v) === filtros.realizadoPor;
+      return matchFechaInicio && matchFechaFin && matchEstado && matchCliente && matchCategoria && matchAutor;
     });
-  }, [ventas, filtros]);
+  }, [ventas, filtros, categoriasPorVenta]);
 
   /* ══ Acciones múltiples sobre la tabla ══ */
 
@@ -496,33 +544,6 @@ const stockInsuficiente = productoSeleccionado
   }, [ventasFiltradas]);
 
   /* ══ Categorias ══ */
-
-  /** Categoria del inventario por id de producto: respaldo cuando el item no la trae. */
-  const categoriaPorProducto = useMemo(() => {
-    const mapa: Record<string, string> = {};
-    inventario.forEach(p => {
-      if (p.categoria) mapa[p.id] = p.categoria;
-    });
-    return mapa;
-  }, [inventario]);
-
-  /** Categorias distintas de los items de una venta, en el orden en que aparecen. */
-  const categoriasDeVenta = (venta: Venta): string[] => {
-    const cats = new Set<string>();
-    venta.productos.forEach(p => {
-      cats.add(p.categoria || categoriaPorProducto[p.productoId] || 'Sin categoria');
-    });
-    return Array.from(cats);
-  };
-
-  /** Resueltas una vez por venta, para no recalcularlas en cada render de la tabla. */
-  const categoriasPorVenta = useMemo(() => {
-    const mapa: Record<string, string[]> = {};
-    ventasFiltradas.forEach(v => {
-      mapa[v.id] = categoriasDeVenta(v);
-    });
-    return mapa;
-  }, [ventasFiltradas, categoriaPorProducto]);
 
   const datosVentasPorCategoria = useMemo(() => {
     const ventasPorCat: Record<string, number> = {};
@@ -711,8 +732,8 @@ const stockInsuficiente = productoSeleccionado
       fechaFin: fin,
       estado: 'Todos',
       cliente: '',
-      montoMin: '',
-      montoMax: ''
+      categoria: '',
+      realizadoPor: ''
     });
     setPeriodoSeleccionado('este_mes');
   };
@@ -865,12 +886,22 @@ const stockInsuficiente = productoSeleccionado
             <input type="text" placeholder="Buscar..." value={filtros.cliente} onChange={e => setFiltros({...filtros, cliente: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" />
           </div>
           <div>
-            <label className="block text-xs text-on-surface-variant mb-1">Monto Min.</label>
-            <input type="number" placeholder="$0" value={filtros.montoMin} onChange={e => setFiltros({...filtros, montoMin: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" />
+            <label className="block text-xs text-on-surface-variant mb-1">Categoria</label>
+            <select value={filtros.categoria} onChange={e => setFiltros({...filtros, categoria: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
+              <option value="">Todas</option>
+              {categoriasDisponibles.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="block text-xs text-on-surface-variant mb-1">Monto Max.</label>
-            <input type="number" placeholder="$0" value={filtros.montoMax} onChange={e => setFiltros({...filtros, montoMax: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" />
+            <label className="block text-xs text-on-surface-variant mb-1">Realizado por</label>
+            <select value={filtros.realizadoPor} onChange={e => setFiltros({...filtros, realizadoPor: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
+              <option value="">Todos</option>
+              {autoresDisponibles.map(a => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -932,7 +963,7 @@ const stockInsuficiente = productoSeleccionado
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center gap-1.5 text-xs font-bold text-on-surface-variant">
                       <span className="material-symbols-outlined text-sm text-tertiary">badge</span>
-                      {venta.creado_por || venta.creado_por_id?.slice(0, 6)?.toUpperCase() || 'Sistema'}
+                      {autorDeVenta(venta)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-on-surface">
