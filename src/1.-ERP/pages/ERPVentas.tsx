@@ -874,16 +874,16 @@ const stockInsuficiente = productoSeleccionado
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
+            <label className="block text-xs text-on-surface-variant mb-1">Cliente</label>
+            <input type="text" placeholder="Buscar..." value={filtros.cliente} onChange={e => setFiltros({...filtros, cliente: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" />
+          </div>
+          <div>
             <label className="block text-xs text-on-surface-variant mb-1">Estado</label>
             <select value={filtros.estado} onChange={e => setFiltros({...filtros, estado: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
               <option value="Todos">Todos</option>
               <option value="Pagado">Pagado</option>
               <option value="Pendiente">Pendiente</option>
             </select>
-          </div>
-          <div>
-            <label className="block text-xs text-on-surface-variant mb-1">Cliente</label>
-            <input type="text" placeholder="Buscar..." value={filtros.cliente} onChange={e => setFiltros({...filtros, cliente: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" />
           </div>
           <div>
             <label className="block text-xs text-on-surface-variant mb-1">Categoria</label>
