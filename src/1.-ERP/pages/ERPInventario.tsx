@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
 import { useAuth } from '../../context/AuthContext';
 import { puedeEditarModulo } from '@/lib/roles';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SelectorFecha from '../components/SelectorFecha';
+import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn } from '@/lib/utils';
 import { useColoresTema } from '@/lib/useColoresTema';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
@@ -48,6 +49,65 @@ export default function ERPInventario() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+
+  /* ══ Periodo de los movimientos: mismo selector que Ventas, a la derecha ══ */
+
+  const [periodoMovimientos, setPeriodoMovimientos] = useState('este_mes');
+  const [rangoMovimientos, setRangoMovimientos] = useState({ fechaInicio: '', fechaFin: '' });
+
+  /** Rango de mes natural en ISO 'YYYY-MM-DD', igual que en Ventas. */
+  const rangoMes = (offset: number) => {
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
+    return { inicio, fin };
+  };
+
+  useEffect(() => {
+    if (periodoMovimientos === 'personalizado') return;
+    const { inicio, fin } = periodoMovimientos === 'mes_anterior' ? rangoMes(-1) : rangoMes(0);
+    setRangoMovimientos({ fechaInicio: inicio, fechaFin: fin });
+  }, [periodoMovimientos]);
+
+  /** El rango manual parte con el mes actual; las fechas quedan editables. */
+  const elegirPeriodoMovimientos = (valor: string) => {
+    setPeriodoMovimientos(valor);
+    if (valor === 'personalizado') {
+      const { inicio, fin } = rangoMes(0);
+      setRangoMovimientos({ fechaInicio: inicio, fechaFin: fin });
+    }
+  };
+
+  /** Rango real de datos: acota hasta donde el usuario puede navegar. */
+  const rangoMovimientosDisponible = useMemo(() => {
+    const fechas = movimientosInventario.map(m => m.fecha).filter(Boolean).sort();
+    if (fechas.length === 0) return null;
+    return { min: fechas[0], max: fechas[fechas.length - 1] };
+  }, [movimientosInventario]);
+
+  /**
+   * El historial antes hacia `slice(0, 100)`: los 100 mas recientes sin mirar la fecha,
+   * asi que al elegir un periodo se veian movimientos de otra epoca y los del periodo
+   * quedaban escondidos detras del corte. Ahora se filtra por fecha y el limite de 100
+   * se aplica despues.
+   */
+  const movimientosFiltrados = useMemo(() => {
+    const { fechaInicio, fechaFin } = rangoMovimientos;
+    const enRango = movimientosInventario.filter(m => {
+      const fecha = (m.fecha || '').slice(0, 10);
+      if (fechaInicio && fecha < fechaInicio) return false;
+      if (fechaFin && fecha > fechaFin) return false;
+      return true;
+    });
+    return { total: enRango.length, lista: enRango.slice(0, 100) };
+  }, [movimientosInventario, rangoMovimientos]);
+
+  const etiquetaRangoMovimientos = etiquetaRangoPeriodo(
+    periodoMovimientos === 'personalizado',
+    rangoMovimientos.fechaInicio,
+    rangoMovimientos.fechaFin,
+    rangoMovimientosDisponible
+  );
 
   const [nuevoProducto, setNuevoProducto] = useState<Partial<Producto>>({
     nombre: '',
@@ -292,6 +352,38 @@ export default function ERPInventario() {
               className={cn("p-2 rounded-lg transition-all", viewMode === 'cards' ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline")}>
               <span className="material-symbols-outlined">grid_view</span>
             </button>
+          </div>
+        )}
+
+        {/* Rango de fechas de Movimientos, a la derecha y a la misma altura que las
+            pestañas. Usa el mismo componente y las mismas opciones que Ventas. */}
+        {activeTab === 'movimientos' && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <SelectorDesplegable
+              icono="calendar_month"
+              valor={periodoMovimientos}
+              onChange={elegirPeriodoMovimientos}
+              opciones={OPCIONES_PERIODO}
+              hint={etiquetaRangoMovimientos}
+            />
+            {periodoMovimientos === 'personalizado' && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
+                  <SelectorFecha
+                    value={rangoMovimientos.fechaInicio}
+                    onChange={fecha => setRangoMovimientos(prev => ({ ...prev, fechaInicio: fecha }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
+                  <SelectorFecha
+                    value={rangoMovimientos.fechaFin}
+                    onChange={fecha => setRangoMovimientos(prev => ({ ...prev, fechaFin: fecha }))}
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -559,10 +651,12 @@ export default function ERPInventario() {
       {activeTab === 'movimientos' && (
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-outline-variant/20 flex items-center justify-between">
+            <div className="p-6 border-b border-outline-variant/20 flex items-center justify-between gap-3 flex-wrap">
               <h3 className="text-lg font-black text-on-surface">Historial Global de Movimientos</h3>
               <span className="px-4 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-black">
-                Últimos 100 registros
+                {movimientosFiltrados.total > movimientosFiltrados.lista.length
+                  ? `Últimos ${movimientosFiltrados.lista.length} de ${movimientosFiltrados.total}`
+                  : `${movimientosFiltrados.total} registros`}
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -575,7 +669,7 @@ export default function ERPInventario() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/20">
-                  {movimientosInventario.slice(0, 100).map(mov => {
+                  {movimientosFiltrados.lista.map(mov => {
                     const prod = inventario.find(p => p.id === mov.productoId);
                     return (
                       <tr key={mov.id} className="hover:bg-surface-container-low/50 transition-colors">
@@ -604,6 +698,17 @@ export default function ERPInventario() {
                   })}
                 </tbody>
               </table>
+              {movimientosFiltrados.lista.length === 0 && (
+                <div className="p-16 text-center">
+                  <span className="material-symbols-outlined text-5xl text-outline/30 mb-3 block">event_busy</span>
+                  <p className="text-on-surface-variant font-bold">Sin movimientos en el periodo seleccionado</p>
+                  <p className="text-outline text-sm mt-1">
+                    {movimientosInventario.length > 0
+                      ? 'Prueba con otro rango o vuelve a "Este Mes".'
+                      : 'Cuando ajustes el stock de un producto, el movimiento aparecera aqui.'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
