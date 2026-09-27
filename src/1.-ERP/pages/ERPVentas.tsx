@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
+import BuscadorCliente from '../components/BuscadorCliente';
 import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
@@ -790,26 +791,16 @@ const stockInsuficiente = productoSeleccionado
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cliente</label>
-                  <select
-                    value={nuevaVenta.cliente_id || ''}
-                    onChange={(e) => {
-                      const cliente = clientes.find(c => c.id === e.target.value);
-                      setNuevaVenta({ ...nuevaVenta, cliente_id: cliente?.id, cliente: cliente?.nombre ?? '' });
-                    }}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                  >
-                    <option value="">Cliente general / nuevo</option>
-                    {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.rut ? ` - ${c.rut}` : ''}</option>)}
-                  </select>
-                  {!nuevaVenta.cliente_id && (
-                    <input
-                      type="text"
-                      value={nuevaVenta.cliente}
-                      onChange={(e) => setNuevaVenta({ ...nuevaVenta, cliente: e.target.value })}
-                      className="mt-2 w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                      placeholder="Nombre del cliente nuevo"
-                    />
-                  )}
+                  <BuscadorCliente
+                    clientes={clientes}
+                    clienteId={nuevaVenta.cliente_id}
+                    clienteNombre={nuevaVenta.cliente}
+                    onChange={(cliente, nombre) => setNuevaVenta(prev => ({
+                      ...prev,
+                      cliente_id: cliente?.id,
+                      cliente: nombre
+                    }))}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha de la venta</label>
