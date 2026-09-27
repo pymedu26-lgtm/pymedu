@@ -111,17 +111,36 @@ export default function ERPGastos() {
   const porcentajeMeta = ventaObjetivo > 0 ? Math.round((totalVentasPeriodo / ventaObjetivo) * 100) : 0;
   const enNumerosVerdes = totalVentasPeriodo >= ventaObjetivo;
 
+  /**
+   * Gastos dentro del rango elegido (mes actual, mes anterior o rango manual).
+   * Es la base del grafico: sigue los filtros de fecha sin arrastrar el buscador
+   * ni el desplegable de categoria, que son filtros propios de la tabla.
+   */
+  const gastosDelPeriodo = useMemo(() =>
+    gastos.filter(g => {
+      const matchFechaInicio = !filtrosPeriodo.fechaInicio || g.fecha >= filtrosPeriodo.fechaInicio;
+      const matchFechaFin = !filtrosPeriodo.fechaFin || g.fecha <= filtrosPeriodo.fechaFin;
+      return matchFechaInicio && matchFechaFin;
+    }), [gastos, filtrosPeriodo]);
+
   const porCategoria = useMemo(() => {
     const mapa: Record<string, number> = {};
-    gastos.forEach(g => { mapa[g.categoria] = (mapa[g.categoria] || 0) + g.monto; });
+    gastosDelPeriodo.forEach(g => { mapa[g.categoria] = (mapa[g.categoria] || 0) + g.monto; });
     return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
-  }, [gastos]);
+  }, [gastosDelPeriodo]);
 
-  /** Base 100 del grafico: la suma de todas las categorias, no solo la mas alta. */
+  /** Base 100 del grafico: la suma de las categorias del periodo, no solo la mas alta. */
   const totalPorCategoria = useMemo(
     () => porCategoria.reduce((acc, [, monto]) => acc + monto, 0),
     [porCategoria]
   );
+
+  /** Rango que abarcan las barras, para que el 100% quede ligado a un periodo concreto. */
+  const rangoDelGrafico = useMemo(() => {
+    const { fechaInicio, fechaFin } = filtrosPeriodo;
+    if (!fechaInicio && !fechaFin) return 'Sin rango de fechas';
+    return `${formatFecha(fechaInicio)} → ${formatFecha(fechaFin)}`;
+  }, [filtrosPeriodo]);
 
   const handleGuardar = () => {
     if (!nuevoGasto.monto || !nuevoGasto.fecha || !nuevoGasto.categoria) return;
@@ -241,8 +260,8 @@ export default function ERPGastos() {
       </div>
 
       {porCategoria.length > 0 && (
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-5 mb-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-5 mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
             <h3 className="font-bold text-on-surface text-sm flex items-center gap-2">
               <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
               Categorías de Gasto
@@ -251,20 +270,27 @@ export default function ERPGastos() {
               Total {fmt(totalPorCategoria)} · 100%
             </span>
           </div>
+          <p className="text-[11px] text-outline mb-3">{rangoDelGrafico}</p>
           <div className="space-y-2.5">
             {porCategoria.map(([cat, monto]) => {
               const pct = totalPorCategoria > 0 ? (monto / totalPorCategoria) * 100 : 0;
+              const pctTexto = pct.toLocaleString('es-CL', { maximumFractionDigits: 1 });
+              const fueraDeFiltro = categoria !== 'Todas' && cat !== categoria;
               return (
-                <div key={cat} className="flex items-center gap-3">
-                  <span className="text-xs text-on-surface-variant font-bold w-36 truncate" title={cat}>{cat}</span>
-                  <div className="flex-1 h-2.5 bg-surface-container-high rounded-full overflow-hidden">
+                <div key={cat} className={cn('flex items-center gap-2 sm:gap-3', fueraDeFiltro && 'opacity-40')}>
+                  <span className="text-xs text-on-surface-variant font-bold truncate min-w-0 flex-1 sm:flex-none sm:w-36" title={cat}>
+                    {cat}
+                  </span>
+                  <div className="flex-1 min-w-[2.5rem] h-2.5 bg-surface-container-high rounded-full overflow-hidden">
                     <div className="h-full bg-error/60 rounded-full transition-all duration-500"
                       style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="text-xs font-extrabold text-on-surface w-14 text-right tabular-nums">
-                    {pct.toLocaleString('es-CL', { maximumFractionDigits: 1 })}%
+                  <span className="text-xs font-extrabold text-on-surface w-12 sm:w-14 text-right tabular-nums shrink-0">
+                    {pctTexto}%
                   </span>
-                  <span className="text-xs text-on-surface-variant w-24 text-right tabular-nums">{fmt(monto)}</span>
+                  <span className="text-xs text-on-surface-variant tabular-nums shrink-0 sm:w-24 sm:text-right">
+                    {fmt(monto)}
+                  </span>
                 </div>
               );
             })}
