@@ -886,14 +886,14 @@ export default function ERPInventario() {
       {/* Modal Nuevo Producto / Editar */}
       {showModal && (
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50">
+          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
               <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar Producto' : 'Registrar Nuevo Producto'}</h3>
               <button onClick={() => { setShowModal(false); setEditingId(null); }} className="text-on-surface-variant hover:text-error transition-colors">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="p-6 space-y-4 overflow-y-auto flex-grow">
               {/* La pregunta va primero porque de ella depende que campos tengan sentido:
                   un servicio no lleva codigo de barras ni stock minimo. */}
               <div>
@@ -929,86 +929,92 @@ export default function ERPInventario() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre</label>
-                  <input type="text" value={nuevoProducto.nombre} onChange={(e) => setNuevoProducto({...nuevoProducto, nombre: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: Cuaderno Universitario" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Código / SKU</label>
-                  <input type="text" value={nuevoProducto.codigo} onChange={(e) => setNuevoProducto({...nuevoProducto, codigo: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: CUAD-001" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
-                <select value={nuevoProducto.categoria} onChange={(e) => setNuevoProducto({...nuevoProducto, categoria: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                  {CATEGORIAS_POR_TIPO[tipoEnFormulario].map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Codigo de barras y uso operativo solo aplican a un producto fisico: un
-                  servicio no se escanea y su uso operativo es siempre "servicio". */}
-              {tipoEnFormulario === 'producto' && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Codigo de barras</label>
-                    <input type="text" value={nuevoProducto.codigoBarras || ''} onChange={(e) => setNuevoProducto({ ...nuevoProducto, codigoBarras: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: 7800000000000" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre</label>
+                      <input type="text" value={nuevoProducto.nombre} onChange={(e) => setNuevoProducto({...nuevoProducto, nombre: e.target.value})}
+                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: Cuaderno Universitario" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Código / SKU</label>
+                      <input type="text" value={nuevoProducto.codigo} onChange={(e) => setNuevoProducto({...nuevoProducto, codigo: e.target.value})}
+                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: CUAD-001" />
+                    </div>
                   </div>
+
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
-                    <select value={nuevoProducto.tipoOperativo || 'producto_simple'} onChange={(e) => setNuevoProducto({ ...nuevoProducto, tipoOperativo: e.target.value as Producto['tipoOperativo'] })}
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
+                    <select value={nuevoProducto.categoria} onChange={(e) => setNuevoProducto({...nuevoProducto, categoria: e.target.value})}
                       className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                      <option value="producto_simple">Producto simple</option>
-                      <option value="pack">Pack / combo</option>
-                      <option value="insumo">Insumo</option>
-                      <option value="producto_compuesto">Producto compuesto</option>
+                      {CATEGORIAS_POR_TIPO[tipoEnFormulario].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
                     </select>
                   </div>
+
+                  {/* Codigo de barras y uso operativo solo aplican a un producto fisico: un
+                      servicio no se escanea y su uso operativo es siempre "servicio". */}
+                  {tipoEnFormulario === 'producto' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Codigo de barras</label>
+                        <input type="text" value={nuevoProducto.codigoBarras || ''} onChange={(e) => setNuevoProducto({ ...nuevoProducto, codigoBarras: e.target.value })}
+                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: 7800000000000" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
+                        <select value={nuevoProducto.tipoOperativo || 'producto_simple'} onChange={(e) => setNuevoProducto({ ...nuevoProducto, tipoOperativo: e.target.value as Producto['tipoOperativo'] })}
+                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
+                          <option value="producto_simple">Producto simple</option>
+                          <option value="pack">Pack / combo</option>
+                          <option value="insumo">Insumo</option>
+                          <option value="producto_compuesto">Producto compuesto</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Descripción</label>
+                    <textarea value={nuevoProducto.descripcion} onChange={(e) => setNuevoProducto({...nuevoProducto, descripcion: e.target.value})}
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none resize-none text-on-surface bg-surface-container-lowest" placeholder="Descripción detallada..." rows={2} />
+                  </div>
                 </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Descripción</label>
-                <textarea value={nuevoProducto.descripcion} onChange={(e) => setNuevoProducto({...nuevoProducto, descripcion: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none resize-none text-on-surface bg-surface-container-lowest" placeholder="Descripción detallada..." rows={2} />
-              </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Proveedor Principal</label>
+                    <select value={nuevoProducto.proveedorId || ''} onChange={(e) => setNuevoProducto({ ...nuevoProducto, proveedorId: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
+                      <option value="">Sin proveedor asignado</option>
+                      {proveedores.map(p => (
+                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Proveedor Principal</label>
-                <select value={nuevoProducto.proveedorId || ''} onChange={(e) => setNuevoProducto({ ...nuevoProducto, proveedorId: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                  <option value="">Sin proveedor asignado</option>
-                  {proveedores.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre}</option>
-                  ))}
-                </select>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo Unitario</label>
+                      <input type="number" value={nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costo: Number(e.target.value)})}
+                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio Venta Base</label>
+                      <input type="number" value={nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: Number(e.target.value)})}
+                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo Unitario</label>
-                  <input type="number" value={nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costo: Number(e.target.value)})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="incluyeIva" checked={nuevoProducto.incluyeIva}
+                      onChange={(e) => setNuevoProducto({...nuevoProducto, incluyeIva: e.target.checked})}
+                      className="w-4 h-4 text-primary rounded border-outline-variant/50 focus:ring-primary/20" />
+                    <label htmlFor="incluyeIva" className="text-sm text-on-surface font-medium">El precio de venta incluye IVA</label>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio Venta Base</label>
-                  <input type="number" value={nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: Number(e.target.value)})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="incluyeIva" checked={nuevoProducto.incluyeIva}
-                  onChange={(e) => setNuevoProducto({...nuevoProducto, incluyeIva: e.target.checked})}
-                  className="w-4 h-4 text-primary rounded border-outline-variant/50 focus:ring-primary/20" />
-                <label htmlFor="incluyeIva" className="text-sm text-on-surface font-medium">El precio de venta incluye IVA</label>
               </div>
 
               {tipoEnFormulario === 'producto' && (
@@ -1036,7 +1042,7 @@ export default function ERPInventario() {
                 </div>
               )}
             </div>
-            <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50">
+            <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50 shrink-0">
               <button onClick={() => { setShowModal(false); setEditingId(null); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 Cancelar
               </button>
