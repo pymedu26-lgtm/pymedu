@@ -5,7 +5,7 @@ import TarjetasResumen from '../components/TarjetasResumen';
 import BuscadorCliente from '../components/BuscadorCliente';
 import SelectorFecha from '../components/SelectorFecha';
 import FiltroPeriodo from '../components/FiltroPeriodo';
-import { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta, abrirPdfVentasLote } from '../services/pdfNotaVenta';
@@ -762,29 +762,40 @@ const stockInsuficiente = productoSeleccionado
           </div>
           <div>
             <label className="block text-xs text-on-surface-variant mb-1">Estado</label>
-            <select value={filtros.estado} onChange={e => setFiltros({...filtros, estado: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-              <option value="Todos">Todos</option>
-              <option value="Pagado">Pagado</option>
-              <option value="Pendiente">Pendiente</option>
-            </select>
+            <SelectorDesplegable
+              className="w-full"
+              valor={filtros.estado}
+              onChange={valor => setFiltros({ ...filtros, estado: valor })}
+              opciones={[
+                { valor: 'Todos', etiqueta: 'Todos' },
+                { valor: 'Pagado', etiqueta: 'Pagado' },
+                { valor: 'Pendiente', etiqueta: 'Pendiente' }
+              ]}
+            />
           </div>
           <div>
             <label className="block text-xs text-on-surface-variant mb-1">Categoria</label>
-            <select value={filtros.categoria} onChange={e => setFiltros({...filtros, categoria: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-              <option value="">Todas</option>
-              {categoriasDisponibles.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            <SelectorDesplegable
+              className="w-full"
+              valor={filtros.categoria}
+              onChange={valor => setFiltros({ ...filtros, categoria: valor })}
+              opciones={[
+                { valor: '', etiqueta: 'Todas' },
+                ...categoriasDisponibles.map(c => ({ valor: c, etiqueta: c }))
+              ]}
+            />
           </div>
           <div>
             <label className="block text-xs text-on-surface-variant mb-1">Realizado por</label>
-            <select value={filtros.realizadoPor} onChange={e => setFiltros({...filtros, realizadoPor: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-outline-variant/50 text-sm focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-              <option value="">Todos</option>
-              {autoresDisponibles.map(a => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
+            <SelectorDesplegable
+              className="w-full"
+              valor={filtros.realizadoPor}
+              onChange={valor => setFiltros({ ...filtros, realizadoPor: valor })}
+              opciones={[
+                { valor: '', etiqueta: 'Todos' },
+                ...autoresDisponibles.map(a => ({ valor: a, etiqueta: a }))
+              ]}
+            />
           </div>
         </div>
       </div>
@@ -994,18 +1005,19 @@ const stockInsuficiente = productoSeleccionado
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Metodo de pago</label>
-                  <select
-                    value={nuevaVenta.metodo_pago}
-                    onChange={(e) => setNuevaVenta({ ...nuevaVenta, metodo_pago: e.target.value as Venta['metodo_pago'] })}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                  >
-                    <option value="efectivo">Efectivo</option>
-                    <option value="transferencia">Transferencia</option>
-                    <option value="debito">Débito</option>
-                    <option value="credito">Crédito</option>
-                    <option value="mixto">Mixto</option>
-                    <option value="cheque">Cheque</option>
-                  </select>
+                  <SelectorDesplegable
+                    className="w-full"
+                    valor={nuevaVenta.metodo_pago}
+                    onChange={valor => setNuevaVenta({ ...nuevaVenta, metodo_pago: valor as Venta['metodo_pago'] })}
+                    opciones={[
+                      { valor: 'efectivo', etiqueta: 'Efectivo' },
+                      { valor: 'transferencia', etiqueta: 'Transferencia' },
+                      { valor: 'debito', etiqueta: 'Débito' },
+                      { valor: 'credito', etiqueta: 'Crédito' },
+                      { valor: 'mixto', etiqueta: 'Mixto' },
+                      { valor: 'cheque', etiqueta: 'Cheque' }
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -1036,26 +1048,28 @@ const stockInsuficiente = productoSeleccionado
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre del producto o servicio</label>
                   {productoActual.esInventario ? (
-                    <select 
-                      value={productoActual.productoId}
-                      onChange={(e) => {
-                        const sel = inventario.find(x => x.id === e.target.value);
-                        setProductoActual((prev) => ({
+                    <SelectorDesplegable
+                      className="w-full"
+                      valor={productoActual.productoId}
+                      onChange={valor => {
+                        const sel = inventario.find(x => x.id === valor);
+                        setProductoActual(prev => ({
                           ...prev,
-                          productoId: e.target.value,
+                          productoId: valor,
                           nombre: sel?.nombre ?? '',
                           categoria: sel?.categoria ?? '',
                           precio: sel?.precio ?? 0,
-                          cantidad: 1,
+                          cantidad: 1
                         }));
                       }}
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                    >
-                      <option value="">Seleccionar de inventario...</option>
-                      {inventario.filter(p => p.estado === 'activo').map(p => (
-                        <option key={p.id} value={p.id}>{p.nombre} - ${p.precio.toLocaleString('es-CL')}{p.categoria ? ` (${p.categoria})` : ''}</option>
-                      ))}
-                    </select>
+                      opciones={[
+                        { valor: '', etiqueta: 'Seleccionar de inventario...' },
+                        ...inventario.filter(p => p.estado === 'activo').map(p => ({
+                          valor: p.id,
+                          etiqueta: `${p.nombre} - $${p.precio.toLocaleString('es-CL')}${p.categoria ? ` (${p.categoria})` : ''}`
+                        }))
+                      ]}
+                    />
                   ) : (
                     <input
                       type="text"
@@ -1174,15 +1188,14 @@ const stockInsuficiente = productoSeleccionado
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
                   <div>
                     <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Documento</label>
-                    <select
-                      value={tipoDocumentoNormalizado}
-                      onChange={(e) => setNuevaVenta({ ...nuevaVenta, tipo_documento: e.target.value as Venta['tipo_documento'] })}
-                      className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                    >
-                      {Object.entries(DOCUMENT_LABELS).filter(([value]) => value !== 'nota_credito').map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
+                    <SelectorDesplegable
+                      className="w-full"
+                      valor={tipoDocumentoNormalizado}
+                      onChange={valor => setNuevaVenta({ ...nuevaVenta, tipo_documento: valor as Venta['tipo_documento'] })}
+                      opciones={Object.entries(DOCUMENT_LABELS)
+                        .filter(([value]) => value !== 'nota_credito')
+                        .map(([value, label]) => ({ valor: value, etiqueta: label }))}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Pago recibido</label>

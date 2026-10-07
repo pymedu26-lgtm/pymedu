@@ -5,7 +5,7 @@ import { puedeEditarModulo } from '@/lib/roles';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SelectorFecha from '../components/SelectorFecha';
 import FiltroPeriodo from '../components/FiltroPeriodo';
-import { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn } from '@/lib/utils';
 import { useColoresTema } from '@/lib/useColoresTema';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
@@ -644,13 +644,15 @@ export default function ERPInventario() {
                 className="w-full pl-12 pr-4 py-3 bg-surface-container-low border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 outline-none font-medium text-on-surface" 
               />
             </div>
-            <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value as any)}
-              className="px-4 py-3 bg-surface-container-low border-none rounded-2xl text-sm font-bold text-on-surface-variant outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="todos">Todos los Tipos</option>
-              <option value="producto">Productos</option>
-              <option value="servicio">Servicios</option>
-            </select>
+            <SelectorDesplegable
+              valor={filtroTipo}
+              onChange={valor => setFiltroTipo(valor as any)}
+              opciones={[
+                { valor: 'todos', etiqueta: 'Todos los Tipos' },
+                { valor: 'producto', etiqueta: 'Productos' },
+                { valor: 'servicio', etiqueta: 'Servicios' }
+              ]}
+            />
           </div>
 
           {/* Sin resultados se muestra solo el aviso: antes se pintaba la tabla con
@@ -907,12 +909,12 @@ export default function ERPInventario() {
 
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
-                    <select value={nuevoProducto.categoria} onChange={(e) => setNuevoProducto({...nuevoProducto, categoria: e.target.value})}
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                      {CATEGORIAS_POR_TIPO[tipoEnFormulario].map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
+                    <SelectorDesplegable
+                      className="w-full"
+                      valor={nuevoProducto.categoria}
+                      onChange={valor => setNuevoProducto({ ...nuevoProducto, categoria: valor })}
+                      opciones={CATEGORIAS_POR_TIPO[tipoEnFormulario].map(c => ({ valor: c, etiqueta: c }))}
+                    />
                   </div>
 
                   {/* Codigo de barras y uso operativo solo aplican a un producto fisico: un
@@ -926,13 +928,17 @@ export default function ERPInventario() {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
-                        <select value={nuevoProducto.tipoOperativo || 'producto_simple'} onChange={(e) => setNuevoProducto({ ...nuevoProducto, tipoOperativo: e.target.value as Producto['tipoOperativo'] })}
-                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                          <option value="producto_simple">Producto simple</option>
-                          <option value="pack">Pack / combo</option>
-                          <option value="insumo">Insumo</option>
-                          <option value="producto_compuesto">Producto compuesto</option>
-                        </select>
+                        <SelectorDesplegable
+                          className="w-full"
+                          valor={nuevoProducto.tipoOperativo || 'producto_simple'}
+                          onChange={valor => setNuevoProducto({ ...nuevoProducto, tipoOperativo: valor as Producto['tipoOperativo'] })}
+                          opciones={[
+                            { valor: 'producto_simple', etiqueta: 'Producto simple' },
+                            { valor: 'pack', etiqueta: 'Pack / combo' },
+                            { valor: 'insumo', etiqueta: 'Insumo' },
+                            { valor: 'producto_compuesto', etiqueta: 'Producto compuesto' }
+                          ]}
+                        />
                       </div>
                     </div>
                   )}
@@ -947,13 +953,15 @@ export default function ERPInventario() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Proveedor Principal</label>
-                    <select value={nuevoProducto.proveedorId || ''} onChange={(e) => setNuevoProducto({ ...nuevoProducto, proveedorId: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                      <option value="">Sin proveedor asignado</option>
-                      {proveedores.map(p => (
-                        <option key={p.id} value={p.id}>{p.nombre}</option>
-                      ))}
-                    </select>
+                    <SelectorDesplegable
+                      className="w-full"
+                      valor={nuevoProducto.proveedorId || ''}
+                      onChange={valor => setNuevoProducto({ ...nuevoProducto, proveedorId: valor })}
+                      opciones={[
+                        { valor: '', etiqueta: 'Sin proveedor asignado' },
+                        ...proveedores.map(p => ({ valor: p.id, etiqueta: p.nombre }))
+                      ]}
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -1035,14 +1043,18 @@ export default function ERPInventario() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Tipo de Movimiento</label>
-                  <select value={nuevoMovimiento.tipo} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, tipo: e.target.value as any})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface">
-                    <option value="ingreso">Ingreso / Compra</option>
-                    <option value="salida">Salida / Venta</option>
-                    <option value="ajuste">Ajuste (+/-)</option>
-                    <option value="merma">Merma / Pérdida</option>
-                    <option value="devolucion">Devolución</option>
-                  </select>
+                  <SelectorDesplegable
+                    className="w-full"
+                    valor={nuevoMovimiento.tipo}
+                    onChange={valor => setNuevoMovimiento({ ...nuevoMovimiento, tipo: valor as any })}
+                    opciones={[
+                      { valor: 'ingreso', etiqueta: 'Ingreso / Compra' },
+                      { valor: 'salida', etiqueta: 'Salida / Venta' },
+                      { valor: 'ajuste', etiqueta: 'Ajuste (+/-)' },
+                      { valor: 'merma', etiqueta: 'Merma / Pérdida' },
+                      { valor: 'devolucion', etiqueta: 'Devolución' }
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad</label>

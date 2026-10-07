@@ -4,7 +4,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
 import SelectorFecha from '../components/SelectorFecha';
 import FiltroPeriodo from '../components/FiltroPeriodo';
-import { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
 
 const ModalCargaMasivaGastos = lazy(() => import('../components/ModalCargaMasivaGastos'));
@@ -285,11 +285,14 @@ export default function ERPGastos() {
           <input type="text" placeholder="Buscar por proveedor o categoria..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
         </div>
-        <select value={categoria} onChange={e => setCategoria(e.target.value)}
-          className="px-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm font-bold text-on-surface outline-none focus:border-primary bg-surface-container-lowest">
-          <option value="Todas">Todas las categorías</option>
-          {CATEGORIAS_GASTO.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <SelectorDesplegable
+          valor={categoria}
+          onChange={setCategoria}
+          opciones={[
+            { valor: 'Todas', etiqueta: 'Todas las categorías' },
+            ...CATEGORIAS_GASTO.map(c => ({ valor: c, etiqueta: c }))
+          ]}
+        />
       </div>
 
       <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
@@ -381,17 +384,21 @@ export default function ERPGastos() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoria</label>
-                      <select value={nuevoGasto.categoria} onChange={e => setNuevoGasto({ ...nuevoGasto, categoria: e.target.value })}
-                        className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface">
-                        {CATEGORIAS_GASTO.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <SelectorDesplegable
+                        className="w-full"
+                        valor={nuevoGasto.categoria}
+                        onChange={valor => setNuevoGasto({ ...nuevoGasto, categoria: valor })}
+                        opciones={CATEGORIAS_GASTO.map(c => ({ valor: c, etiqueta: c }))}
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Método de Pago</label>
-                      <select value={nuevoGasto.metodo_pago} onChange={e => setNuevoGasto({ ...nuevoGasto, metodo_pago: e.target.value as MetodoPago })}
-                        className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface">
-                        {METODOS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                      </select>
+                      <SelectorDesplegable
+                        className="w-full"
+                        valor={nuevoGasto.metodo_pago}
+                        onChange={valor => setNuevoGasto({ ...nuevoGasto, metodo_pago: valor as MetodoPago })}
+                        opciones={METODOS.map(m => ({ valor: m.value, etiqueta: m.label }))}
+                      />
                     </div>
                   </div>
 
