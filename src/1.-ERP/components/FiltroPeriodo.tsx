@@ -33,7 +33,7 @@ export default function FiltroPeriodo({
         valor={periodo}
         onChange={onPeriodo}
         opciones={OPCIONES_PERIODO}
-        hint={etiqueta}
+        hint={periodo === 'personalizado' ? null : etiqueta}
       />
       {periodo === 'personalizado' && (
         <>

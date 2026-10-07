@@ -15,7 +15,7 @@ export interface OpcionDesplegable {
 export const OPCIONES_PERIODO: OpcionDesplegable[] = [
   { valor: 'este_mes', etiqueta: 'Este Mes', icono: 'calendar_today' },
   { valor: 'mes_anterior', etiqueta: 'Mes Anterior', icono: 'history' },
-  { valor: 'personalizado', etiqueta: 'Rango Personalizado', icono: 'tune' }
+  { valor: 'personalizado', etiqueta: 'Personalizado', icono: 'tune' }
 ];
 
 /**
