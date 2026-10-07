@@ -615,9 +615,9 @@ export default function ERPInventario() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Pie Chart */}
-            <div className="lg:col-span-2 bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
+            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
               <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-6 flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary text-xl">pie_chart</span>
                 Distribución por Categoría
