@@ -3,7 +3,8 @@ import { useERP, Gasto, MetodoPago } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
 import SelectorFecha from '../components/SelectorFecha';
-import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import FiltroPeriodo from '../components/FiltroPeriodo';
+import { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
 
 const ModalCargaMasivaGastos = lazy(() => import('../components/ModalCargaMasivaGastos'));
@@ -221,33 +222,13 @@ export default function ERPGastos() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex justify-between items-center gap-4 flex-wrap">
-          <SelectorDesplegable
-            icono="calendar_month"
-            valor={periodoSeleccionado}
-            onChange={elegirPeriodo}
-            opciones={OPCIONES_PERIODO}
-            hint={etiquetaRango}
-          />
-          {periodoSeleccionado === 'personalizado' && (
-            <div className="flex items-center gap-3">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
-                <SelectorFecha
-                  value={filtrosPeriodo.fechaInicio}
-                  onChange={fecha => setFiltrosPeriodo(p => ({ ...p, fechaInicio: fecha }))}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
-                <SelectorFecha
-                  value={filtrosPeriodo.fechaFin}
-                  onChange={fecha => setFiltrosPeriodo(p => ({ ...p, fechaFin: fecha }))}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        <FiltroPeriodo
+          periodo={periodoSeleccionado}
+          etiqueta={etiquetaRango}
+          rango={filtrosPeriodo}
+          onPeriodo={elegirPeriodo}
+          onRango={rango => setFiltrosPeriodo(prev => ({ ...prev, ...rango }))}
+        />
 
         <TarjetasResumen
           totalVentas={totalVentasPeriodo}

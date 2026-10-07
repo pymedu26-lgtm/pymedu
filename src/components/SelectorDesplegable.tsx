@@ -101,7 +101,10 @@ export default function SelectorDesplegable({
           {seleccionada?.etiqueta}
         </span>
         {hint && (
-          <span className="text-[10px] font-semibold text-on-surface-variant/50 normal-case tracking-normal">
+          <span
+            title={hint}
+            className="max-w-[10rem] truncate text-[10px] font-semibold text-on-surface-variant/50 normal-case tracking-normal"
+          >
             {hint}
           </span>
         )}

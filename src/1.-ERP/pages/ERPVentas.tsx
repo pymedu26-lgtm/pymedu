@@ -4,7 +4,8 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
 import BuscadorCliente from '../components/BuscadorCliente';
 import SelectorFecha from '../components/SelectorFecha';
-import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import FiltroPeriodo from '../components/FiltroPeriodo';
+import { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta, abrirPdfVentasLote } from '../services/pdfNotaVenta';
@@ -667,33 +668,13 @@ const stockInsuficiente = productoSeleccionado
 
       {/* Summary Section */}
       <div className="space-y-4">
-        <div className="flex justify-between items-center gap-4 flex-wrap">
-          <SelectorDesplegable
-            icono="calendar_month"
-            valor={periodoSeleccionado}
-            onChange={elegirPeriodo}
-            opciones={OPCIONES_PERIODO}
-            hint={etiquetaRango}
-          />
-          {periodoSeleccionado === 'personalizado' && (
-            <div className="flex items-center gap-3">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
-                <SelectorFecha
-                  value={filtros.fechaInicio}
-                  onChange={fecha => setFiltros({ ...filtros, fechaInicio: fecha })}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
-                <SelectorFecha
-                  value={filtros.fechaFin}
-                  onChange={fecha => setFiltros({ ...filtros, fechaFin: fecha })}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        <FiltroPeriodo
+          periodo={periodoSeleccionado}
+          etiqueta={etiquetaRango}
+          rango={filtros}
+          onPeriodo={elegirPeriodo}
+          onRango={rango => setFiltros(prev => ({ ...prev, ...rango }))}
+        />
 
         <TarjetasResumen
           totalVentas={totalVentas}

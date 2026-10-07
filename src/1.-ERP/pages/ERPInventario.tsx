@@ -4,7 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { puedeEditarModulo } from '@/lib/roles';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SelectorFecha from '../components/SelectorFecha';
-import SelectorDesplegable, { OPCIONES_PERIODO, etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import FiltroPeriodo from '../components/FiltroPeriodo';
+import { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn } from '@/lib/utils';
 import { useColoresTema } from '@/lib/useColoresTema';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
@@ -69,49 +70,6 @@ const CATEGORIAS_POR_TIPO = {
   producto: ['Mercadería', 'Insumos', 'Otros'],
   servicio: ['Servicios', 'Otros']
 } as const;
-
-/**
- * Filtro de mes de Inventario. Vive en la misma fila que las pestañas en las dos
- * pestañas, siempre a la izquierda, con las pestañas a la derecha. Comparte el
- * componente y las opciones con Ventas para que ambos modulos se comporten igual.
- */
-function FiltroPeriodoMes({ periodo, etiqueta, rango, onPeriodo, onRango }: {
-  periodo: string;
-  etiqueta: string;
-  rango: { fechaInicio: string; fechaFin: string };
-  onPeriodo: (valor: string) => void;
-  onRango: (rango: { fechaInicio: string; fechaFin: string }) => void;
-}) {
-  return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <SelectorDesplegable
-        icono="calendar_month"
-        valor={periodo}
-        onChange={onPeriodo}
-        opciones={OPCIONES_PERIODO}
-        hint={etiqueta}
-      />
-      {periodo === 'personalizado' && (
-        <>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
-            <SelectorFecha
-              value={rango.fechaInicio}
-              onChange={fecha => onRango({ ...rango, fechaInicio: fecha })}
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
-            <SelectorFecha
-              value={rango.fechaFin}
-              onChange={fecha => onRango({ ...rango, fechaFin: fecha })}
-            />
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 export default function ERPInventario() {
   const { inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
@@ -501,12 +459,15 @@ export default function ERPInventario() {
         )}
       </div>
 
-      {/* Tabs. El filtro de mes vive en la misma fila en las dos pestañas y siempre
-          a la izquierda; el grupo de pestañas queda a la derecha. Se eliminaron los
-          botones table_rows / grid_view, asi que la vista de tarjetas ya no tiene
-          forma de activarse y la tabla es la unica vista. */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <FiltroPeriodoMes
+      {/* Tabs. El filtro de mes vive en la misma fila en las dos pestañas, siempre a
+          la izquierda, y el grupo de pestañas queda a la derecha. Las fechas del rango
+          personalizado se alinean por la base con el selector y las pestañas para que
+          el bloque no se desajuste al aparecer. Se eliminaron los botones
+          table_rows / grid_view, asi que la vista de tarjetas ya no tiene forma de
+          activarse y la tabla es la unica vista. */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-6">
+        <FiltroPeriodo
+          className="min-w-0 flex-1"
           periodo={periodoMovimientos}
           etiqueta={etiquetaRangoMovimientos}
           rango={rangoMovimientos}
@@ -514,7 +475,7 @@ export default function ERPInventario() {
           onRango={setRangoMovimientos}
         />
 
-        <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto">
+        <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto shrink-0">
           {[
             { id: 'lista', label: 'Inventario', icon: 'list' },
             { id: 'movimientos', label: 'Movimientos', icon: 'swap_horiz' }
