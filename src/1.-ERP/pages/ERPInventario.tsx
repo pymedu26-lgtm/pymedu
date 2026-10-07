@@ -324,6 +324,27 @@ export default function ERPInventario() {
     return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
   }, [inventario, stockAlCierre]);
 
+  /**
+   * Conteo de productos activos segun su estado de stock en el periodo: alimenta el
+   * donut "Salud del Stock", que reemplaza al consejo logístico estatico.
+   */
+  const stockPorEstado = useMemo(() => {
+    const conteo: Record<'sin_stock' | 'bajo' | 'ok', number> = { sin_stock: 0, bajo: 0, ok: 0 };
+    inventario.forEach(p => {
+      const e = estadoStock(p, stockMostrado(p));
+      if (e !== 'no_aplica') conteo[e] += 1;
+    });
+    const total = conteo.sin_stock + conteo.bajo + conteo.ok;
+    return {
+      total,
+      datos: [
+        { key: 'sin_stock', name: 'Sin stock', value: conteo.sin_stock },
+        { key: 'bajo', name: 'Stock bajo', value: conteo.bajo },
+        { key: 'ok', name: 'En stock', value: conteo.ok }
+      ]
+    };
+  }, [inventario, stockAlCierre]);
+
   const inventarioFiltrado = useMemo(() =>
     inventario.filter(p => {
       const matchBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -622,16 +643,53 @@ export default function ERPInventario() {
               </div>
             </div>
 
-            {/* Consejo */}
-            <div className="bg-primary rounded-3xl p-6 text-inverse-on-surface shadow-xl relative overflow-hidden">
-              <div className="relative z-10">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-2">Consejo Logístico</p>
-                <h4 className="text-xl font-black mb-4 leading-tight">Optimiza tu capital de trabajo</h4>
-                <p className="text-white/80 text-sm leading-relaxed">
-                  Tienes <strong>{productosBajoStock} productos</strong> bajo el stock mínimo. Ajusta el stock desde el icono de cada producto o registra una salida en Movimientos.
-                </p>
-              </div>
-              <span className="material-symbols-outlined absolute -bottom-10 -right-10 text-[180px] opacity-10 rotate-12">inventory</span>
+            {/* Salud del Stock */}
+            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm flex flex-col">
+              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl">query_stats</span>
+                Salud del Stock
+              </h3>
+              <p className="text-[11px] text-outline font-medium mb-4">
+                Productos activos según su nivel de existencias
+              </p>
+              {stockPorEstado.total === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center min-h-[200px]">
+                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">inventory_2</span>
+                  <p className="text-on-surface-variant text-sm font-bold">Sin productos activos</p>
+                </div>
+              ) : (
+                <>
+                  <div className="h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={stockPorEstado.datos}
+                          cx="50%" cy="50%" innerRadius={48} outerRadius={80} paddingAngle={4} dataKey="value" nameKey="name" stroke="none"
+                        >
+                          {stockPorEstado.datos.map(item => (
+                            <Cell
+                              key={item.key}
+                              fill={item.key === 'sin_stock' ? c.error : item.key === 'bajo' ? c.secondary : c.success}
+                            />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                          formatter={(value: number, name: string) => [`${value.toLocaleString('es-CL')}`, name]}
+                        />
+                        <Legend layout="horizontal" verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: '11px', color: c.onSurfaceVariant }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {productosBajoStock > 0 ? (
+                    <p className="text-[11px] font-bold text-secondary mt-3 text-center">
+                      {productosBajoStock} {productosBajoStock === 1 ? 'producto requiere' : 'productos requieren'} atención
+                    </p>
+                  ) : (
+                    <p className="text-[11px] font-bold text-success mt-3 text-center">Stock saludable en todos los productos</p>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
