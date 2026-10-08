@@ -148,7 +148,7 @@ export default function SelectorDesplegable({
   };
 
   return (
-    <div ref={contenedorRef} className={cn('relative', className)}>
+    <div ref={contenedorRef} className={cn('relative z-50', className)}>
       <button
         ref={botonRef}
         type="button"
@@ -193,7 +193,7 @@ export default function SelectorDesplegable({
             width: posicion.ancho,
             maxHeight: posicion.maxHeight
           }}
-          className="fixed z-[70] overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest shadow-xl shadow-shadow/10"
+          className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest shadow-xl shadow-shadow/10"
         >
           {opciones.map(o => {
             const activa = o.valor === valor;
