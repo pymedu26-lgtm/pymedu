@@ -1094,45 +1094,21 @@ export default function ERPInventario() {
                     )}
                   </div>
 
-                  {/* Codigo de barras y uso operativo solo aplican a un producto fisico: un
-                      servicio no se escanea y su uso operativo es siempre "servicio". */}
+                  {/* Uso operativo solo aplica a producto físico */}
                   {tipoEnFormulario === 'producto' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Codigo de barras</label>
-                        <input
-                          type="text"
-                          value={nuevoProducto.codigoBarras || ''}
-                          onKeyDown={() => setBarcodeManualEntry(true)}
-                          onChange={(e) => {
-                            if (barcodeManualEntry) {
-                              setBarcodeManualEntry(false)
-                              setNuevoProducto({ ...nuevoProducto, codigoBarras: '' })
-                              return
-                            }
-                            setNuevoProducto({ ...nuevoProducto, codigoBarras: e.target.value })
-                          }}
-                          onBlur={() => setBarcodeManualEntry(false)}
-                          onPaste={() => setBarcodeManualEntry(false)}
-                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest"
-                          placeholder="Escanear o pegar (manual se descarta)"
-                        />
-                        <p className="mt-1 text-[10px] text-outline">Nota: si lo escribes manualmente, el valor no se guardará.</p>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
-                        <SelectorDesplegable
-                          className="w-full"
-                          valor={nuevoProducto.tipoOperativo || 'producto_simple'}
-                          onChange={valor => setNuevoProducto({ ...nuevoProducto, tipoOperativo: valor as Producto['tipoOperativo'] })}
-                          opciones={[
-                            { valor: 'producto_simple', etiqueta: 'Producto simple' },
-                            { valor: 'pack', etiqueta: 'Pack / combo' },
-                            { valor: 'insumo', etiqueta: 'Insumo' },
-                            { valor: 'producto_compuesto', etiqueta: 'Producto compuesto' }
-                          ]}
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
+                      <SelectorDesplegable
+                        className="w-full"
+                        valor={nuevoProducto.tipoOperativo || 'producto_simple'}
+                        onChange={valor => setNuevoProducto({ ...nuevoProducto, tipoOperativo: valor as Producto['tipoOperativo'] })}
+                        opciones={[
+                          { valor: 'producto_simple', etiqueta: 'Producto simple' },
+                          { valor: 'pack', etiqueta: 'Pack / combo' },
+                          { valor: 'insumo', etiqueta: 'Insumo' },
+                          { valor: 'producto_compuesto', etiqueta: 'Producto compuesto' }
+                        ]}
+                      />
                     </div>
                   )}
 
