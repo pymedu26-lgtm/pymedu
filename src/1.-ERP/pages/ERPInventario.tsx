@@ -41,35 +41,49 @@ const ETIQUETA_STOCK: Record<EstadoStock, { texto: string; clase: string }> = {
  * otro caso se deja en cero o vacio a proposito: un servicio con stock o codigo de
  * barras colgando ensucia la valorizacion, el historial y el contador de alertas.
  */
-const CAMPOS_INICIALES = (tipo: 'producto' | 'servicio' = 'producto'): Partial<Producto> => ({
-  nombre: '',
-  codigo: '',
-  codigoBarras: '',
-  categoria: tipo === 'servicio' ? 'Servicios' : 'Mercadería',
-  tipo,
-  tipoOperativo: tipo === 'servicio' ? 'servicio' : 'producto_simple',
-  descripcion: '',
-  costo: 0,
-  precio: 0,
-  incluyeIva: true,
-  stock: 0,
-  stockReservado: 0,
-  stockMinimo: 0,
-  unidadMedida: tipo === 'servicio' ? 'servicio' : 'un',
-  estado: 'activo',
-  proveedorId: ''
-});
+const CAMPOS_INICIALES = (
+  tipo: 'producto' | 'servicio_hora' | 'servicio_pedido' = 'producto'
+): Partial<Producto> => {
+  const esServicio = tipo !== 'producto'
+  const modalidad = tipo === 'servicio_hora' ? 'por_hora' : tipo === 'servicio_pedido' ? 'por_pedido' : undefined
+
+  return {
+    nombre: '',
+    codigo: '',
+    codigoBarras: '',
+    categoria: esServicio ? 'Servicios' : 'Mercadería',
+    tipo: esServicio ? 'servicio' : 'producto',
+    modalidadServicio: modalidad,
+    tarifaHora: 0,
+    costoHora: 0,
+    precioFijo: 0,
+    costoFijo: 0,
+    tiempoMinimoHoras: 0,
+    tipoOperativo: esServicio ? 'servicio' : 'producto_simple',
+    descripcion: '',
+    costo: 0,
+    precio: 0,
+    incluyeIva: true,
+    stock: 0,
+    stockReservado: 0,
+    stockMinimo: 0,
+    unidadMedida: tipo === 'servicio_hora' ? 'hora' : tipo === 'servicio_pedido' ? 'pedido' : 'un',
+    estado: 'activo',
+    proveedorId: ''
+  }
+}
 
 /** Campos que el usuario escribio y que valen igual para un producto y para un servicio. */
 const CAMPOS_COMUNES: (keyof Producto)[] = [
-  'nombre', 'codigo', 'descripcion', 'costo', 'precio', 'incluyeIva', 'proveedorId', 'estado'
-];
+  'nombre', 'codigo', 'descripcion', 'costo', 'precio', 'tarifaHora', 'costoHora', 'precioFijo', 'costoFijo', 'incluyeIva', 'proveedorId', 'estado'
+]
 
-/** Categorias segun el tipo, para no guardar un producto en "Servicios" o al reves. */
+/** Categorias sugeridas segun el tipo. Se combinan con las ya existentes en el inventario. */
 const CATEGORIAS_POR_TIPO = {
   producto: ['Mercadería', 'Insumos', 'Otros'],
-  servicio: ['Servicios', 'Otros']
-} as const;
+  servicio_hora: ['Servicios', 'Otros'],
+  servicio_pedido: ['Servicios', 'Otros']
+} as const
 
 export default function ERPInventario() {
   const { inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
@@ -86,6 +100,9 @@ export default function ERPInventario() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [mostrarInputCategoria, setMostrarInputCategoria] = useState(false)
+  const [nuevaCategoria, setNuevaCategoria] = useState('')
+  const [barcodeManualEntry, setBarcodeManualEntry] = useState(false)
 
   /* ══ Periodo de los movimientos: mismo selector que Ventas, a la derecha ══ */
 
@@ -302,7 +319,10 @@ export default function ERPInventario() {
   // Tipo efectivo del formulario. Se normaliza en un solo lugar porque la pregunta, los
   // campos condicionales y el guardado dependen de el, y si quedara indefinido la
   // pregunta marcaria Producto mientras el bloque de stock seguiria oculto.
-  const tipoEnFormulario: 'producto' | 'servicio' = nuevoProducto.tipo === 'servicio' ? 'servicio' : 'producto';
+  const tipoEnFormulario: 'producto' | 'servicio_hora' | 'servicio_pedido' =
+  nuevoProducto.tipo === 'servicio'
+    ? (nuevoProducto.modalidadServicio === 'por_hora' ? 'servicio_hora' : 'servicio_pedido')
+    : 'producto';
 
   // "Activos" de verdad: la etiqueta prometia productos vendibles, pero contaba servicios
   // e inactivos, mientras que el selector de Ventas solo ofrece los que estan activos.
@@ -384,11 +404,14 @@ export default function ERPInventario() {
    * respeta lo que el usuario ya escribio. Al editar no se permite cambiar el tipo, como
    * antes: mover un producto con historial a servicio dejaria movimientos huerfanos.
    */
-  const elegirTipo = (tipo: 'producto' | 'servicio') => {
+  const elegirTipo = (tipo: 'producto' | 'servicio_hora' | 'servicio_pedido') => {
     if (editingId) return;
+    setMostrarInputCategoria(false)
+    setNuevaCategoria('')
+    setBarcodeManualEntry(false)
     setNuevoProducto(prev => {
       const yaEscrito = Object.fromEntries(
-        CAMPOS_COMUNES.filter(k => prev[k] !== undefined && prev[k] !== '').map(k => [k, prev[k]])
+        CAMPOS_COMUNES.filter(k => prev[k] !== undefined && prev[k] !== '' && prev[k] !== 0 && prev[k] !== null).map(k => [k, prev[k]])
       );
       return { ...CAMPOS_INICIALES(tipo), ...yaEscrito };
     });
@@ -396,24 +419,54 @@ export default function ERPInventario() {
 
   const handleGuardar = () => {
     if (nuevoProducto.nombre && nuevoProducto.categoria) {
-      const esServicio = tipoEnFormulario === 'servicio';
-      const productoData = {
+      const tf = tipoEnFormulario
+      const esProducto = tf === 'producto'
+      const esServicioHora = tf === 'servicio_hora'
+      const esServicioPedido = tf === 'servicio_pedido'
+      const esServicio = !esProducto
+
+      const tarifaHoraVal = Number(nuevoProducto.tarifaHora ?? 0) || 0
+      const costoHoraVal = Number(nuevoProducto.costoHora ?? 0) || 0
+      const precioFijoVal = Number(nuevoProducto.precioFijo ?? 0) || 0
+      const costoFijoVal = Number(nuevoProducto.costoFijo ?? 0) || 0
+
+      const precioCompat = esServicioHora
+        ? tarifaHoraVal
+        : esServicioPedido
+          ? precioFijoVal
+          : Number(nuevoProducto.precio) || 0
+
+      const costoCompat = esServicioHora
+        ? costoHoraVal
+        : esServicioPedido
+          ? costoFijoVal
+          : Number(nuevoProducto.costo) || 0
+
+      const productoData: Partial<Producto> = {
         nombre: nuevoProducto.nombre,
-        codigo: nuevoProducto.codigo || '',
-        // Un servicio no se escanea ni se reserva: aunque el formulario esconda estos
-        // campos, se fuerzan aqui para que ningun estado desincronizado los guarde.
-        codigoBarras: esServicio ? '' : (nuevoProducto.codigoBarras || ''),
+        codigo: nuevoProducto.codigo?.trim() || '',
+        codigoBarras: esServicio ? '' : (nuevoProducto.codigoBarras?.trim() || ''),
         categoria: nuevoProducto.categoria,
         tipo: esServicio ? 'servicio' : 'producto',
+        modalidadServicio: esServicioHora ? 'por_hora' : esServicioPedido ? 'por_pedido' : undefined,
+        tarifaHora: esServicioHora ? tarifaHoraVal : undefined,
+        costoHora: esServicioHora ? costoHoraVal : undefined,
+        precioFijo: esServicioPedido ? precioFijoVal : undefined,
+        costoFijo: esServicioPedido ? costoFijoVal : undefined,
+        tiempoMinimoHoras: esServicioHora ? (Number(nuevoProducto.tiempoMinimoHoras) || 0) : undefined,
         tipoOperativo: esServicio ? 'servicio' : (nuevoProducto.tipoOperativo || 'producto_simple'),
         descripcion: nuevoProducto.descripcion || '',
-        costo: Number(nuevoProducto.costo) || 0,
-        precio: Number(nuevoProducto.precio) || 0,
+        costo: costoCompat,
+        precio: precioCompat,
         incluyeIva: nuevoProducto.incluyeIva ?? true,
         stock: esServicio ? 0 : (Number(nuevoProducto.stock) || 0),
         stockReservado: esServicio ? 0 : (Number(nuevoProducto.stockReservado) || 0),
         stockMinimo: esServicio ? 0 : (Number(nuevoProducto.stockMinimo) || 0),
-        unidadMedida: esServicio ? 'servicio' : (nuevoProducto.unidadMedida || 'un'),
+        unidadMedida: esServicioHora
+          ? (nuevoProducto.unidadMedida || 'hora')
+          : esServicioPedido
+            ? (nuevoProducto.unidadMedida || 'pedido')
+            : (nuevoProducto.unidadMedida || 'un'),
         estado: nuevoProducto.estado || 'activo',
         proveedorId: nuevoProducto.proveedorId || ''
       };
@@ -421,12 +474,15 @@ export default function ERPInventario() {
       if (editingId) {
         editProducto(editingId, productoData);
       } else {
-        addProducto(productoData);
+        addProducto(productoData as Omit<Producto, 'id'>);
       }
 
       setShowModal(false);
       setEditingId(null);
-      setNuevoProducto(CAMPOS_INICIALES());
+      setMostrarInputCategoria(false);
+      setNuevaCategoria('');
+      setBarcodeManualEntry(false);
+      setNuevoProducto(CAMPOS_INICIALES('producto'));
     }
   };
 
@@ -465,7 +521,14 @@ export default function ERPInventario() {
             Exportar
           </button>
           {puedeEditar && (
-            <button onClick={() => setShowModal(true)}
+            <button onClick={() => {
+              setEditingId(null)
+              setMostrarInputCategoria(false)
+              setNuevaCategoria('')
+              setBarcodeManualEntry(false)
+              setNuevoProducto(CAMPOS_INICIALES('producto'))
+              setShowModal(true)
+            }}
               className="flex items-center gap-2 px-6 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all">
               <span className="material-symbols-outlined text-lg">add_box</span>
               Nuevo Producto
@@ -772,17 +835,17 @@ export default function ERPInventario() {
                                     {ETIQUETA_STOCK[estado].texto}
                                   </span>
                                 )}
-                                {/* Las reservas son pedidos pendientes de hoy: en un mes
-                                    pasado no existian, asi que no se mezclan con el stock
-                                    de ese cierre. */}
-                                {producto.stockReservado && stockPeriodo === producto.stock ? (
+                                {(producto.stockReservado || 0) > 0 && stockPeriodo === producto.stock ? (
                                   <span className="text-[9px] font-medium text-primary">
-                                    ({producto.stockReservado} res. · disp. {Math.max(0, producto.stock - producto.stockReservado)})
+                                    ({producto.stockReservado} res. – disp. {Math.max(0, (producto.stock || 0) - (producto.stockReservado || 0))})
                                   </span>
                                 ) : null}
                               </div>
                             ) : (
-                              <span className="material-symbols-outlined text-outline/30">settings</span>
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida || 'servicio'}</span>
+                                <span className="material-symbols-outlined text-outline/30">work</span>
+                              </div>
                             )}
                           </td>
                           <td className="px-6 py-4 text-right font-bold text-on-surface-variant">
@@ -910,7 +973,7 @@ export default function ERPInventario() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
               <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar Producto' : 'Registrar Nuevo Producto'}</h3>
-              <button onClick={() => { setShowModal(false); setEditingId(null); }} className="text-on-surface-variant hover:text-error transition-colors">
+              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} className="text-on-surface-variant hover:text-error transition-colors">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -921,10 +984,11 @@ export default function ERPInventario() {
                 <p className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
                   {editingId ? 'Tipo' : '¿Producto o Servicio?'}
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {([
-                    { valor: 'producto', titulo: 'Producto', desc: 'Físico, se controla por stock', icon: 'inventory_2' },
-                    { valor: 'servicio', titulo: 'Servicio', desc: 'Intangible, no lleva stock', icon: 'work' }
+                    { valor: 'producto', titulo: 'Producto', desc: 'Físico, con control de stock', icon: 'inventory_2' },
+                    { valor: 'servicio_hora', titulo: 'Servicio por hora', desc: 'Se cobra por hora trabajada', icon: 'schedule' },
+                    { valor: 'servicio_pedido', titulo: 'Servicio por pedido', desc: 'Precio fijo por trabajo/paquete', icon: 'work' }
                   ] as const).map(op => {
                     const activo = tipoEnFormulario === op.valor;
                     return (
@@ -959,7 +1023,7 @@ export default function ERPInventario() {
                         className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: Cuaderno Universitario" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Código / SKU</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Código / SKU (opcional)</label>
                       <input type="text" value={nuevoProducto.codigo} onChange={(e) => setNuevoProducto({...nuevoProducto, codigo: e.target.value})}
                         className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: CUAD-001" />
                     </div>
@@ -969,10 +1033,65 @@ export default function ERPInventario() {
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
                     <SelectorDesplegable
                       className="w-full"
-                      valor={nuevoProducto.categoria}
-                      onChange={valor => setNuevoProducto({ ...nuevoProducto, categoria: valor })}
-                      opciones={CATEGORIAS_POR_TIPO[tipoEnFormulario].map(c => ({ valor: c, etiqueta: c }))}
+                      valor={nuevoProducto.categoria || ''}
+                      onChange={valor => {
+                        if (valor === '__crear_categoria__') {
+                          setMostrarInputCategoria(true)
+                          setNuevaCategoria('')
+                          return
+                        }
+                        setMostrarInputCategoria(false)
+                        setNuevaCategoria('')
+                        setNuevoProducto({ ...nuevoProducto, categoria: valor })
+                      }}
+                      opciones={[
+                        ...((() => {
+                          const existentes = new Set<string>()
+                          inventario.forEach(p => { if (p.categoria?.trim()) existentes.add(p.categoria.trim()) })
+                          CATEGORIAS_POR_TIPO[tipoEnFormulario].forEach(c => existentes.add(c as string))
+                          return Array.from(existentes).sort((a,b)=>a.localeCompare(b))
+                        })()).map(c => ({ valor: c, etiqueta: c })),
+                        { valor: '__crear_categoria__', etiqueta: '+ Crear nueva categoría...' }
+                      ]}
                     />
+                    {mostrarInputCategoria && (
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          type="text"
+                          value={nuevaCategoria}
+                          onChange={(e)=>setNuevaCategoria(e.target.value)}
+                          autoFocus
+                          placeholder="Nombre de la nueva categoría"
+                          className="flex-1 px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nc = nuevaCategoria.trim()
+                            if (!nc) return
+                            const existentes = new Set<string>()
+                            inventario.forEach(p => { if (p.categoria?.trim()) existentes.add(p.categoria.trim()) })
+                            CATEGORIAS_POR_TIPO[tipoEnFormulario].forEach(c => existentes.add(c as string))
+                            const lista = Array.from(existentes)
+                            const existe = lista.some(c=>c.toLowerCase()===nc.toLowerCase())
+                            const categoriaFinal = existe ? lista.find(c=>c.toLowerCase()===nc.toLowerCase()) || nc : nc
+                            setNuevoProducto({...nuevoProducto, categoria: categoriaFinal})
+                            setMostrarInputCategoria(false)
+                            setNuevaCategoria('')
+                          }}
+                          className="px-4 py-3 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm hover:scale-105 transition-transform"
+                        >
+                          Agregar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={()=>{setMostrarInputCategoria(false); setNuevaCategoria('')}}
+                          className="px-4 py-3 rounded-xl border border-outline-variant/40 font-medium hover:bg-surface-container-low transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Codigo de barras y uso operativo solo aplican a un producto fisico: un
@@ -981,8 +1100,24 @@ export default function ERPInventario() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Codigo de barras</label>
-                        <input type="text" value={nuevoProducto.codigoBarras || ''} onChange={(e) => setNuevoProducto({ ...nuevoProducto, codigoBarras: e.target.value })}
-                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: 7800000000000" />
+                        <input
+                          type="text"
+                          value={nuevoProducto.codigoBarras || ''}
+                          onKeyDown={() => setBarcodeManualEntry(true)}
+                          onChange={(e) => {
+                            if (barcodeManualEntry) {
+                              setBarcodeManualEntry(false)
+                              setNuevoProducto({ ...nuevoProducto, codigoBarras: '' })
+                              return
+                            }
+                            setNuevoProducto({ ...nuevoProducto, codigoBarras: e.target.value })
+                          }}
+                          onBlur={() => setBarcodeManualEntry(false)}
+                          onPaste={() => setBarcodeManualEntry(false)}
+                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest"
+                          placeholder="Escanear o pegar (manual se descarta)"
+                        />
+                        <p className="mt-1 text-[10px] text-outline">Nota: si lo escribes manualmente, el valor no se guardará.</p>
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
@@ -1023,16 +1158,46 @@ export default function ERPInventario() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo Unitario</label>
-                      <input type="number" value={nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costo: Number(e.target.value)})}
-                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio Venta Base</label>
-                      <input type="number" value={nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: Number(e.target.value)})}
-                        className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
-                    </div>
+                    {tipoEnFormulario === 'servicio_hora' ? (
+                      <>
+                        <div>
+                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo por hora ($/h)</label>
+                          <input type="number" value={nuevoProducto.costoHora ?? nuevoProducto.costo ?? ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costoHora: Number(e.target.value)||0})}
+                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Tarifa por hora ($/h)</label>
+                          <input type="number" value={nuevoProducto.tarifaHora ?? nuevoProducto.precio ?? ''} onChange={(e) => setNuevoProducto({...nuevoProducto, tarifaHora: Number(e.target.value)||0})}
+                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                        </div>
+                      </>
+                    ) : tipoEnFormulario === 'servicio_pedido' ? (
+                      <>
+                        <div>
+                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo fijo ($)</label>
+                          <input type="number" value={nuevoProducto.costoFijo ?? nuevoProducto.costo ?? ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costoFijo: Number(e.target.value)||0})}
+                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio fijo ($)</label>
+                          <input type="number" value={nuevoProducto.precioFijo ?? nuevoProducto.precio ?? ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precioFijo: Number(e.target.value)||0})}
+                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo Unitario</label>
+                          <input type="number" value={nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costo: Number(e.target.value)||0})}
+                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio Venta Base</label>
+                          <input type="number" value={nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: Number(e.target.value)||0})}
+                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1070,7 +1235,7 @@ export default function ERPInventario() {
               )}
             </div>
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50 shrink-0">
-              <button onClick={() => { setShowModal(false); setEditingId(null); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
+              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 Cancelar
               </button>
               <button onClick={handleGuardar} className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">

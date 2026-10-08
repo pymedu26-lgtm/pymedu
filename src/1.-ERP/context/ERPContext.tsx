@@ -166,24 +166,31 @@ export interface Movimiento {
 }
 
 export interface Producto {
-  id: string;
-  nombre: string;
-  codigo: string;
-  codigoBarras?: string;
-  categoria: string;
-  tipo: 'producto' | 'servicio';
-  tipoOperativo?: 'producto_simple' | 'servicio' | 'pack' | 'insumo' | 'producto_compuesto';
-  descripcion: string;
-  costo: number;
-  precio: number;
-  incluyeIva: boolean;
-  stock: number;
-  stockReservado?: number;
-  stockMinimo: number;
-  bodegaPrincipalId?: string;
-  unidadMedida: string;
-  estado: 'activo' | 'inactivo';
-  proveedorId?: string;
+  id: string
+  nombre: string
+  codigo: string
+  codigoBarras?: string
+  categoria: string
+  tipo: 'producto' | 'servicio'
+  modalidadServicio?: 'por_hora' | 'por_pedido'
+  tarifaHora?: number
+  costoHora?: number
+  precioFijo?: number
+  costoFijo?: number
+  tiempoMinimoHoras?: number
+  tipoOperativo?: 'producto_simple' | 'servicio' | 'pack' | 'insumo' | 'producto_compuesto'
+  descripcion?: string
+  costo: number
+  precio: number
+  incluyeIva?: boolean
+  stock: number
+  stockReservado?: number
+  stockMinimo?: number
+  bodegaPrincipalId?: string
+  unidadMedida: string
+  estado: 'activo' | 'inactivo'
+  proveedorId?: string
+  esInventariable?: boolean
 }
 
 export interface MovimientoInventario {
