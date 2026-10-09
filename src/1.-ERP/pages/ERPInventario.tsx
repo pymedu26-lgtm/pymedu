@@ -85,6 +85,21 @@ const CATEGORIAS_POR_TIPO = {
   servicio_pedido: ['Servicios', 'Otros']
 } as const
 
+/** Unidades de medida por defecto para productos fisicos. */
+const UNIDADES_PRODUCTO: { valor: string; etiqueta: string }[] = [
+  { valor: 'un', etiqueta: 'Unidad (un)' },
+  { valor: 'kg', etiqueta: 'Kilogramo (kg)' },
+  { valor: 'g', etiqueta: 'Gramo (g)' },
+  { valor: 'lt', etiqueta: 'Litro (lt)' },
+  { valor: 'ml', etiqueta: 'Mililitro (ml)' },
+  { valor: 'm', etiqueta: 'Metro (m)' },
+  { valor: 'cm', etiqueta: 'Centimetro (cm)' },
+  { valor: 'caja', etiqueta: 'Caja' },
+  { valor: 'pack', etiqueta: 'Pack' },
+  { valor: 'docena', etiqueta: 'Docena' },
+  { valor: 'par', etiqueta: 'Par' }
+]
+
 export default function ERPInventario() {
   const { inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
   // La matriz de roles define quien escribe en cada modulo, pero hasta ahora solo se
@@ -1197,8 +1212,19 @@ export default function ERPInventario() {
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Unidad</label>
-                        <input type="text" value={nuevoProducto.unidadMedida} onChange={(e) => setNuevoProducto({...nuevoProducto, unidadMedida: e.target.value})}
-                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="un, kg, lt..." />
+                        <SelectorDesplegable
+                          className="w-full [&>button]:py-3"
+                          valor={nuevoProducto.unidadMedida || 'un'}
+                          onChange={valor => setNuevoProducto({ ...nuevoProducto, unidadMedida: valor })}
+                          opciones={(() => {
+                            const actual = nuevoProducto.unidadMedida
+                            const lista = UNIDADES_PRODUCTO.map(u => ({ valor: u.valor, etiqueta: u.etiqueta }))
+                            if (actual && !UNIDADES_PRODUCTO.some(u => u.valor === actual)) {
+                              lista.unshift({ valor: actual, etiqueta: actual })
+                            }
+                            return lista
+                          })()}
+                        />
                       </div>
                     </div>
                   )}
