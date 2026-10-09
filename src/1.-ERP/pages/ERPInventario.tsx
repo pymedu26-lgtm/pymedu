@@ -1153,12 +1153,12 @@ export default function ERPInventario() {
                       <>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo por hora ($/h)</label>
-                          <input type="number" value={nuevoProducto.costoHora ?? nuevoProducto.costo ?? ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costoHora: Number(e.target.value)||0})}
+                          <input type="number" value={nuevoProducto.costoHora || nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costoHora: Number(e.target.value)||0})}
                             className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Tarifa por hora ($/h)</label>
-                          <input type="number" value={nuevoProducto.tarifaHora ?? nuevoProducto.precio ?? ''} onChange={(e) => setNuevoProducto({...nuevoProducto, tarifaHora: Number(e.target.value)||0})}
+                          <input type="number" value={nuevoProducto.tarifaHora || nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, tarifaHora: Number(e.target.value)||0})}
                             className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
                         </div>
                       </>
@@ -1166,12 +1166,12 @@ export default function ERPInventario() {
                       <>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo fijo ($)</label>
-                          <input type="number" value={nuevoProducto.costoFijo ?? nuevoProducto.costo ?? ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costoFijo: Number(e.target.value)||0})}
+                          <input type="number" value={nuevoProducto.costoFijo || nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costoFijo: Number(e.target.value)||0})}
                             className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio fijo ($)</label>
-                          <input type="number" value={nuevoProducto.precioFijo ?? nuevoProducto.precio ?? ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precioFijo: Number(e.target.value)||0})}
+                          <input type="number" value={nuevoProducto.precioFijo || nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precioFijo: Number(e.target.value)||0})}
                             className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
                         </div>
                       </>
