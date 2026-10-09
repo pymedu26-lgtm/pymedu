@@ -1003,8 +1003,8 @@ export default function ERPInventario() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {([
                     { valor: 'producto', titulo: 'Producto', desc: 'Físico, con control de stock', icon: 'inventory_2' },
-                    { valor: 'servicio_hora', titulo: 'Servicio por hora', desc: 'Se cobra por hora trabajada', icon: 'schedule' },
-                    { valor: 'servicio_pedido', titulo: 'Servicio por pedido', desc: 'Precio fijo por trabajo/paquete', icon: 'work' }
+                    { valor: 'servicio_pedido', titulo: 'Servicios', desc: 'Precio fijo por trabajo/paquete', icon: 'work' },
+                    { valor: 'servicio_hora', titulo: 'Servicio por hora', desc: 'Se cobra por hora trabajada', icon: 'schedule' }
                   ] as const).map(op => {
                     const activo = tipoEnFormulario === op.valor;
                     return (
