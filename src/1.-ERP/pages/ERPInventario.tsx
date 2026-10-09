@@ -1182,33 +1182,28 @@ export default function ERPInventario() {
                       className="w-4 h-4 text-primary rounded border-outline-variant/50 focus:ring-primary/20" />
                     <label htmlFor="incluyeIva" className="text-sm text-on-surface font-medium">El precio de venta incluye IVA</label>
                   </div>
+
+                  {tipoEnFormulario === 'producto' && (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Actual</label>
+                        <input type="number" value={nuevoProducto.stock || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: Number(e.target.value)})}
+                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" disabled={!!editingId} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Mínimo</label>
+                        <input type="number" value={nuevoProducto.stockMinimo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stockMinimo: Number(e.target.value)})}
+                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Unidad</label>
+                        <input type="text" value={nuevoProducto.unidadMedida} onChange={(e) => setNuevoProducto({...nuevoProducto, unidadMedida: e.target.value})}
+                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="un, kg, lt..." />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {tipoEnFormulario === 'producto' && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/20">
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Actual</label>
-                    <input type="number" value={nuevoProducto.stock || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: Number(e.target.value)})}
-                      className="w-full px-4 py-2 rounded-lg border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" disabled={!!editingId} />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Reservado</label>
-                    <input type="number" value={nuevoProducto.stockReservado || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stockReservado: Number(e.target.value)})}
-                      className="w-full px-4 py-2 rounded-lg border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Mínimo</label>
-                    <input type="number" value={nuevoProducto.stockMinimo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stockMinimo: Number(e.target.value)})}
-                      className="w-full px-4 py-2 rounded-lg border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Unidad</label>
-                    <input type="text" value={nuevoProducto.unidadMedida} onChange={(e) => setNuevoProducto({...nuevoProducto, unidadMedida: e.target.value})}
-                      className="w-full px-4 py-2 rounded-lg border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="un, kg, lt..." />
-                  </div>
-                </div>
-              )}
             </div>
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50 shrink-0">
               <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
