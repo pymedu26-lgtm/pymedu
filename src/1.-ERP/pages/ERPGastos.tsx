@@ -3,6 +3,7 @@ import { useERP, Gasto, MetodoPago } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
 import SelectorFecha from '../components/SelectorFecha';
+import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
 import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
@@ -373,8 +374,8 @@ export default function ERPGastos() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Monto Total</label>
-                      <input type="number" value={nuevoGasto.monto || ''} onChange={e => setNuevoGasto({ ...nuevoGasto, monto: Number(e.target.value) })}
-                        className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" placeholder="$0" />
+                      <CampoMoneda valor={nuevoGasto.monto} onChange={monto => setNuevoGasto({ ...nuevoGasto, monto })}
+                        className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>

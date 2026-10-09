@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { puedeEditarModulo } from '@/lib/roles';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SelectorFecha from '../components/SelectorFecha';
+import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
 import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn } from '@/lib/utils';
@@ -1153,39 +1154,39 @@ export default function ERPInventario() {
                       <>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo por hora ($/h)</label>
-                          <input type="number" value={nuevoProducto.costoHora || nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costoHora: Number(e.target.value)||0})}
-                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                          <CampoMoneda valor={nuevoProducto.costoHora || nuevoProducto.costo || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, costoHora: valor})}
+                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Tarifa por hora ($/h)</label>
-                          <input type="number" value={nuevoProducto.tarifaHora || nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, tarifaHora: Number(e.target.value)||0})}
-                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                          <CampoMoneda valor={nuevoProducto.tarifaHora || nuevoProducto.precio || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, tarifaHora: valor})}
+                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                       </>
                     ) : tipoEnFormulario === 'servicio_pedido' ? (
                       <>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo fijo ($)</label>
-                          <input type="number" value={nuevoProducto.costoFijo || nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costoFijo: Number(e.target.value)||0})}
-                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                          <CampoMoneda valor={nuevoProducto.costoFijo || nuevoProducto.costo || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, costoFijo: valor})}
+                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio fijo ($)</label>
-                          <input type="number" value={nuevoProducto.precioFijo || nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precioFijo: Number(e.target.value)||0})}
-                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                          <CampoMoneda valor={nuevoProducto.precioFijo || nuevoProducto.precio || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, precioFijo: valor})}
+                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                       </>
                     ) : (
                       <>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo Unitario</label>
-                          <input type="number" value={nuevoProducto.costo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, costo: Number(e.target.value)||0})}
-                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                          <CampoMoneda valor={nuevoProducto.costo || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, costo: valor})}
+                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio Venta Base</label>
-                          <input type="number" value={nuevoProducto.precio || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: Number(e.target.value)||0})}
-                            className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="$0" />
+                          <CampoMoneda valor={nuevoProducto.precio || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, precio: valor})}
+                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                       </>
                     )}
@@ -1285,8 +1286,8 @@ export default function ERPInventario() {
               {nuevoMovimiento.tipo === 'ingreso' && (
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo Unitario (Opcional)</label>
-                  <input type="number" value={nuevoMovimiento.costoUnitario || ''} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, costoUnitario: Number(e.target.value)})}
-                    className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Actualizar costo..." />
+                  <CampoMoneda valor={nuevoMovimiento.costoUnitario || ''} onChange={(valor) => setNuevoMovimiento({...nuevoMovimiento, costoUnitario: valor})}
+                    className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Actualizar costo..." />
                 </div>
               )}
               <div>

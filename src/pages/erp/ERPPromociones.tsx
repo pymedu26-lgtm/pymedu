@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useERP, Promocion } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
+import CampoMoneda from '../../components/CampoMoneda';
 import { cn } from '@/lib/utils';
 
 export default function ERPPromociones() {
@@ -115,8 +116,13 @@ export default function ERPPromociones() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Valor</label>
-                  <input type="number" value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
+                  {nuevo.tipo === 'monto' ? (
+                    <CampoMoneda valor={nuevo.valor} onChange={valor => setNuevo({ ...nuevo, valor: String(valor) })}
+                      className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
+                  ) : (
+                    <input type="number" value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
+                  )}
                 </div>
               </div>
               <div>

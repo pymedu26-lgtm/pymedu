@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useERP, MetodoPago } from '../../1.-ERP/context/ERPContext';
 import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
+import CampoMoneda from '../../components/CampoMoneda';
 import { cn, formatFecha } from '@/lib/utils';
 
 const METODOS: { value: MetodoPago; label: string }[] = [
@@ -117,8 +118,8 @@ export default function ERPPagar() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Monto</label>
-                    <input type="number" value={form.monto} max={saldo} onChange={e => setForm({ ...form, monto: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
+                    <CampoMoneda valor={form.monto} onChange={monto => setForm({ ...form, monto: String(monto) })}
+                      className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
                   </div>
                   <div>
               <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>

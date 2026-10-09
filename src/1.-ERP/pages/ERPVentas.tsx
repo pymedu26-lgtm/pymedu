@@ -4,6 +4,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
 import BuscadorCliente from '../components/BuscadorCliente';
 import SelectorFecha from '../components/SelectorFecha';
+import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
 import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
@@ -1114,13 +1115,10 @@ const stockInsuficiente = productoSeleccionado
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio unitario ($)</label>
-                    <input 
-                      type="number" 
-                      min="0"
-                      value={productoActual.precio || ''}
-                      onChange={(e) => setProductoActual({...productoActual, precio: Number(e.target.value)})}
-                      placeholder="$0"
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
+                    <CampoMoneda
+                      valor={productoActual.precio || ''}
+                      onChange={(valor) => setProductoActual({...productoActual, precio: valor})}
+                      className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                     />
                   </div>
                 </div>
@@ -1199,18 +1197,14 @@ const stockInsuficiente = productoSeleccionado
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Pago recibido</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max={totalesVenta.total}
-                      value={montoPagado}
-                      onChange={(e) => {
-                        setMontoPagado(e.target.value);
-                        const saldo = Math.max(0, totalesVenta.total - Number(e.target.value || 0));
+                    <CampoMoneda
+                      valor={montoPagado}
+                      onChange={(valor) => {
+                        setMontoPagado(String(valor));
+                        const saldo = Math.max(0, totalesVenta.total - valor);
                         setNuevaVenta({ ...nuevaVenta, estado: saldo > 0 ? 'Pendiente' : 'Pagado' });
                       }}
-                      className="w-full px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                      placeholder="$0"
+                      className="px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                     />
                   </div>
                   {impactoVenta.saldoPendiente > 0 && (
