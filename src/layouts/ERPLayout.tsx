@@ -322,6 +322,7 @@ name: 'Mi institución',
       <aside
         className={cn(
           'sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300',
+          !sidebarOpen && openGroups.size > 0 && 'z-[1100]',
           sidebarOpen ? 'w-[248px]' : 'w-[64px]'
         )}
       >
