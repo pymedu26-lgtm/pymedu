@@ -105,6 +105,12 @@ export const api = {
   crearUsuario: (payload: Record<string, unknown>) =>
     request<{ perfil: Record<string, unknown> }>('/api/admin/crear-usuario', json(payload)),
 
+  actualizarUsuario: (id: string, payload: Record<string, unknown>) =>
+    request<{ perfil: Record<string, unknown> }>(`/api/admin/perfiles/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
   // ── Vinculación ───────────────────────────────────────
   miVinculacion: () =>
     request<{ data: Record<string, unknown> | null }>('/api/vinculacion/mi'),

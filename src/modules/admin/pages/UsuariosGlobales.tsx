@@ -67,6 +67,18 @@ export default function UsuariosGlobales() {
     institucion_id: '',
     membresia_nivel: 'premium' as 'free' | 'pro' | 'premium',
   });
+  const [showEditar, setShowEditar] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [usuarioEditando, setUsuarioEditando] = useState<Record<string, unknown> | null>(null);
+  const [editData, setEditData] = useState({
+    nombre_completo: '',
+    email: '',
+    rol: 'emprendedor',
+    institucion_id: '',
+    membresia_nivel: 'free' as 'free' | 'pro' | 'premium',
+    activo: true,
+    password: '',
+  });
 
   const fetchInstituciones = useCallback(async () => {
     try {
@@ -151,6 +163,51 @@ export default function UsuariosGlobales() {
     setNuevoUsuario({ nombre_completo: '', email: '', password: '', rol: 'emprendedor', institucion_id: '', membresia_nivel: 'premium' });
     fetchUsuarios();
     fetchStats();
+  };
+
+  const handleEditar = (u: Record<string, unknown>) => {
+    setError('');
+    setExito('');
+    setUsuarioEditando(u);
+    setEditData({
+      nombre_completo: (u.nombre_completo as string) ?? '',
+      email: (u.email as string) ?? '',
+      rol: (u.rol as string) ?? 'emprendedor',
+      institucion_id: (u.institucion_id as string) ?? '',
+      membresia_nivel: ((u.membresia_nivel as string) ?? 'free') as 'free' | 'pro' | 'premium',
+      activo: Boolean(u.activo),
+      password: '',
+    });
+    setShowEditar(true);
+  };
+
+  const handleGuardarEdicion = async () => {
+    if (!usuarioEditando) return;
+    setError('');
+    setExito('');
+    setEditando(true);
+    try {
+      const payload: Record<string, unknown> = {
+        nombre_completo: editData.nombre_completo.trim(),
+        email: editData.email.trim(),
+        rol: editData.rol,
+        institucion_id: editData.institucion_id || null,
+        membresia_nivel: editData.membresia_nivel,
+        activo: editData.activo,
+      };
+      if (editData.password.trim()) {
+        payload.password = editData.password.trim();
+      }
+      await api.actualizarUsuario(usuarioEditando.id as string, payload);
+      setEditando(false);
+      setExito('Usuario actualizado correctamente.');
+      setShowEditar(false);
+      fetchUsuarios();
+      fetchStats();
+    } catch (err) {
+      setEditando(false);
+      setError(err instanceof Error ? err.message : 'No se pudo actualizar el usuario.');
+    }
   };
 
   return (
@@ -263,7 +320,7 @@ export default function UsuariosGlobales() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-1">
-                      <button className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Editar">
+                      <button onClick={() => handleEditar(u)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Editar">
                         <span className="material-symbols-outlined text-on-surface-variant text-lg">edit</span>
                       </button>
                       <button className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Cambiar rol">
@@ -400,6 +457,107 @@ export default function UsuariosGlobales() {
                 className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50"
               >
                 {creando ? 'Creando...' : 'Crear usuario'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar usuario */}
+      {showEditar && usuarioEditando && (
+        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-outline-variant/30 flex justify-between items-center shrink-0">
+              <h3 className="text-lg font-bold text-on-surface">Editar usuario</h3>
+              <button onClick={() => setShowEditar(false)} className="text-on-surface-variant hover:text-on-surface">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-6 space-y-4 overflow-y-auto">
+              {exito && (
+                <p className="flex items-center gap-1.5 text-xs font-bold text-on-success-container bg-success-container rounded-xl px-3 py-2">
+                  <span className="material-symbols-outlined text-base">check_circle</span> {exito}
+                </p>
+              )}
+              {error && (
+                <p className="flex items-center gap-1.5 text-xs font-bold text-on-error-container bg-error-container rounded-xl px-3 py-2">
+                  <span className="material-symbols-outlined text-base">error</span> {error}
+                </p>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre completo</label>
+                <input
+                  type="text" value={editData.nombre_completo}
+                  onChange={e => setEditData({ ...editData, nombre_completo: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Email</label>
+                <input
+                  type="email" value={editData.email}
+                  onChange={e => setEditData({ ...editData, email: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Contraseña (dejar vacío para no cambiar)</label>
+                <input
+                  type="password" value={editData.password}
+                  onChange={e => setEditData({ ...editData, password: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Rol</label>
+                <select
+                  value={editData.rol}
+                  onChange={e => setEditData({ ...editData, rol: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                >
+                  {ROLES_CREABLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  {usuarioEditando?.rol === 'superadmin' && <option value="superadmin">Super Admin</option>}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Institución</label>
+                <select
+                  value={editData.institucion_id}
+                  onChange={e => setEditData({ ...editData, institucion_id: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                >
+                  <option value="">Sin institución</option>
+                  {instituciones.map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Membresía</label>
+                <select
+                  value={editData.membresia_nivel}
+                  onChange={e => setEditData({ ...editData, membresia_nivel: e.target.value as 'free' | 'pro' | 'premium' })}
+                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                >
+                  {MEMBRESIAS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  id="activo" type="checkbox" checked={editData.activo}
+                  onChange={e => setEditData({ ...editData, activo: e.target.checked })}
+                  className="h-5 w-5 rounded"
+                />
+                <label htmlFor="activo" className="text-sm font-bold text-on-surface-variant">Usuario activo</label>
+              </div>
+            </div>
+            <div className="px-6 pb-6 flex gap-3 shrink-0">
+              <button onClick={() => setShowEditar(false)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button
+                onClick={handleGuardarEdicion}
+                disabled={editando}
+                className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50"
+              >
+                {editando ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
           </div>

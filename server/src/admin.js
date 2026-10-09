@@ -97,6 +97,107 @@ router.post('/crear-usuario', soloSuperadmin, async (req, res) => {
   }
 });
 
+// Superadmin actualiza un usuario.
+router.put('/perfiles/:id', soloSuperadmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body ?? {};
+    const asignaciones = [];
+    const parametros = [];
+
+    const existente = await db.prepare('SELECT id, email, rol FROM perfiles WHERE id = ?').get(id);
+    if (!existente) return res.status(404).json({ error: 'El usuario no existe.' });
+    if (id === req.perfil.id && body.activo === false) {
+      return res.status(400).json({ error: 'No puedes desactivar tu propio usuario.' });
+    }
+
+    if (body.nombre_completo !== undefined) {
+      asignaciones.push('nombre_completo = ?');
+      parametros.push(String(body.nombre_completo).trim());
+    }
+
+    if (body.email !== undefined && body.email !== existente.email) {
+      const emailLimpio = String(body.email).trim().toLowerCase();
+      const otro = await db.prepare('SELECT id FROM perfiles WHERE email = ? AND id != ?').get(emailLimpio, id);
+      if (otro) return res.status(409).json({ error: 'El email ya está registrado.' });
+      asignaciones.push('email = ?');
+      parametros.push(emailLimpio);
+    }
+
+    if (body.rol !== undefined) {
+      const rolNuevo = body.rol;
+      if (!ROLES_CREABLES.includes(rolNuevo) && rolNuevo !== 'superadmin') {
+        return res.status(400).json({ error: `Rol no permitido: ${rolNuevo}` });
+      }
+      if (id === req.perfil.id && rolNuevo !== existente.rol) {
+        return res.status(400).json({ error: 'No puedes cambiar tu propio rol.' });
+      }
+      asignaciones.push('rol = ?');
+      parametros.push(rolNuevo);
+    }
+
+    if (body.institucion_id !== undefined) {
+      const instId = body.institucion_id || null;
+      if (instId) {
+        const inst = await db.prepare('SELECT id FROM instituciones WHERE id = ?').get(instId);
+        if (!inst) return res.status(400).json({ error: 'La institución no existe.' });
+      }
+      asignaciones.push('institucion_id = ?');
+      parametros.push(instId);
+    }
+
+    if (body.membresia_nivel !== undefined || body.membresia !== undefined) {
+      const nivel = body.membresia_nivel ?? body.membresia;
+      if (!['free', 'pro', 'premium'].includes(nivel)) {
+        return res.status(400).json({ error: 'Membresía inválida.' });
+      }
+      asignaciones.push('membresia_nivel = ?');
+      parametros.push(nivel);
+      const flags = flagsPorMembresia(nivel);
+      asignaciones.push('puede_ver_remuneraciones = ?');
+      parametros.push(flags.puede_ver_remuneraciones);
+      asignaciones.push('puede_ver_caja = ?');
+      parametros.push(flags.puede_ver_caja);
+      asignaciones.push('puede_ver_reportes = ?');
+      parametros.push(flags.puede_ver_reportes);
+      asignaciones.push('puede_crear_ventas = ?');
+      parametros.push(flags.puede_crear_ventas);
+      asignaciones.push('puede_crear_gastos = ?');
+      parametros.push(flags.puede_crear_gastos);
+    }
+
+    if (body.activo !== undefined) {
+      asignaciones.push('activo = ?');
+      parametros.push(body.activo ? 1 : 0);
+    }
+
+    if (body.password !== undefined && body.password !== '') {
+      if (String(body.password).length < 6) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
+      }
+      asignaciones.push('password_hash = ?');
+      parametros.push(bcrypt.hashSync(String(body.password), 10));
+    }
+
+    if (asignaciones.length === 0) {
+      return res.status(400).json({ error: 'sin_campos_para_actualizar' });
+    }
+
+    asignaciones.push("updated_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')");
+
+    await db.prepare(`UPDATE perfiles SET ${asignaciones.join(', ')} WHERE id = ?`).run(...parametros, id);
+
+    const perfil = await db.prepare('SELECT * FROM perfiles WHERE id = ?').get(id);
+    res.json({ perfil: sanitizarPerfil(perfil) });
+  } catch (error) {
+    console.error('[admin] Error actualizando usuario:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'El email ya está registrado.' });
+    }
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // Superadmin elimina un usuario (cascade: errores de ERP, solicitudes,
 // usuario_programas; reporta_a/creado_por pasan a NULL).
 router.delete('/perfiles/:id', soloSuperadmin, async (req, res) => {
