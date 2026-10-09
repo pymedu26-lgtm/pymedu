@@ -132,14 +132,18 @@ export default function SelectorDesplegable({
     const abreArriba = espacioAbajo < ALTO_LISTA_MAX && espacioArriba > espacioAbajo;
     const disponible = Math.max(160, (abreArriba ? espacioArriba : espacioAbajo) - MARGEN_VENTANA);
     const maxHeight = Math.min(ALTO_LISTA_MAX, disponible);
-    const top = abreArriba
-      ? Math.max(MARGEN_VENTANA, rect.top - SEPARACION - maxHeight)
-      : rect.bottom + SEPARACION;
+    // Al abrir hacia arriba se ancla el borde inferior del panel al borde
+    // superior del boton. Con top + maxHeight una lista corta flotaba lejos
+    // del boton porque maxHeight es solo el tope, no la altura real.
+    const top = abreArriba ? undefined : rect.bottom + SEPARACION;
+    const bottom = abreArriba
+      ? Math.max(MARGEN_VENTANA, window.innerHeight - rect.top + SEPARACION)
+      : undefined;
     const left = Math.min(
       Math.max(MARGEN_VENTANA, rect.left),
       Math.max(MARGEN_VENTANA, window.innerWidth - ancho - MARGEN_VENTANA)
     );
-    return { top, left, maxHeight, ancho };
+    return { top, bottom, left, maxHeight, ancho };
   }, [rect]);
 
   const elegir = (v: string) => {
@@ -189,6 +193,7 @@ export default function SelectorDesplegable({
           role="listbox"
           style={{
             top: posicion.top,
+            bottom: posicion.bottom,
             left: posicion.left,
             width: posicion.ancho,
             maxHeight: posicion.maxHeight

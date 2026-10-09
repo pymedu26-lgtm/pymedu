@@ -115,14 +115,17 @@ export default function SelectorFecha({
     const abreArriba = espacioAbajo < ALTO_CALENDARIO && espacioArriba > espacioAbajo;
     const disponible = Math.max(160, (abreArriba ? espacioArriba : espacioAbajo) - MARGEN_VENTANA);
     const maxHeight = Math.min(ALTO_CALENDARIO, disponible);
-    const top = abreArriba
-      ? Math.max(MARGEN_VENTANA, rect.top - SEPARACION - maxHeight)
-      : rect.bottom + SEPARACION;
+    // Al abrir hacia arriba se ancla el borde inferior del calendario al borde
+    // superior del boton, para no depender de la altura maxima estimada.
+    const top = abreArriba ? undefined : rect.bottom + SEPARACION;
+    const bottom = abreArriba
+      ? Math.max(MARGEN_VENTANA, window.innerHeight - rect.top + SEPARACION)
+      : undefined;
     const left = Math.min(
       Math.max(MARGEN_VENTANA, rect.left),
       Math.max(MARGEN_VENTANA, window.innerWidth - ANCHO_CALENDARIO - MARGEN_VENTANA)
     );
-    return { top, left, maxHeight };
+    return { top, bottom, left, maxHeight };
   }, [rect]);
 
   const dias = useMemo(() => {
@@ -187,6 +190,7 @@ export default function SelectorFecha({
           aria-label="Calendario"
           style={{
             top: posicion.top,
+            bottom: posicion.bottom,
             left: posicion.left,
             width: ANCHO_CALENDARIO,
             maxHeight: posicion.maxHeight

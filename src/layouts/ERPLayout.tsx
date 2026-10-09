@@ -3,7 +3,7 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useERP } from '../1.-ERP/context/ERPContext';
-import { useState } from 'react';
+import { useState, useRef, useCallback, useLayoutEffect } from 'react';
 
 interface NavItem {
   name: string;
@@ -35,6 +35,9 @@ export default function ERPLayout() {
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [avatarError, setAvatarError] = useState(false);
+  const [flyoutTop, setFlyoutTop] = useState(8);
+  const flyoutRef = useRef<HTMLDivElement>(null);
+  const gruposRef = useRef<Record<string, HTMLElement | null>>({});
 
   const esPremium = perfil?.membresia_nivel === 'pro' || perfil?.membresia_nivel === 'premium';
 
@@ -296,6 +299,31 @@ name: 'Mi institución',
     });
   };
 
+  // Con el sidebar colapsado, el panel de la seccion se alinea verticalmente
+  // con el icono que lo abrio en lugar de quedar pegado al borde superior.
+  const reposicionarFlyout = useCallback(() => {
+    if (sidebarOpen) return;
+    const key = openGroups.values().next().value as string | undefined;
+    const section = key ? gruposRef.current[key] : null;
+    const panel = flyoutRef.current;
+    if (!section || !panel) return;
+    const margen = 8;
+    const s = section.getBoundingClientRect();
+    const alto = panel.offsetHeight;
+    setFlyoutTop(Math.max(margen, Math.min(s.top, window.innerHeight - alto - margen)));
+  }, [openGroups, sidebarOpen]);
+
+  useLayoutEffect(() => {
+    reposicionarFlyout();
+    if (sidebarOpen) return;
+    window.addEventListener('resize', reposicionarFlyout);
+    window.addEventListener('scroll', reposicionarFlyout, true);
+    return () => {
+      window.removeEventListener('resize', reposicionarFlyout);
+      window.removeEventListener('scroll', reposicionarFlyout, true);
+    };
+  }, [reposicionarFlyout, sidebarOpen]);
+
   const membresiaConfig = {
     free: { label: 'Gratuito', cls: 'bg-on-primary-container/15 text-on-primary-container' },
     pro: { label: 'Pro', cls: 'bg-on-primary-container/25 text-on-primary-container' },
@@ -375,6 +403,7 @@ name: 'Mi institución',
             return (
               <section
                 key={group.key}
+                ref={el => { gruposRef.current[group.key] = el; }}
                 className={cn(
                   'relative mb-2.5 transition-all duration-200',
                   sidebarOpen
@@ -435,10 +464,12 @@ name: 'Mi institución',
                       />
                     )}
                     <div
+                      ref={!sidebarOpen ? flyoutRef : undefined}
+                      style={!sidebarOpen ? { top: flyoutTop, maxHeight: 'calc(100vh - 1rem)' } : undefined}
                       className={cn(
                         sidebarOpen
                           ? 'mt-2.5 space-y-1.5'
-                          : 'fixed left-[64px] top-0 bottom-0 z-[70] w-72 space-y-2 bg-primary-container p-4 shadow-2xl border-l border-white/10 overflow-y-auto hide-scrollbar'
+                          : 'fixed left-[64px] z-[70] w-72 space-y-2 bg-primary-container p-4 shadow-2xl border-l border-white/10 overflow-y-auto hide-scrollbar'
                       )}
                     >
                       {!sidebarOpen && (
