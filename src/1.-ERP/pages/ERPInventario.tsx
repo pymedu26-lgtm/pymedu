@@ -7,7 +7,7 @@ import SelectorFecha from '../components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
 import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
-import { cn } from '@/lib/utils';
+import { cn, formatFecha } from '@/lib/utils';
 import { useColoresTema } from '@/lib/useColoresTema';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 
@@ -180,22 +180,33 @@ export default function ERPInventario() {
   }), [movimientosEnRango]);
 
   /**
-   * Movimientos por dia del periodo, con entradas y salidas por separado: es el
-   * equivalente al grafico de ventas por dia, pero con las dosSeries que importan en
-   * bodega. El dia se ordena numericamente; ordenar el texto "Dia 10" contra "Dia 2"
-   * los deja fuera de secuencia.
+   * Movimientos por dia del periodo: un punto por fecha, con entradas y salidas
+   * por separado. Si el rango cruza meses (Personalizado) la etiqueta lleva
+   * dia/mes/año; agrupar solo por dia de mes mezclaba meses distintos en la
+   * misma columna. Las fechas ISO ordenan cronologicamente.
    */
   const datosMovimientosPorDia = useMemo(() => {
-    const porDia: Record<number, { dia: number; etiqueta: string; entradas: number; salidas: number }> = {};
+    const porFecha: Record<string, { entradas: number; salidas: number }> = {};
     movimientosEnRango.forEach(m => {
-      const dia = Number((m.fecha || '').slice(8, 10));
-      if (!dia) return;
-      if (!porDia[dia]) porDia[dia] = { dia, etiqueta: `Dia ${dia}`, entradas: 0, salidas: 0 };
-      if (m.tipo === 'ingreso' || m.tipo === 'devolucion') porDia[dia].entradas += m.cantidad;
-      else if (m.tipo === 'salida' || m.tipo === 'merma') porDia[dia].salidas += m.cantidad;
+      const fecha = (m.fecha || '').slice(0, 10);
+      if (!fecha) return;
+      const serie = porFecha[fecha] ?? (porFecha[fecha] = { entradas: 0, salidas: 0 });
+      if (m.tipo === 'ingreso' || m.tipo === 'devolucion') serie.entradas += m.cantidad;
+      else if (m.tipo === 'salida' || m.tipo === 'merma') serie.salidas += m.cantidad;
     });
-    return Object.values(porDia).sort((a, b) => a.dia - b.dia);
+    const fechas = Object.keys(porFecha).sort();
+    const mismoMes = fechas.every(f => f.slice(0, 7) === fechas[0]?.slice(0, 7));
+    return fechas.map(fecha => ({
+      etiqueta: mismoMes ? `Dia ${Number(fecha.slice(8, 10))}` : formatFecha(fecha),
+      entradas: porFecha[fecha].entradas,
+      salidas: porFecha[fecha].salidas,
+    }));
   }, [movimientosEnRango]);
+
+  /** Con rangos largos la etiqueta diaria se junta: se deja ~12 como maximo. */
+  const saltoEtiquetasMovimientos = datosMovimientosPorDia.length > 34
+    ? Math.ceil(datosMovimientosPorDia.length / 12)
+    : 0;
 
   const etiquetaRangoMovimientos = etiquetaRangoPeriodo(
     periodoMovimientos === 'personalizado',
@@ -646,7 +657,7 @@ export default function ERPInventario() {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={datosMovimientosPorDia}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                      <XAxis dataKey="etiqueta" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval="preserveStartEnd" />
+                      <XAxis dataKey="etiqueta" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval={saltoEtiquetasMovimientos} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
                       <RechartsTooltip
                         contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}

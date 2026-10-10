@@ -10,7 +10,7 @@ import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/Sele
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta, abrirPdfVentasLote } from '../services/pdfNotaVenta';
-import { cn } from '@/lib/utils';
+import { cn, formatFecha } from '@/lib/utils';
 import { useColoresTema } from '@/lib/useColoresTema';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -501,16 +501,32 @@ const stockInsuficiente = productoSeleccionado
   const enNumerosVerdes = totalVentas >= metaVenta;
   const porcentajeMeta = metaVenta > 0 ? Math.round((totalVentas / metaVenta) * 100) : 0;
 
+  /**
+   * Serie diaria del periodo: un punto por fecha. Si el rango cruza meses
+   * (Personalizado), la etiqueta lleva dia/mes/año para que no parezca un solo
+   * mes con montos mezclados; al agrupar solo por dia de mes, agosto y octubre
+   * se sumaban en la misma columna. Con un solo mes se mantiene "Dia N" y las
+   * fechas ISO ordenan cronologicamente.
+   */
   const datosVentasPorDia = useMemo(() => {
-    const ventasPorDia: Record<string, number> = {};
+    const porFecha: Record<string, number> = {};
     ventasFiltradas.forEach(v => {
-      const dia = v.fecha.split('-')[2];
-      ventasPorDia[dia] = (ventasPorDia[dia] || 0) + v.monto;
+      const fecha = (v.fecha || '').split('T')[0];
+      if (!fecha) return;
+      porFecha[fecha] = (porFecha[fecha] || 0) + v.monto;
     });
-    return Object.entries(ventasPorDia)
-      .map(([dia, monto]) => ({ dia: `Dia ${dia}`, monto }))
-      .sort((a, b) => a.dia.localeCompare(b.dia));
+    const fechas = Object.keys(porFecha).sort();
+    const mismoMes = fechas.every(f => f.slice(0, 7) === fechas[0]?.slice(0, 7));
+    return fechas.map(fecha => ({
+      dia: mismoMes ? `Dia ${Number(fecha.slice(8, 10))}` : formatFecha(fecha),
+      monto: porFecha[fecha],
+    }));
   }, [ventasFiltradas]);
+
+  /** Con rangos largos la etiqueta diaria se junta: se deja ~12 como maximo. */
+  const saltoEtiquetas = datosVentasPorDia.length > 34
+    ? Math.ceil(datosVentasPorDia.length / 12)
+    : 0;
 
   /* ══ Categorias ══ */
 
@@ -695,7 +711,7 @@ const stockInsuficiente = productoSeleccionado
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={datosVentasPorDia}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
+                <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval={saltoEtiquetas} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
                 <RechartsTooltip
                   contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
