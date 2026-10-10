@@ -64,7 +64,7 @@ export default function SelectorFecha({
     if (value) setCursor(desdeIso(value));
   }, [value]);
 
-  /** Reubica el calendario si el modal se desplaza o cambia el tamaño de la ventana. */
+  /** Reubica el calendario si cambia el tamaño de la ventana. */
   const medir = useCallback(() => {
     const el = botonRef.current;
     if (el) setRect(el.getBoundingClientRect());
@@ -76,12 +76,18 @@ export default function SelectorFecha({
       return;
     }
     medir();
-    // Con captura=true tambien se capturan los scroll de los contenedores internos del modal.
     window.addEventListener('resize', medir);
-    window.addEventListener('scroll', medir, true);
+    // Al desplazar la pagina o el modal el calendario se cierra. Si se quedara
+    // fijo terminaria flotando por encima de la barra superior o del titulo del
+    // modal. El scroll dentro del propio calendario no lo cierra.
+    const onScroll = (e: Event) => {
+      if (calendarioRef.current && e.target instanceof Node && calendarioRef.current.contains(e.target)) return;
+      setAbierto(false);
+    };
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('resize', medir);
-      window.removeEventListener('scroll', medir, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [abierto, medir]);
 

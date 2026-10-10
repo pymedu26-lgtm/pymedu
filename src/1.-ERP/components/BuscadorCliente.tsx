@@ -49,7 +49,7 @@ export default function BuscadorCliente({
     setTexto(clienteNombre ?? '');
   }, [clienteId, clienteNombre]);
 
-  /** Reubica la lista si el modal se desplaza o cambia el tamaño de la ventana. */
+  /** Reubica la lista si cambia el tamaño de la ventana. */
   const medir = useCallback(() => {
     const el = inputRef.current;
     if (el) setRect(el.getBoundingClientRect());
@@ -61,12 +61,18 @@ export default function BuscadorCliente({
       return;
     }
     medir();
-    // Con captura=true tambien se capturan los scroll de los contenedores internos del modal.
     window.addEventListener('resize', medir);
-    window.addEventListener('scroll', medir, true);
+    // Al desplazar la pagina o el modal la lista se cierra. Si se quedara fija
+    // (position: fixed) terminaria flotando por encima de la barra superior o
+    // del titulo del modal. El scroll dentro de la propia lista no la cierra.
+    const onScroll = (e: Event) => {
+      if (listaRef.current && e.target instanceof Node && listaRef.current.contains(e.target)) return;
+      setAbierto(false);
+    };
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('resize', medir);
-      window.removeEventListener('scroll', medir, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [abierto, medir]);
 
