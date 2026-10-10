@@ -152,13 +152,21 @@ export default function SelectorDesplegable({
     return { top, bottom, left, maxHeight, ancho };
   }, [rect]);
 
+  /** Capa del portal: en la pagina la lista debe quedar bajo la barra superior
+   *  (z-40) para no flotar sobre ella; dentro de un modal (overlay position:fixed
+   *  z-50/60) necesita capa alta para no quedar tapada por el propio overlay. */
+  const capa = useMemo(
+    () => (abierto && botonRef.current?.closest('.fixed') ? 'z-[1000]' : 'z-30'),
+    [abierto]
+  );
+
   const elegir = (v: string) => {
     onChange(v);
     setAbierto(false);
   };
 
   return (
-    <div ref={contenedorRef} className={cn('relative z-50', className)}>
+    <div ref={contenedorRef} className={cn('relative', className)}>
       <button
         ref={botonRef}
         type="button"
@@ -204,7 +212,10 @@ export default function SelectorDesplegable({
             width: posicion.ancho,
             maxHeight: posicion.maxHeight
           }}
-          className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest shadow-xl shadow-shadow/10"
+          className={cn(
+            'fixed overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest shadow-xl shadow-shadow/10',
+            capa
+          )}
         >
           {opciones.map(o => {
             const activa = o.valor === valor;

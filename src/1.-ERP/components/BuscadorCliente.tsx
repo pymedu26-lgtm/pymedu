@@ -132,6 +132,14 @@ export default function BuscadorCliente({
     return { top, bottom, left, maxHeight, ancho };
   }, [rect]);
 
+  /** Capa del portal: en la pagina la lista debe quedar bajo la barra superior
+   *  (z-40) para no flotar sobre ella; dentro de un modal (overlay position:fixed
+   *  z-50/60) necesita capa alta para no quedar tapada por el propio overlay. */
+  const capa = useMemo(
+    () => (abierto && inputRef.current?.closest('.fixed') ? 'z-[1000]' : 'z-30'),
+    [abierto]
+  );
+
   const escribir = (valor: string) => {
     setTexto(valor);
     setAbierto(true);
@@ -185,7 +193,10 @@ export default function BuscadorCliente({
             width: posicion.ancho,
             maxHeight: posicion.maxHeight
           }}
-          className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-xl border border-outline-variant/50 bg-surface-container-lowest shadow-xl shadow-shadow/10"
+          className={cn(
+            'fixed overflow-y-auto overscroll-contain rounded-xl border border-outline-variant/50 bg-surface-container-lowest shadow-xl shadow-shadow/10',
+            capa
+          )}
         >
           {resultados.length > 0 ? (
             resultados.map(c => {

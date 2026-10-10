@@ -134,6 +134,14 @@ export default function SelectorFecha({
     return { top, bottom, left, maxHeight };
   }, [rect]);
 
+  /** Capa del portal: en la pagina el calendario debe quedar bajo la barra superior
+   *  (z-40) para no flotar sobre ella; dentro de un modal (overlay position:fixed
+   *  z-50/60) necesita capa alta para no quedar tapado por el propio overlay. */
+  const capa = useMemo(
+    () => (abierto && botonRef.current?.closest('.fixed') ? 'z-[1000]' : 'z-30'),
+    [abierto]
+  );
+
   const dias = useMemo(() => {
     const primero = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
     const desplazamiento = (primero.getDay() + 6) % 7; // lunes primero
@@ -201,7 +209,10 @@ export default function SelectorFecha({
             width: ANCHO_CALENDARIO,
             maxHeight: posicion.maxHeight
           }}
-          className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-3 shadow-xl shadow-shadow/10"
+          className={cn(
+            'fixed overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-3 shadow-xl shadow-shadow/10',
+            capa
+          )}
         >
           <div className="flex items-center justify-between mb-2">
             <button
