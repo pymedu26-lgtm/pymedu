@@ -195,7 +195,7 @@ export default function SelectorFecha({
             width: ANCHO_CALENDARIO,
             maxHeight: posicion.maxHeight
           }}
-          className="fixed z-[70] overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-3 shadow-xl shadow-shadow/10"
+          className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-3 shadow-xl shadow-shadow/10"
         >
           <div className="flex items-center justify-between mb-2">
             <button
