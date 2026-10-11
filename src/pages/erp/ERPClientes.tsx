@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useERP } from '../../1.-ERP/context/ERPContext';
+import { Cliente, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
 
@@ -21,12 +21,13 @@ const validarRUT = (rut: string): boolean => {
 };
 
 export default function ERPClientes() {
-  const { clientes, addCliente, deleteCliente, getSaldoPendienteVenta, ventas } = useERP();
+  const { clientes, addCliente, updateCliente, deleteCliente, getSaldoPendienteVenta, ventas } = useERP();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [nuevo, setNuevo] = useState({ nombre: '', rut: '', telefono: '', email: '', comuna: '', limite_credito: '' });
+  const [nuevo, setNuevo] = useState({ nombre: '', rut: '', telefono: '', email: '', direccion: '', comuna: '', notas: '', limite_credito: '' });
   const [rutError, setRutError] = useState('');
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
@@ -34,10 +35,40 @@ export default function ERPClientes() {
   const clientesFiltrados = clientes.filter(c =>
     c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
     (c.rut || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.email.toLowerCase().includes(busqueda.toLowerCase())
+    c.email.toLowerCase().includes(busqueda.toLowerCase()) ||
+    c.telefono.toLowerCase().includes(busqueda.toLowerCase())
   );
 
   const totalDeuda = clientes.reduce((a, c) => a + c.deuda, 0);
+
+  const abrirNuevo = () => {
+    setEditandoId(null);
+    setNuevo({ nombre: '', rut: '', telefono: '', email: '', direccion: '', comuna: '', notas: '', limite_credito: '' });
+    setRutError('');
+    setShowModal(true);
+  };
+
+  const abrirEditar = (c: Cliente) => {
+    setEditandoId(c.id);
+    setNuevo({
+      nombre: c.nombre,
+      rut: c.rut || '',
+      telefono: c.telefono || '',
+      email: c.email || '',
+      direccion: c.direccion || '',
+      comuna: c.comuna || '',
+      notas: c.notas || '',
+      limite_credito: c.limite_credito !== undefined ? String(c.limite_credito) : '',
+    });
+    setRutError('');
+    setShowModal(true);
+  };
+
+  const cerrarModal = () => {
+    setShowModal(false);
+    setEditandoId(null);
+    setRutError('');
+  };
 
   const guardar = () => {
     if (!nuevo.nombre.trim()) return;
@@ -46,16 +77,19 @@ export default function ERPClientes() {
       return;
     }
     setRutError('');
-    addCliente({
+    const datos = {
       nombre: nuevo.nombre.trim(),
       rut: nuevo.rut || undefined,
       telefono: nuevo.telefono,
       email: nuevo.email,
+      direccion: nuevo.direccion || undefined,
       comuna: nuevo.comuna || undefined,
+      notas: nuevo.notas || undefined,
       limite_credito: nuevo.limite_credito ? Number(nuevo.limite_credito) : undefined,
-    });
-    setShowModal(false);
-    setNuevo({ nombre: '', rut: '', telefono: '', email: '', comuna: '', limite_credito: '' });
+    };
+    if (editandoId) updateCliente(editandoId, datos);
+    else addCliente(datos);
+    cerrarModal();
   };
 
   return (
@@ -68,7 +102,7 @@ export default function ERPClientes() {
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus clientes y su deuda pendiente.</p>
         </div>
-        <button onClick={() => setShowModal(true)}
+        <button onClick={abrirNuevo}
           className="flex items-center gap-2 px-5 py-3 bg-primary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
           <span className="material-symbols-outlined text-lg">person_add</span>
           Nuevo Cliente
@@ -144,11 +178,18 @@ export default function ERPClientes() {
                       ) : '—'}
                     </td>
                     <td className="p-4">
-                      <button
-                        onClick={() => { setItemToDelete(c.id); setDeleteModalOpen(true); }}
-                        className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
-                        <span className="material-symbols-outlined text-base">delete</span>
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => abrirEditar(c)}
+                          className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10">
+                          <span className="material-symbols-outlined text-base">edit</span>
+                        </button>
+                        <button
+                          onClick={() => { setItemToDelete(c.id); setDeleteModalOpen(true); }}
+                          className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
+                          <span className="material-symbols-outlined text-base">delete</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -162,8 +203,8 @@ export default function ERPClientes() {
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-primary">Nuevo Cliente</h3>
-              <button onClick={() => { setShowModal(false); setRutError(''); }} className="text-on-surface-variant hover:text-on-surface">
+              <h3 className="text-lg font-bold text-primary">{editandoId ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
+              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -173,7 +214,9 @@ export default function ERPClientes() {
                 { key: 'rut' as const, label: 'RUT (opcional)' },
                 { key: 'telefono' as const, label: 'Teléfono' },
                 { key: 'email' as const, label: 'Email' },
+                { key: 'direccion' as const, label: 'Dirección (opcional)' },
                 { key: 'comuna' as const, label: 'Comuna (opcional)' },
+                { key: 'notas' as const, label: 'Notas (opcional)' },
                 { key: 'limite_credito' as const, label: 'Límite de crédito (opcional)' },
               ].map(f => (
                 <div key={f.key}>
@@ -193,8 +236,10 @@ export default function ERPClientes() {
               )}
             </div>
             <div className="px-6 pb-6 flex gap-3 shrink-0">
-              <button onClick={() => { setShowModal(false); setRutError(''); }} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50">Guardar Cliente</button>
+              <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50">
+                {editandoId ? 'Guardar Cambios' : 'Guardar Cliente'}
+              </button>
             </div>
           </div>
         </div>
