@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+﻿import { useState, useMemo, useEffect } from 'react';
 import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
 import { useAuth } from '../../context/AuthContext';
 import { puedeEditarModulo } from '@/lib/roles';
@@ -893,7 +893,7 @@ export default function ERPInventario() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex items-center justify-center gap-1 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                            <div className="flex items-center justify-center gap-1 transition-opacity opacity-100">
                               {puedeEditar && (
                                 <>
                                   <button onClick={() => handleMovimientoClick(producto.id)}
