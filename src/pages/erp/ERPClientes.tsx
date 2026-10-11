@@ -95,6 +95,41 @@ export default function ERPClientes() {
     cerrarModal();
   };
 
+  const celdaCSV = (valor: unknown) => {
+    const s = String(valor ?? '');
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const descargarCSV = (nombreArchivo: string, headers: string[], rows: (string | number)[][]) => {
+    const csv = [headers, ...rows].map(e => e.map(celdaCSV).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nombreArchivo;
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportarClientesCSV = () => {
+    const headers = ['Nombre', 'RUT', 'Teléfono', 'Email', 'Dirección', 'Comuna', 'Ventas', 'Deuda', 'Límite_Crédito', 'Notas'];
+    const rows = clientesFiltrados.map(c => [
+      c.nombre,
+      c.rut || '',
+      c.telefono,
+      c.email,
+      c.direccion || '',
+      c.comuna || '',
+      c.ventas,
+      c.deuda,
+      c.limite_credito ?? '',
+      c.notas || '',
+    ]);
+    descargarCSV(`clientes_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+  };
+
   return (
     <div className="p-8 space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -110,6 +145,11 @@ export default function ERPClientes() {
             className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
             <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
+          </button>
+          <button onClick={exportarClientesCSV}
+            className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
+            <span className="material-symbols-outlined text-lg">download</span>
+            Exportar
           </button>
           <button onClick={abrirNuevo}
             className="flex items-center gap-2 px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
