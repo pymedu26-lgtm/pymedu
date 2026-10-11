@@ -258,20 +258,17 @@ export default function ERPClientes() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['Cliente', 'Contacto', 'Segmento', 'Deuda pendiente', 'Límite de crédito', 'Acciones'].map(h => (
+                {['Cliente', 'Contacto', 'Deuda pendiente', 'Límite de crédito', 'Acciones'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {clientesFiltrados.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-on-surface-variant">No se encontraron clientes.</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-on-surface-variant">No se encontraron clientes.</td></tr>
               )}
               {clientesFiltrados.map(c => {
                 const saldoReal = c.deuda;
-                const rv = resumenDe(c);
-                const rec = recenciaDe(rv.ultima);
-                const seg = segmentoDe(rv, rec?.dias ?? null);
                 return (
                   <tr key={c.id} className="hover:bg-surface-container-low/50 transition-colors">
                     <td className="p-4">
@@ -281,16 +278,6 @@ export default function ERPClientes() {
                     <td className="p-4 text-on-surface-variant text-xs">
                       <p>{c.email || '—'}</p>
                       <p>{c.telefono || '—'}</p>
-                    </td>
-                    <td className="p-4">
-                      <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide', seg.clase)}>
-                        {seg.nombre}
-                      </span>
-                      {rec && (
-                        <p className="text-xs text-on-surface-variant mt-1" title={`Última compra: ${rec.fecha}`}>
-                          Última compra {rec.texto.toLowerCase()}
-                        </p>
-                      )}
                     </td>
                     <td className="p-4">
                       <span className={cn('font-extrabold', saldoReal > 0 ? 'text-secondary' : 'text-success')}>
