@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, useMemo } from 'react';
 import { Cliente, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import CampoMoneda from '../../components/CampoMoneda';
@@ -53,6 +53,38 @@ export default function ERPClientes() {
   );
 
   const totalDeuda = clientes.reduce((a, c) => a + c.deuda, 0);
+
+  const resumenVentas = useMemo(() => {
+    const norm = (s: string) => (s || '').trim().toLowerCase();
+    const acumular = (mapa: Map<string, { cantidad: number; total: number; ultima: string }>, clave: string, monto: number, fecha: string) => {
+      const prev = mapa.get(clave);
+      mapa.set(clave, {
+        cantidad: (prev?.cantidad ?? 0) + 1,
+        total: (prev?.total ?? 0) + (monto || 0),
+        ultima: prev && prev.ultima > fecha ? prev.ultima : fecha,
+      });
+    };
+    const porId = new Map<string, { cantidad: number; total: number; ultima: string }>();
+    const porNombre = new Map<string, { cantidad: number; total: number; ultima: string }>();
+    ventas.forEach(v => {
+      if (v.cliente_id) acumular(porId, v.cliente_id, v.monto, v.fecha);
+      if (v.cliente) acumular(porNombre, norm(v.cliente), v.monto, v.fecha);
+    });
+    return { porId, porNombre };
+  }, [ventas]);
+
+  const resumenDe = (c: Cliente) => {
+    const r = resumenVentas.porId.get(c.id) ?? resumenVentas.porNombre.get((c.nombre || '').trim().toLowerCase());
+    if (r) return r;
+    return { cantidad: c.ventas, total: 0, ultima: '' };
+  };
+
+  const fechaCorta = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  };
 
   const abrirNuevo = () => {
     setEditandoId(null);
@@ -124,19 +156,24 @@ export default function ERPClientes() {
   };
 
   const exportarClientesCSV = () => {
-    const headers = ['Nombre', 'RUT', 'Teléfono', 'Email', 'Dirección', 'Comuna', 'Ventas', 'Deuda', 'Límite_Crédito', 'Notas'];
-    const rows = clientesFiltrados.map(c => [
-      c.nombre,
-      c.rut || '',
-      c.telefono,
-      c.email,
-      c.direccion || '',
-      c.comuna || '',
-      c.ventas,
-      c.deuda,
-      c.limite_credito ?? '',
-      c.notas || '',
-    ]);
+    const headers = ['Nombre', 'RUT', 'Teléfono', 'Email', 'Dirección', 'Comuna', 'N_Ventas', 'Total_Vendido', 'Última_Venta', 'Deuda', 'Límite_Crédito', 'Notas'];
+    const rows = clientesFiltrados.map(c => {
+      const rv = resumenDe(c);
+      return [
+        c.nombre,
+        c.rut || '',
+        c.telefono,
+        c.email,
+        c.direccion || '',
+        c.comuna || '',
+        rv.cantidad,
+        rv.total,
+        rv.ultima ? rv.ultima.split('T')[0] : '',
+        c.deuda,
+        c.limite_credito ?? '',
+        c.notas || '',
+      ];
+    });
     descargarCSV(`clientes_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
   };
 
@@ -209,6 +246,7 @@ export default function ERPClientes() {
               )}
               {clientesFiltrados.map(c => {
                 const saldoReal = c.deuda;
+                const rv = resumenDe(c);
                 return (
                   <tr key={c.id} className="hover:bg-surface-container-low/50 transition-colors">
                     <td className="p-4">
@@ -219,7 +257,19 @@ export default function ERPClientes() {
                       <p>{c.email || '—'}</p>
                       <p>{c.telefono || '—'}</p>
                     </td>
-                    <td className="p-4 font-bold text-on-surface">{c.ventas}</td>
+                    <td className="p-4">
+                      {rv.cantidad > 0 || rv.total > 0 ? (
+                        <div>
+                          <p className="font-bold text-on-surface">{fmt(rv.total)}</p>
+                          <p className="text-xs text-on-surface-variant">
+                            {rv.cantidad} {rv.cantidad === 1 ? 'venta' : 'ventas'}
+                            {rv.ultima ? ` · última ${fechaCorta(rv.ultima)}` : ''}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-on-surface-variant">—</span>
+                      )}
+                    </td>
                     <td className="p-4">
                       <span className={cn('font-extrabold', saldoReal > 0 ? 'text-secondary' : 'text-success')}>
                         {fmt(saldoReal)}
