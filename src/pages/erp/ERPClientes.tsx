@@ -251,14 +251,14 @@ export default function ERPClientes() {
 
       {showModal && (
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
               <h3 className="text-lg font-bold text-primary">{editandoId ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
               <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="p-6 space-y-4 overflow-y-auto">
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto">
               {[
                 { key: 'nombre' as const, label: 'Nombre / Razón social' },
                 { key: 'rut' as const, label: 'RUT (opcional)' },
@@ -269,7 +269,7 @@ export default function ERPClientes() {
                 { key: 'notas' as const, label: 'Notas (opcional)' },
                 { key: 'limite_credito' as const, label: 'Límite de crédito (opcional)' },
               ].map(f => (
-                <div key={f.key}>
+                <div key={f.key} className={f.key === 'notas' ? 'md:col-span-2' : ''}>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">{f.label}</label>
                   <input
                     type={f.key === 'limite_credito' ? 'number' : 'text'}
@@ -280,7 +280,7 @@ export default function ERPClientes() {
                 </div>
               ))}
               {rutError && (
-                <p className="flex items-center gap-1.5 text-xs font-bold text-error">
+                <p className="md:col-span-2 flex items-center gap-1.5 text-xs font-bold text-error">
                   <span className="material-symbols-outlined text-sm">error</span> {rutError}
                 </p>
               )}
