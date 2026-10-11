@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Cliente, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
+
+const ModalCargaMasivaClientes = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaClientes'));
 
 const validarRUT = (rut: string): boolean => {
   const limpio = (rut ?? '').replace(/[^0-9kK]/g, '');
@@ -24,6 +26,7 @@ export default function ERPClientes() {
   const { clientes, addCliente, updateCliente, deleteCliente, getSaldoPendienteVenta, ventas } = useERP();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -102,11 +105,18 @@ export default function ERPClientes() {
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus clientes y su deuda pendiente.</p>
         </div>
-        <button onClick={abrirNuevo}
-          className="flex items-center gap-2 px-5 py-3 bg-primary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
-          <span className="material-symbols-outlined text-lg">person_add</span>
-          Nuevo Cliente
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={() => setShowCargaMasiva(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
+            <span className="material-symbols-outlined text-lg">upload_file</span>
+            Carga Masiva
+          </button>
+          <button onClick={abrirNuevo}
+            className="flex items-center gap-2 px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+            <span className="material-symbols-outlined text-lg">person_add</span>
+            Nuevo Cliente
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -243,6 +253,17 @@ export default function ERPClientes() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCargaMasiva && (
+        <Suspense fallback={null}>
+          <ModalCargaMasivaClientes
+            isOpen={showCargaMasiva}
+            onClose={() => setShowCargaMasiva(false)}
+            onImport={(nuevos) => { nuevos.forEach(c => addCliente(c)); }}
+            clientesExistentes={clientes}
+          />
+        </Suspense>
       )}
 
       <ConfirmDeleteModal
