@@ -93,7 +93,15 @@ export default function ERPClientes() {
     const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
     const texto = dias <= 0 ? 'Compró hoy' : dias === 1 ? 'Hace 1 día' : dias < 30 ? `Hace ${dias} días` : dias < 60 ? 'Hace 1 mes' : `Hace ${Math.floor(dias / 30)} meses`;
     const clase = dias <= 30 ? 'bg-success/10 text-success' : dias <= 90 ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error';
-    return { texto, clase, fecha: fechaCorta(iso) };
+    return { dias, texto, clase, fecha: fechaCorta(iso) };
+  };
+
+  const segmentoDe = (rv: { cantidad: number; total: number }, dias: number | null) => {
+    if (rv.cantidad === 0) return { nombre: 'Sin compras', clase: 'bg-surface-container text-on-surface-variant' };
+    if (dias !== null && dias > 90) return { nombre: 'Inactivo', clase: 'bg-error/10 text-error' };
+    if (rv.cantidad === 1) return { nombre: 'Nuevo', clase: 'bg-primary/10 text-primary' };
+    if (rv.cantidad >= 5 || rv.total >= 1000000) return { nombre: 'VIP', clase: 'bg-secondary/10 text-secondary' };
+    return { nombre: 'Recurrente', clase: 'bg-success/10 text-success' };
   };
 
   const abrirNuevo = () => {
@@ -166,9 +174,11 @@ export default function ERPClientes() {
   };
 
   const exportarClientesCSV = () => {
-    const headers = ['Nombre', 'RUT', 'Teléfono', 'Email', 'Dirección', 'Comuna', 'N_Ventas', 'Total_Vendido', 'Ticket_Promedio', 'Última_Venta', 'Deuda', 'Límite_Crédito', 'Notas'];
+    const headers = ['Nombre', 'RUT', 'Teléfono', 'Email', 'Dirección', 'Comuna', 'Segmento', 'N_Ventas', 'Total_Vendido', 'Ticket_Promedio', 'Última_Venta', 'Deuda', 'Límite_Crédito', 'Notas'];
     const rows = clientesFiltrados.map(c => {
       const rv = resumenDe(c);
+      const rec = recenciaDe(rv.ultima);
+      const seg = segmentoDe(rv, rec?.dias ?? null);
       const ticket = rv.cantidad > 0 ? Math.round(rv.total / rv.cantidad) : 0;
       return [
         c.nombre,
@@ -177,6 +187,7 @@ export default function ERPClientes() {
         c.email,
         c.direccion || '',
         c.comuna || '',
+        seg.nombre,
         rv.cantidad,
         rv.total,
         ticket,
@@ -247,7 +258,7 @@ export default function ERPClientes() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['Cliente', 'Contacto', 'Ventas', 'Deuda pendiente', 'Límite de crédito', 'Acciones'].map(h => (
+                {['Cliente', 'Contacto', 'Segmento', 'Deuda pendiente', 'Límite de crédito', 'Acciones'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>
@@ -259,8 +270,8 @@ export default function ERPClientes() {
               {clientesFiltrados.map(c => {
                 const saldoReal = c.deuda;
                 const rv = resumenDe(c);
-                const ticket = rv.cantidad > 0 ? Math.round(rv.total / rv.cantidad) : 0;
                 const rec = recenciaDe(rv.ultima);
+                const seg = segmentoDe(rv, rec?.dias ?? null);
                 return (
                   <tr key={c.id} className="hover:bg-surface-container-low/50 transition-colors">
                     <td className="p-4">
@@ -272,21 +283,13 @@ export default function ERPClientes() {
                       <p>{c.telefono || '—'}</p>
                     </td>
                     <td className="p-4">
-                      {rv.cantidad > 0 || rv.total > 0 ? (
-                        <div>
-                          <p className="font-bold text-on-surface">{fmt(rv.total)}</p>
-                          <p className="text-xs text-on-surface-variant">
-                            {rv.cantidad} {rv.cantidad === 1 ? 'venta' : 'ventas'} · prom. {fmt(ticket)}
-                          </p>
-                          {rec && (
-                            <span title={`Última venta: ${rec.fecha}`}
-                              className={cn('inline-flex mt-1 items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide', rec.clase)}>
-                              {rec.texto}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-on-surface-variant">—</span>
+                      <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide', seg.clase)}>
+                        {seg.nombre}
+                      </span>
+                      {rec && (
+                        <p className="text-xs text-on-surface-variant mt-1" title={`Última compra: ${rec.fecha}`}>
+                          Última compra {rec.texto.toLowerCase()}
+                        </p>
                       )}
                     </td>
                     <td className="p-4">
