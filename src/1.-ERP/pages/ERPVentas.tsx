@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+﻿import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
@@ -640,6 +640,40 @@ const stockInsuficiente = productoSeleccionado
     setShowModal(true);
   };
 
+  const celdaCSV = (valor: unknown) => {
+    const s = String(valor ?? '');
+    return /[";\r\n]/.test(s) ? " + s.replace(/"/g, '""') + " : s;
+  };
+
+  const descargarCSV = (nombreArchivo: string, headers: string[], rows: (string | number)[][]) => {
+    const csv = [headers, ...rows].map(e => e.map(celdaCSV).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nombreArchivo;
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportarVentasCSV = () => {
+    const headers = ['Folio', 'Fecha', 'Cliente', 'Tipo_Documento', 'Estado', 'Metodo_Pago', 'Subtotal', 'IVA', 'Total', 'Nota'];
+    const rows = ventas.map(v => [
+      v.folio,
+      v.fecha,
+      v.cliente,
+      v.tipo_documento,
+      v.estado,
+      v.metodo_pago,
+      v.subtotal,
+      v.iva,
+      v.total,
+      v.nota || '',
+    ]);
+    descargarCSV("ventas_2026-10-11.csv", headers, rows);
+  };
   const cerrarModal = () => {
     setShowModal(false);
     setEditingId(null);
@@ -672,6 +706,16 @@ const stockInsuficiente = productoSeleccionado
           >
             <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
+          </button>
+          <button onClick={exportarVentasCSV}
+            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">download</span>
+            Exportar
+          </button>
+          <button onClick={exportarVentasCSV}
+            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">download</span>
+            Exportar
           </button>
           <button 
             onClick={() => { setEditingId(null); setShowModal(true); }}

@@ -1,4 +1,5 @@
-﻿import { useState, useMemo, useEffect } from 'react';
+﻿import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+const ModalCargaMasivaInventario = lazy(() => import('../components/ModalCargaMasivaInventario'));
 import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
 import { useAuth } from '../../context/AuthContext';
 import { puedeEditarModulo } from '@/lib/roles';
@@ -112,6 +113,7 @@ export default function ERPInventario() {
   const [showModal, setShowModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
   const [showHistorialModal, setShowHistorialModal] = useState(false);
+  const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -542,6 +544,11 @@ export default function ERPInventario() {
         </div>
         
         <div className="flex flex-wrap gap-3">
+                    <button onClick={() => setShowCargaMasiva(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-lowest border-2 border-outline-variant/30 text-on-surface-variant rounded-xl font-bold text-sm hover:bg-surface-container-low transition-all">
+            <span className="material-symbols-outlined text-lg">upload_file</span>
+            Carga Masiva
+          </button>
           <button onClick={exportToCSV}
             className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-lowest border-2 border-outline-variant/30 text-on-surface-variant rounded-xl font-bold text-sm hover:bg-surface-container-low transition-all">
             <span className="material-symbols-outlined text-lg">download</span>
@@ -1391,6 +1398,16 @@ export default function ERPInventario() {
       )}
 
       {/* Modal Confirmar Eliminación */}
+      {showCargaMasiva && (
+        <Suspense fallback={null}>
+          <ModalCargaMasivaInventario
+            isOpen={showCargaMasiva}
+            onClose={() => setShowCargaMasiva(false)}
+            onImport={(productos) => { productos.forEach(p => addProducto(p)); }}
+            inventarioExistente={inventario}
+          />
+        </Suspense>
+      )}
       <ConfirmDeleteModal
         isOpen={deleteModalOpen}
         onClose={() => { setDeleteModalOpen(false); setItemToDelete(null); }}
