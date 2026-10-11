@@ -544,13 +544,13 @@ export default function ERPInventario() {
         </div>
         
         <div className="flex flex-wrap gap-3">
-                    <button onClick={() => setShowCargaMasiva(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-lowest border-2 border-outline-variant/30 text-on-surface-variant rounded-xl font-bold text-sm hover:bg-surface-container-low transition-all">
+          <button onClick={() => setShowCargaMasiva(true)}
+            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
             <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-lowest border-2 border-outline-variant/30 text-on-surface-variant rounded-xl font-bold text-sm hover:bg-surface-container-low transition-all">
+            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
             <span className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
@@ -563,7 +563,7 @@ export default function ERPInventario() {
               setNuevoProducto(CAMPOS_INICIALES('producto'))
               setShowModal(true)
             }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-all">
+              className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2">
               <span className="material-symbols-outlined text-lg">add_box</span>
               Nuevo Producto
             </button>
