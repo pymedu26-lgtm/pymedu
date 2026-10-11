@@ -162,7 +162,7 @@ export default function ModalCargaMasivaGastos({
   const procesar = (file: File) => {
     setError(null);
     if (!extensionValida(file.name)) {
-      setError('Formato no admitido. Usa un archivo .xlsx, .xls, .xlsm o .csv.');
+      setError('Formato no admitido. Solo se aceptan archivos .xlsx de la plantilla de descarga.');
       return;
     }
     setCargando(true);
@@ -373,7 +373,7 @@ export default function ModalCargaMasivaGastos({
                 Seleccionar archivo
               </button>
               <input ref={inputRef} type="file" accept={EXTENSIONES.join(',')} onChange={handleInputChange} className="hidden" />
-              <p className="text-xs text-on-surface-variant mt-4">Formatos permitidos: {EXTENSIONES.join(', ')}</p>
+              <p className="text-xs text-on-surface-variant mt-4">Formato permitido: .xlsx (plantilla de descarga)</p>
               <button onClick={descargarPlantilla} className="mt-6 flex items-center gap-2 px-5 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-surface-container-low transition-all">
                 <span className="material-symbols-outlined text-lg">download</span>
                 Descargar Plantilla

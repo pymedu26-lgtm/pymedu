@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { EstadoPago, MetodoPago } from '../context/ERPContext';
 
-export const EXTENSIONES = ['.xlsx', '.xls', '.xlsm', '.csv'];
+export const EXTENSIONES = ['.xlsx'];
 
 export const METODOS_PAGO: { valor: MetodoPago; alias: string[] }[] = [
   { valor: 'efectivo', alias: ['efectivo', 'cash', 'efectivopago'] },
