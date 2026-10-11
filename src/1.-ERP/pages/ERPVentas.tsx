@@ -642,7 +642,7 @@ const stockInsuficiente = productoSeleccionado
 
   const celdaCSV = (valor: unknown) => {
     const s = String(valor ?? '');
-    return /[";\r\n]/.test(s) ? " + s.replace(/"/g, '""') + " : s;
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
 
   const descargarCSV = (nombreArchivo: string, headers: string[], rows: (string | number)[][]) => {
@@ -672,7 +672,7 @@ const stockInsuficiente = productoSeleccionado
       v.total,
       v.nota || '',
     ]);
-    descargarCSV("ventas_2026-10-11.csv", headers, rows);
+    descargarCSV(`ventas_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
   };
   const cerrarModal = () => {
     setShowModal(false);
@@ -706,11 +706,6 @@ const stockInsuficiente = productoSeleccionado
           >
             <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
-          </button>
-          <button onClick={exportarVentasCSV}
-            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">download</span>
-            Exportar
           </button>
           <button onClick={exportarVentasCSV}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">

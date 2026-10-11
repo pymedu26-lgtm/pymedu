@@ -195,7 +195,7 @@ export default function ERPGastos() {
 
   const celdaCSV = (valor: unknown) => {
     const s = String(valor ?? '');
-    return /[";\r\n]/.test(s) ? " + s.replace(/"/g, '""') + " : s;
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
 
   const descargarCSV = (nombreArchivo: string, headers: string[], rows: (string | number)[][]) => {
@@ -229,7 +229,7 @@ export default function ERPGastos() {
       g.recurrente ? 'Sí' : 'No',
       g.nota || '',
     ]);
-    descargarCSV(gastos_.csv, headers, rows);
+    descargarCSV(`gastos_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
   };
   const cerrarModal = () => {
     setShowModal(false);
