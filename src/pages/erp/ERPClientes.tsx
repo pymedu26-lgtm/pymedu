@@ -86,6 +86,16 @@ export default function ERPClientes() {
     return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' });
   };
 
+  const recenciaDe = (iso: string) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+    const texto = dias <= 0 ? 'Compró hoy' : dias === 1 ? 'Hace 1 día' : dias < 30 ? `Hace ${dias} días` : dias < 60 ? 'Hace 1 mes' : `Hace ${Math.floor(dias / 30)} meses`;
+    const clase = dias <= 30 ? 'bg-success/10 text-success' : dias <= 90 ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error';
+    return { texto, clase, fecha: fechaCorta(iso) };
+  };
+
   const abrirNuevo = () => {
     setEditandoId(null);
     setNuevo({ nombre: '', rut: '', telefono: '', email: '', direccion: '', comuna: '', notas: '', limite_credito: '' });
@@ -156,9 +166,10 @@ export default function ERPClientes() {
   };
 
   const exportarClientesCSV = () => {
-    const headers = ['Nombre', 'RUT', 'Teléfono', 'Email', 'Dirección', 'Comuna', 'N_Ventas', 'Total_Vendido', 'Última_Venta', 'Deuda', 'Límite_Crédito', 'Notas'];
+    const headers = ['Nombre', 'RUT', 'Teléfono', 'Email', 'Dirección', 'Comuna', 'N_Ventas', 'Total_Vendido', 'Ticket_Promedio', 'Última_Venta', 'Deuda', 'Límite_Crédito', 'Notas'];
     const rows = clientesFiltrados.map(c => {
       const rv = resumenDe(c);
+      const ticket = rv.cantidad > 0 ? Math.round(rv.total / rv.cantidad) : 0;
       return [
         c.nombre,
         c.rut || '',
@@ -168,6 +179,7 @@ export default function ERPClientes() {
         c.comuna || '',
         rv.cantidad,
         rv.total,
+        ticket,
         rv.ultima ? rv.ultima.split('T')[0] : '',
         c.deuda,
         c.limite_credito ?? '',
@@ -247,6 +259,8 @@ export default function ERPClientes() {
               {clientesFiltrados.map(c => {
                 const saldoReal = c.deuda;
                 const rv = resumenDe(c);
+                const ticket = rv.cantidad > 0 ? Math.round(rv.total / rv.cantidad) : 0;
+                const rec = recenciaDe(rv.ultima);
                 return (
                   <tr key={c.id} className="hover:bg-surface-container-low/50 transition-colors">
                     <td className="p-4">
@@ -262,9 +276,14 @@ export default function ERPClientes() {
                         <div>
                           <p className="font-bold text-on-surface">{fmt(rv.total)}</p>
                           <p className="text-xs text-on-surface-variant">
-                            {rv.cantidad} {rv.cantidad === 1 ? 'venta' : 'ventas'}
-                            {rv.ultima ? ` · última ${fechaCorta(rv.ultima)}` : ''}
+                            {rv.cantidad} {rv.cantidad === 1 ? 'venta' : 'ventas'} · prom. {fmt(ticket)}
                           </p>
+                          {rec && (
+                            <span title={`Última venta: ${rec.fecha}`}
+                              className={cn('inline-flex mt-1 items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide', rec.clase)}>
+                              {rec.texto}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-on-surface-variant">—</span>
