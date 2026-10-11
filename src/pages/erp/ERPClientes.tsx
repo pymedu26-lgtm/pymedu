@@ -1,6 +1,7 @@
 import { useState, lazy, Suspense } from 'react';
 import { Cliente, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
+import CampoMoneda from '../../components/CampoMoneda';
 import { cn } from '@/lib/utils';
 
 const ModalCargaMasivaClientes = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaClientes'));
@@ -20,6 +21,15 @@ const validarRUT = (rut: string): boolean => {
   const resto = 11 - (suma % 11);
   const dvEsperado = resto === 11 ? '0' : resto === 10 ? 'K' : String(resto);
   return dv === dvEsperado;
+};
+
+const formatearRUT = (valor: string): string => {
+  const limpio = (valor ?? '').replace(/[^0-9kK]/g, '').slice(0, 9);
+  if (!limpio) return '';
+  if (limpio.length === 1) return limpio.toUpperCase();
+  const cuerpo = limpio.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const dv = limpio.slice(-1).toUpperCase();
+  return `${cuerpo}-${dv}`;
 };
 
 export default function ERPClientes() {
@@ -271,12 +281,25 @@ export default function ERPClientes() {
               ].map(f => (
                 <div key={f.key} className={f.key === 'notas' ? 'md:col-span-2' : ''}>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">{f.label}</label>
-                  <input
-                    type={f.key === 'limite_credito' ? 'number' : 'text'}
-                    value={nuevo[f.key]}
-                    onChange={e => setNuevo({ ...nuevo, [f.key]: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
-                  />
+                  {f.key === 'limite_credito' ? (
+                    <CampoMoneda
+                      valor={nuevo.limite_credito}
+                      onChange={monto => setNuevo({ ...nuevo, limite_credito: monto ? String(monto) : '' })}
+                      placeholder="$0"
+                      className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={nuevo[f.key]}
+                      onChange={e => {
+                        const valor = f.key === 'rut' ? formatearRUT(e.target.value) : e.target.value;
+                        setNuevo({ ...nuevo, [f.key]: valor });
+                        if (f.key === 'rut' && rutError) setRutError('');
+                      }}
+                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                    />
+                  )}
                 </div>
               ))}
               {rutError && (
