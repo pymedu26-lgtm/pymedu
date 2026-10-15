@@ -3,6 +3,8 @@ import { Cliente, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import CampoMoneda from '../../components/CampoMoneda';
 import { cn } from '@/lib/utils';
+import { Plus, Search, Edit, Trash2, Upload, FileText } from "lucide-react";
+import ModalHistorialCliente from "../../1.-ERP/components/ModalHistorialCliente";
 
 const ModalCargaMasivaClientes = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaClientes'));
 
@@ -33,13 +35,14 @@ const formatearRUT = (valor: string): string => {
 };
 
 export default function ERPClientes() {
-  const { clientes, addCliente, updateCliente, deleteCliente, getSaldoPendienteVenta, ventas } = useERP();
+  const { clientes, addCliente, updateCliente, deleteCliente, getSaldoPendienteVenta, ventas, abonos } = useERP();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [historialCliente, setHistorialCliente] = useState<Cliente | null>(null);
   const [nuevo, setNuevo] = useState({ nombre: '', rut: '', telefono: '', email: '', direccion: '', comuna: '', notas: '', limite_credito: '' });
   const [rutError, setRutError] = useState('');
 
@@ -300,12 +303,20 @@ export default function ERPClientes() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => abrirEditar(c)}
-                          className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10">
+                          className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
+                          title="Editar">
                           <span className="material-symbols-outlined text-base">edit</span>
                         </button>
                         <button
+                          onClick={() => setHistorialCliente(c)}
+                          className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
+                          title="Historial de pagos/deudas">
+                          <span className="material-symbols-outlined text-base">history</span>
+                        </button>
+                        <button
                           onClick={() => { setItemToDelete(c.id); setDeleteModalOpen(true); }}
-                          className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
+                          className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
+                          title="Eliminar">
                           <span className="material-symbols-outlined text-base">delete</span>
                         </button>
                       </div>
@@ -393,6 +404,15 @@ export default function ERPClientes() {
         onClose={() => { setDeleteModalOpen(false); setItemToDelete(null); }}
         onConfirm={() => { if (itemToDelete) deleteCliente(itemToDelete); }}
         title="Eliminar Cliente" />
+
+      {historialCliente && (
+        <ModalHistorialCliente
+          cliente={historialCliente}
+          ventas={ventas}
+          abonos={abonos}
+          onClose={() => setHistorialCliente(null)}
+        />
+      )}
     </div>
   );
 }
