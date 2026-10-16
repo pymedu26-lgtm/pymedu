@@ -78,8 +78,9 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
   const { ventasCliente, abonosCliente, historial, pagadoPorVenta, total } = useMemo(() => {
     const ventasCliente = ventas
       .filter(v => {
-        const c: any = v.cliente
-        return c?.id === cliente.id || v.cliente_id === cliente.id || c === cliente.id
+        const nombreVenta = typeof v.cliente === 'string' ? v.cliente.trim().toLowerCase() : ''
+        const nombreCliente = (cliente.nombre || '').trim().toLowerCase()
+        return v.cliente_id === cliente.id || (nombreVenta !== '' && nombreVenta === nombreCliente)
       })
       .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
 
@@ -96,6 +97,10 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
 
     const baseVenta = (v: Venta) => v.saldo_base ?? v.saldo_pendiente ?? (v.estado === 'Pendiente' ? (v.monto || 0) : 0)
 
+    // Cobrado al instante en la venta (POS/efectivo): para una venta "Pendiente" es 0,
+    // para una "Pagado" es todo el monto (no genera abono).
+    const cobradoAlInstante = (v: Venta) => Math.max(0, (v.monto || 0) - baseVenta(v))
+
     const keys = new Set<string>()
     ventasCliente.forEach(v => keys.add(getYM(v.fecha)))
     abonosCliente.forEach(a => keys.add(getYM(a.fecha)))
@@ -107,11 +112,14 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
     const historial = meses.map(ym => {
       const ventasMes = ventasCliente
         .filter(v => getYM(v.fecha) === ym)
-        .reduce((sum, v) => sum + baseVenta(v), 0)
+        .reduce((sum, v) => sum + (v.monto || 0), 0)
 
       const pagosMes = abonosCliente
         .filter(a => getYM(a.fecha) === ym)
         .reduce((sum, a) => sum + (a.monto_abono ?? a.monto ?? 0), 0)
+        + ventasCliente
+          .filter(v => getYM(v.fecha) === ym)
+          .reduce((sum, v) => sum + cobradoAlInstante(v), 0)
 
       acumVentas += ventasMes
       acumPagos += pagosMes
@@ -127,10 +135,14 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
       }
     })
 
-    const totalFacturado = ventasCliente.reduce((s, v) => s + baseVenta(v), 0)
+    // Monto real facturado (total de la venta), sin importar si se pagó al instante.
+    const totalFacturado = ventasCliente.reduce((s, v) => s + (v.monto || 0), 0)
+    // Lo efectivamente cobrado = abonos manuales + la parte cobrada al instante en POS
+    // (para una venta creada "Pagado", saldo_base = 0 => se cobró todo su monto en su fecha).
     const totalCobrado = abonosCliente.reduce((s, a) => s + (a.monto_abono ?? a.monto ?? 0), 0)
+      + ventasCliente.reduce((s, v) => s + cobradoAlInstante(v), 0)
     const ticket = ventasCliente.length > 0
-      ? Math.round(ventasCliente.reduce((s, v) => s + (v.monto || 0), 0) / ventasCliente.length)
+      ? Math.round(totalFacturado / ventasCliente.length)
       : 0
 
     return {
