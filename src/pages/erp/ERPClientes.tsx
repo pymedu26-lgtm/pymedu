@@ -261,17 +261,20 @@ export default function ERPClientes() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['Cliente', 'Contacto', 'Deuda pendiente', 'Límite de crédito', 'Acciones'].map(h => (
+                {['Cliente', 'Contacto', 'Compras', 'Última compra', 'Deuda pendiente', 'Límite de crédito', 'Acciones'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {clientesFiltrados.length === 0 && (
-                <tr><td colSpan={5} className="p-8 text-center text-on-surface-variant">No se encontraron clientes.</td></tr>
+                <tr><td colSpan={7} className="p-8 text-center text-on-surface-variant">No se encontraron clientes.</td></tr>
               )}
               {clientesFiltrados.map(c => {
                 const saldoReal = c.deuda;
+                const rv = resumenDe(c);
+                const rec = recenciaDe(rv.ultima);
+                const seg = segmentoDe(rv, rec?.dias ?? null);
                 return (
                   <tr key={c.id} className="hover:bg-surface-container-low/50 transition-colors">
                     <td className="p-4">
@@ -281,6 +284,24 @@ export default function ERPClientes() {
                     <td className="p-4 text-on-surface-variant text-xs">
                       <p>{c.email || '—'}</p>
                       <p>{c.telefono || '—'}</p>
+                    </td>
+                    <td className="p-4">
+                      <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide', seg.clase)}>
+                        {seg.nombre}
+                      </span>
+                      <p className="text-xs text-on-surface-variant mt-1">{rv.cantidad} venta{rv.cantidad === 1 ? '' : 's'}</p>
+                    </td>
+                    <td className="p-4">
+                      {rec ? (
+                        <>
+                          <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide', rec.clase)}>
+                            {rec.texto}
+                          </span>
+                          <p className="text-xs text-on-surface-variant mt-1">{rec.fecha}</p>
+                        </>
+                      ) : (
+                        <span className="text-on-surface-variant">—</span>
+                      )}
                     </td>
                     <td className="p-4">
                       <span className={cn('font-extrabold', saldoReal > 0 ? 'text-secondary' : 'text-success')}>
