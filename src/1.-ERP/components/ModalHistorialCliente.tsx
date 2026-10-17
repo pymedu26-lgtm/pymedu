@@ -164,6 +164,20 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
     { label: 'Límite de crédito', valor: cliente.limite_credito ? fmt(cliente.limite_credito) : 'Sin límite' },
   ]
 
+  const mesesDisponibles = useMemo(() => {
+    const set = new Set<string>()
+    ventasCliente.forEach(v => set.add(getYM(v.fecha)))
+    abonosCliente.forEach(a => set.add(getYM(a.fecha)))
+    return Array.from(set).sort((a, b) => b.localeCompare(a))
+  }, [ventasCliente, abonosCliente])
+
+  const [mesFiltro, setMesFiltro] = useState<string>('todos')
+
+  const historialFiltrado = useMemo(() => {
+    if (mesFiltro === 'todos') return historial
+    return historial.filter(h => h.ym === mesFiltro)
+  }, [historial, mesFiltro])
+
   const tabs: { id: Pestana; label: string; count?: number }[] = [
     { id: 'resumen', label: 'Resumen' },
     { id: 'ventas', label: 'Ventas', count: total.nVentas },
@@ -228,29 +242,46 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
             historial.length === 0 ? (
               <p className="text-center text-on-surface-variant py-10">Sin movimientos registrados para este cliente.</p>
             ) : (
-              <div className="rounded-2xl border border-outline-variant/20 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-container-low">
-                    <tr>
-                      {['Mes', 'Ventas del mes', 'Pagos del mes', 'Acum. ventas', 'Acum. pagos', 'Saldo'].map((h, i) => (
-                        <th key={h} className={cn('p-3 text-xs font-bold text-outline uppercase tracking-wider', i === 0 ? 'text-left' : 'text-right')}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/10">
-                    {historial.map(h => (
-                      <tr key={h.ym} className="hover:bg-surface-container-low/50">
-                        <td className="p-3 font-bold text-on-surface">{h.mes}</td>
-                        <td className="p-3 text-right text-on-surface">{fmt(h.ventasMes)}</td>
-                        <td className="p-3 text-right text-success">{fmt(h.pagosMes)}</td>
-                        <td className="p-3 text-right text-on-surface-variant">{fmt(h.acumVentas)}</td>
-                        <td className="p-3 text-right text-on-surface-variant">{fmt(h.acumPagos)}</td>
-                        <td className={cn('p-3 text-right font-extrabold', h.saldoFin > 0 ? 'text-secondary' : 'text-success')}>{fmt(h.saldoFin)}</td>
-                      </tr>
+              <>
+                <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <label className="text-xs font-bold uppercase tracking-widest text-outline">Filtrar por mes</label>
+                  <select
+                    value={mesFiltro}
+                    onChange={e => setMesFiltro(e.target.value)}
+                    className="px-4 py-2 rounded-xl border border-outline-variant/40 text-sm bg-surface-container-lowest text-on-surface"
+                  >
+                    <option value="todos">Todos los meses</option>
+                    {mesesDisponibles.map(m => (
+                      <option key={m} value={m}>
+                        {formatMes(m)}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </select>
+                </div>
+                <div className="rounded-2xl border border-outline-variant/20 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-container-low">
+                      <tr>
+                        {['Mes', 'Ventas del mes', 'Pagos del mes', 'Acum. ventas', 'Acum. pagos', 'Saldo'].map((h, i) => (
+                          <th key={h} className={cn('p-3 text-xs font-bold text-outline uppercase tracking-wider', i === 0 ? 'text-left' : 'text-right')}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/10">
+                      {historialFiltrado.map(h => (
+                        <tr key={h.ym} className="hover:bg-surface-container-low/50">
+                          <td className="p-3 font-bold text-on-surface">{h.mes}</td>
+                          <td className="p-3 text-right text-on-surface">{fmt(h.ventasMes)}</td>
+                          <td className="p-3 text-right text-success">{fmt(h.pagosMes)}</td>
+                          <td className="p-3 text-right text-on-surface-variant">{fmt(h.acumVentas)}</td>
+                          <td className="p-3 text-right text-on-surface-variant">{fmt(h.acumPagos)}</td>
+                          <td className={cn('p-3 text-right font-extrabold', h.saldoFin > 0 ? 'text-secondary' : 'text-success')}>{fmt(h.saldoFin)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )
           )}
 
