@@ -165,7 +165,6 @@ name: 'Mi institución',
           icon: 'bar_chart',
           tag: 'RP',
           hint: 'Vista premium para decisiones y cierre.',
-          permiso: 'ver_reportes',
           lock: !esPremium,
         },
         {
