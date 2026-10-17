@@ -85,23 +85,25 @@ export default function ERPPagar() {
         </p>
       </div>
 
-      <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto shrink-0">
-        {[
-          { id: 'pagar', label: 'Por pagar', icon: 'account_balance_wallet' },
-          { id: 'cobrar', label: 'Por cobrar', icon: 'payments' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as 'pagar' | 'cobrar')}
-            className={cn(
-              "flex items-center justify-center gap-2 flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
-              activeTab === tab.id ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
-            )}
-          >
-            <span className="material-symbols-outlined text-lg">{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex justify-end">
+        <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto shrink-0">
+          {[
+            { id: 'pagar', label: 'Por pagar', icon: 'account_balance_wallet' },
+            { id: 'cobrar', label: 'Por cobrar', icon: 'payments' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as 'pagar' | 'cobrar')}
+              className={cn(
+                "flex items-center justify-center gap-2 flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
+                activeTab === tab.id ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
+              )}
+            >
+              <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ══ Lo que debemos: gastos/proveedores ══ */}
@@ -117,21 +119,20 @@ export default function ERPPagar() {
               <table className="w-full text-sm">
                 <thead className="bg-surface-container-low border-b border-outline-variant/20">
                   <tr>
-                    {['ID', 'Fecha', 'Proveedor', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
+                    {['Fecha', 'Proveedor', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
                       <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/10">
                   {porPagar.length === 0 && (
-                    <tr><td colSpan={8} className="p-8 text-center text-on-surface-variant">No hay cuentas por pagar pendientes.</td></tr>
+                    <tr><td colSpan={7} className="p-8 text-center text-on-surface-variant">No hay cuentas por pagar pendientes.</td></tr>
                   )}
                   {porPagar.map(g => {
                     const saldo = getSaldoPendienteGasto(g.id);
                     const abonos = getAbonosByReferencia(g.id);
                     return (
                       <tr key={g.id} className="hover:bg-surface-container-low/50 transition-colors">
-                        <td className="p-4 font-mono text-xs text-outline">{g.id}</td>
                         <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</td>
                         <td className="p-4 font-bold text-on-surface">{g.proveedor}</td>
                         <td className="p-4 font-bold text-on-surface">{fmt(g.monto)}</td>
@@ -168,21 +169,20 @@ export default function ERPPagar() {
               <table className="w-full text-sm">
                 <thead className="bg-surface-container-low border-b border-outline-variant/20">
                   <tr>
-                    {['ID', 'Fecha', 'Cliente', 'Documento', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
+                    {['Fecha', 'Cliente', 'Documento', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
                       <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/10">
                   {porCobrar.length === 0 && (
-                    <tr><td colSpan={9} className="p-8 text-center text-on-surface-variant">No hay boletas o facturas por cobrar pendientes.</td></tr>
+                    <tr><td colSpan={8} className="p-8 text-center text-on-surface-variant">No hay boletas o facturas por cobrar pendientes.</td></tr>
                   )}
                   {porCobrar.map(v => {
                     const saldo = getSaldoPendienteVenta(v.id);
                     const abonos = getAbonosByReferencia(v.id);
                     return (
                       <tr key={v.id} className="hover:bg-surface-container-low/50 transition-colors">
-                        <td className="p-4 font-mono text-xs text-outline">{v.id}</td>
                         <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(v.fecha)}</td>
                         <td className="p-4 font-bold text-on-surface">{v.cliente}</td>
                         <td className="p-4 text-on-surface-variant">
