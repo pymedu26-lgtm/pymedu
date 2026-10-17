@@ -73,7 +73,7 @@ function resumenProductos(v: Venta): string {
 }
 
 export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose }: Props) {
-  const [pestana, setPestana] = useState<Pestana>('resumen')
+  const [pestana, setPestana] = useState<Pestana>('ventas')
 
   const { ventasCliente, abonosCliente, historial, pagadoPorVenta, total } = useMemo(() => {
     const ventasCliente = ventas
@@ -174,7 +174,6 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
   const [mesFiltro, setMesFiltro] = useState<string>('todos')
 
   const tabs: { id: Pestana; label: string; count?: number }[] = [
-    { id: 'resumen', label: 'Resumen' },
     { id: 'ventas', label: 'Ventas', count: total.nVentas },
     { id: 'pagos', label: 'Pagos', count: total.nPagos },
   ]
@@ -233,66 +232,58 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
-          {pestana === 'resumen' && (
-            historial.length === 0 ? (
-              <p className="text-center text-on-surface-variant py-10">Sin movimientos registrados para este cliente.</p>
-            ) : (
-              <>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {mesesDisponibles.length === 0 ? (
-                      <div className="col-span-full rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4 text-center text-sm text-on-surface-variant">
-                        Sin movimientos por mes
-                      </div>
-                    ) : (
-                      mesesDisponibles.map(m => {
-                        const h = historial.find(x => x.ym === m)
-                        if (!h) return null
-                        return (
-                          <div
-                            key={m}
-                            className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4 flex flex-col gap-2"
-                          >
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs font-black uppercase tracking-widest text-outline">{formatMes(m)}</p>
-                              <span
-                                className={cn(
-                                  'inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide',
-                                  h.saldoFin > 0 ? 'bg-secondary/10 text-secondary' : 'bg-success/10 text-success'
-                                )}
-                              >
-                                {h.saldoFin > 0 ? 'Con deuda' : 'Pagado'}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex justify-between text-xs">
-                                <span className="text-on-surface-variant">Ventas</span>
-                                <span className="font-bold text-on-surface">{fmt(h.ventasMes)}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-on-surface-variant">Pagos</span>
-                                <span className="font-bold text-success">{fmt(h.pagosMes)}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-on-surface-variant">Deuda/Saldo</span>
-                                <span className={cn('font-extrabold', h.saldoFin > 0 ? 'text-secondary' : 'text-success')}>
-                                  {fmt(h.saldoFin)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex justify-between text-[10px] text-on-surface-variant border-t border-outline-variant/10 pt-2 mt-auto">
-                              <span>Acum. ventas {fmt(h.acumVentas)}</span>
-                              <span>Acum. pagos {fmt(h.acumPagos)}</span>
-                            </div>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {mesesDisponibles.length === 0 ? (
+                <div className="col-span-full rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4 text-center text-sm text-on-surface-variant">
+                  Sin movimientos por mes
                 </div>
-              </>
-            )
-          )}
+              ) : (
+                mesesDisponibles.map(m => {
+                  const h = historial.find(x => x.ym === m)
+                  if (!h) return null
+                  return (
+                    <div
+                      key={m}
+                      className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4 flex flex-col gap-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-black uppercase tracking-widest text-primary">{formatMes(m)}</p>
+                        <span
+                          className={cn(
+                            'inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide',
+                            h.saldoFin > 0 ? 'bg-secondary/10 text-secondary' : 'bg-success/10 text-success'
+                          )}
+                        >
+                          {h.saldoFin > 0 ? 'Con deuda' : 'Pagado'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-on-surface-variant">Ventas</span>
+                          <span className="font-bold text-on-surface">{fmt(h.ventasMes)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-on-surface-variant">Pagos</span>
+                          <span className="font-bold text-success">{fmt(h.pagosMes)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm pt-1 border-t border-outline-variant/10">
+                          <span className="text-on-surface-variant">Deuda/Saldo</span>
+                          <span className={cn('font-extrabold', h.saldoFin > 0 ? 'text-secondary' : 'text-success')}>
+                            {fmt(h.saldoFin)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[10px] text-on-surface-variant mt-1">
+                          <span>Acum. ventas {fmt(h.acumVentas)}</span>
+                          <span>Acum. pagos {fmt(h.acumPagos)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
 
           {pestana === 'ventas' && (
             ventasCliente.length === 0 ? (
