@@ -153,110 +153,115 @@ export default function ERPPromociones() {
 
       {showModal && (
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
               <h3 className="text-lg font-bold text-tertiary">Nueva Promocion</h3>
               <button onClick={() => setShowModal(false)} className="text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="p-6 space-y-4 overflow-y-auto">
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre</label>
-                <input type="text" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" placeholder="Ej: 20% off en productos seleccionados" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Producto o servicio</label>
-                <select value={nuevo.productoId} onChange={e => setNuevo({ ...nuevo, productoId: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface">
-                  <option value="">Toda la tienda</option>
-                  {productosActivos.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} — {fmt(p.precio)} (costo {fmt(p.costo)})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Tipo</label>
-                  <select value={nuevo.tipo} onChange={e => setNuevo({ ...nuevo, tipo: e.target.value as 'porcentaje' | 'monto' })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface">
-                    <option value="porcentaje">Porcentaje (%)</option>
-                    <option value="monto">Monto fijo ($)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Valor</label>
-                  {nuevo.tipo === 'monto' ? (
-                    <CampoMoneda valor={nuevo.valor} onChange={valor => setNuevo({ ...nuevo, valor: String(valor) })}
-                      className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
-                  ) : (
-                    <input type="number" min={0} max={100} value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
-                  )}
-                </div>
-              </div>
-
-              {/* ── Simulación de rentabilidad ── */}
-              {productoSel ? (
-                <div className="rounded-2xl bg-surface-container-low p-4 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Simulación de rentabilidad</p>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-xl bg-surface-container-lowest p-3">
-                      <p className="text-[9px] font-bold uppercase text-on-surface-variant">Precio actual</p>
-                      <p className="font-black text-on-surface">{fmt(productoSel.precio)}</p>
+            <div className="p-6 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre</label>
+                    <input type="text" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" placeholder="Ej: 20% off en productos seleccionados" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Producto o servicio</label>
+                    <select value={nuevo.productoId} onChange={e => setNuevo({ ...nuevo, productoId: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface">
+                      <option value="">Toda la tienda</option>
+                      {productosActivos.map(p => (
+                        <option key={p.id} value={p.id}>{p.nombre} — {fmt(p.precio)} (costo {fmt(p.costo)})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Tipo</label>
+                      <select value={nuevo.tipo} onChange={e => setNuevo({ ...nuevo, tipo: e.target.value as 'porcentaje' | 'monto' })}
+                        className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface">
+                        <option value="porcentaje">Porcentaje (%)</option>
+                        <option value="monto">Monto fijo ($)</option>
+                      </select>
                     </div>
-                    <div className="rounded-xl bg-surface-container-lowest p-3">
-                      <p className="text-[9px] font-bold uppercase text-on-surface-variant">Costo</p>
-                      <p className="font-black text-error">{fmt(productoSel.costo)}</p>
-                    </div>
-                    <div className="rounded-xl bg-surface-container-lowest p-3">
-                      <p className="text-[9px] font-bold uppercase text-on-surface-variant">Stock</p>
-                      <p className={cn('font-black', productoSel.stock <= (productoSel.stockMinimo ?? 5) ? 'text-warning' : 'text-on-surface')}>{productoSel.stock}</p>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Valor</label>
+                      {nuevo.tipo === 'monto' ? (
+                        <CampoMoneda valor={nuevo.valor} onChange={valor => setNuevo({ ...nuevo, valor: String(valor) })}
+                          className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
+                      ) : (
+                        <input type="number" min={0} max={100} value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: e.target.value })}
+                          className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
+                      )}
                     </div>
                   </div>
-                  {simulacion ? (
-                    <div className="grid grid-cols-2 gap-2 text-center">
-                      <div className="rounded-xl bg-surface-container-lowest p-3">
-                        <p className="text-[9px] font-bold uppercase text-on-surface-variant">Precio final</p>
-                        <p className="font-black text-on-surface">{fmt(simulacion.precioFinal)}</p>
-                        <p className="text-[10px] text-on-surface-variant">Descuento: {fmt(simulacion.descuento)}</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Inicio</label>
+                      <SelectorFecha value={nuevo.fechaInicio} onChange={fecha => setNuevo({ ...nuevo, fechaInicio: fecha })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fin</label>
+                      <SelectorFecha value={nuevo.fechaFin} onChange={fecha => setNuevo({ ...nuevo, fechaFin: fecha })} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Simulación de rentabilidad ── */}
+                <div>
+                  {productoSel ? (
+                    <div className="rounded-2xl bg-surface-container-low p-5 space-y-3">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Simulación de rentabilidad</p>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl bg-surface-container-lowest p-3">
+                          <p className="text-[9px] font-bold uppercase text-on-surface-variant">Precio actual</p>
+                          <p className="font-black text-on-surface">{fmt(productoSel.precio)}</p>
+                        </div>
+                        <div className="rounded-xl bg-surface-container-lowest p-3">
+                          <p className="text-[9px] font-bold uppercase text-on-surface-variant">Costo</p>
+                          <p className="font-black text-error">{fmt(productoSel.costo)}</p>
+                        </div>
+                        <div className="rounded-xl bg-surface-container-lowest p-3">
+                          <p className="text-[9px] font-bold uppercase text-on-surface-variant">Stock</p>
+                          <p className={cn('font-black', productoSel.stock <= (productoSel.stockMinimo ?? 5) ? 'text-warning' : 'text-on-surface')}>{productoSel.stock}</p>
+                        </div>
                       </div>
-                      <div className="rounded-xl bg-surface-container-lowest p-3">
-                        <p className="text-[9px] font-bold uppercase text-on-surface-variant">Ganancia por unidad</p>
-                        <p className={cn('font-black', simulacion.nivel === 'rojo' ? 'text-error' : simulacion.nivel === 'naranja' ? 'text-warning' : 'text-success')}>{fmt(simulacion.gananciaUnit)}</p>
-                        <p className="text-[10px] text-on-surface-variant">Margen {Math.round(simulacion.margenPct)}%</p>
-                      </div>
+                      {simulacion ? (
+                        <div className="grid grid-cols-2 gap-2 text-center">
+                          <div className="rounded-xl bg-surface-container-lowest p-3">
+                            <p className="text-[9px] font-bold uppercase text-on-surface-variant">Precio final</p>
+                            <p className="font-black text-on-surface">{fmt(simulacion.precioFinal)}</p>
+                            <p className="text-[10px] text-on-surface-variant">Descuento: {fmt(simulacion.descuento)}</p>
+                          </div>
+                          <div className="rounded-xl bg-surface-container-lowest p-3">
+                            <p className="text-[9px] font-bold uppercase text-on-surface-variant">Ganancia por unidad</p>
+                            <p className={cn('font-black', simulacion.nivel === 'rojo' ? 'text-error' : simulacion.nivel === 'naranja' ? 'text-warning' : 'text-success')}>{fmt(simulacion.gananciaUnit)}</p>
+                            <p className="text-[10px] text-on-surface-variant">Margen {Math.round(simulacion.margenPct)}%</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-on-surface-variant">Ingresa el valor de la promoción para simular el precio final.</p>
+                      )}
+                      {simulacion && (
+                        <p className={cn('flex items-start gap-2 text-xs font-semibold rounded-xl px-3 py-2',
+                          simulacion.nivel === 'rojo' ? 'bg-error/10 text-error'
+                            : simulacion.nivel === 'naranja' ? 'bg-warning/10 text-warning'
+                              : 'bg-success/10 text-success')}>
+                          <span className="material-symbols-outlined text-base shrink-0">
+                            {simulacion.nivel === 'rojo' ? 'error' : simulacion.nivel === 'naranja' ? 'warning' : 'check_circle'}
+                          </span>
+                          {simulacion.mensaje}
+                        </p>
+                      )}
                     </div>
                   ) : (
-                    <p className="text-xs text-on-surface-variant">Ingresa el valor de la promoción para simular el precio final.</p>
-                  )}
-                  {simulacion && (
-                    <p className={cn('flex items-start gap-2 text-xs font-semibold rounded-xl px-3 py-2',
-                      simulacion.nivel === 'rojo' ? 'bg-error/10 text-error'
-                        : simulacion.nivel === 'naranja' ? 'bg-warning/10 text-warning'
-                          : 'bg-success/10 text-success')}>
-                      <span className="material-symbols-outlined text-base shrink-0">
-                        {simulacion.nivel === 'rojo' ? 'error' : simulacion.nivel === 'naranja' ? 'warning' : 'check_circle'}
-                      </span>
-                      {simulacion.mensaje}
+                    <p className="text-xs text-on-surface-variant rounded-2xl bg-surface-container-low px-4 py-3">
+                      Selecciona un producto o servicio para ver el impacto de la promoción en tu rentabilidad y stock.
                     </p>
                   )}
-                </div>
-              ) : (
-                <p className="text-xs text-on-surface-variant rounded-2xl bg-surface-container-low px-4 py-3">
-                  Selecciona un producto o servicio para ver el impacto de la promoción en tu rentabilidad y stock.
-                </p>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Inicio</label>
-                  <SelectorFecha value={nuevo.fechaInicio} onChange={fecha => setNuevo({ ...nuevo, fechaInicio: fecha })} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fin</label>
-                  <SelectorFecha value={nuevo.fechaFin} onChange={fecha => setNuevo({ ...nuevo, fechaFin: fecha })} />
                 </div>
               </div>
             </div>
