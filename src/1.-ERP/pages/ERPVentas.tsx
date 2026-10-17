@@ -20,6 +20,14 @@ import {
 /** El lector de Excel pesa ~400 KB: se descarga solo al abrir la carga masiva, no con la pagina. */
 const ModalCargaMasivaVentas = lazy(() => import('../components/ModalCargaMasivaVentas'));
 
+/** Boleta o Factura segun el tipo de documento elegido (agrupa variantes exentas). */
+function tipoBoletaOFactura(tipo: Venta['tipo_documento']): 'Boleta' | 'Factura' | 'Otro' {
+  const doc = normalizeDocumentType(tipo);
+  if (doc.startsWith('boleta')) return 'Boleta';
+  if (doc.startsWith('factura')) return 'Factura';
+  return 'Otro';
+}
+
 /** Categorias de una venta en la tabla: muestra hasta 2 y el resto como "+N". */
 function ChipsCategorias({ categorias }: { categorias: string[] }) {
   if (categorias.length === 0) {
@@ -873,6 +881,7 @@ const stockInsuficiente = productoSeleccionado
                   />
                 </th>
                 <th className="px-6 py-4">Documento</th>
+                <th className="px-6 py-4">Tipo</th>
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4">Cliente</th>
                 <th className="px-6 py-4">Realizado por</th>
@@ -902,6 +911,17 @@ const stockInsuficiente = productoSeleccionado
                     <p className="text-[10px] text-on-surface-variant/60 font-bold">
                       {venta.estado_documento ? STATUS_LABELS[venta.estado_documento] : 'Documento pendiente'}
                     </p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
+                      tipoBoletaOFactura(venta.tipo_documento) === 'Boleta'
+                        ? 'bg-primary/10 text-primary'
+                        : tipoBoletaOFactura(venta.tipo_documento) === 'Factura'
+                          ? 'bg-tertiary/15 text-tertiary'
+                          : 'bg-surface-container-high text-on-surface-variant'
+                    }`}>
+                      {tipoBoletaOFactura(venta.tipo_documento)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 text-on-surface-variant">{venta.fecha}</td>
                   <td className="px-6 py-4 font-semibold text-on-surface">
@@ -970,7 +990,7 @@ const stockInsuficiente = productoSeleccionado
               ))}
               {ventasFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-6 py-8 text-center text-on-surface-variant">
+                  <td colSpan={11} className="px-6 py-8 text-center text-on-surface-variant">
                     No se encontraron ventas con los filtros aplicados.
                   </td>
                 </tr>
@@ -1073,6 +1093,48 @@ const stockInsuficiente = productoSeleccionado
                       { valor: 'mixto', etiqueta: 'Mixto' },
                       { valor: 'cheque', etiqueta: 'Cheque' }
                     ]}
+                  />
+                </div>
+              </div>
+
+              {/* Tipo de documento: boleta o factura (siempre visible) */}
+              <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-primary uppercase tracking-widest">Tipo de documento</p>
+                    <p className="text-[10px] text-on-surface-variant/70 mt-0.5">Elige si emitir una boleta o una factura</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {(['Boleta', 'Factura'] as const).map(op => {
+                      const activo = tipoBoletaOFactura(nuevaVenta.tipo_documento) === op;
+                      return (
+                        <button
+                          key={op}
+                          type="button"
+                          onClick={() => setNuevaVenta({ ...nuevaVenta, tipo_documento: op === 'Boleta' ? 'boleta_electronica' : 'factura_electronica' })}
+                          className={cn(
+                            'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all border',
+                            activo
+                              ? 'bg-primary text-inverse-on-surface border-primary shadow-lg shadow-primary/20'
+                              : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/40 hover:border-primary/40'
+                          )}
+                        >
+                          <span className="material-symbols-outlined text-lg">{op === 'Boleta' ? 'receipt' : 'request_quote'}</span>
+                          {op}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Variante del documento</label>
+                  <SelectorDesplegable
+                    className="w-full"
+                    valor={tipoDocumentoNormalizado}
+                    onChange={valor => setNuevaVenta({ ...nuevaVenta, tipo_documento: valor as Venta['tipo_documento'] })}
+                    opciones={Object.entries(DOCUMENT_LABELS)
+                      .filter(([value]) => value !== 'nota_credito')
+                      .map(([value, label]) => ({ valor: value, etiqueta: label }))}
                   />
                 </div>
               </div>
@@ -1239,17 +1301,6 @@ const stockInsuficiente = productoSeleccionado
 
               {nuevaVenta.productos && nuevaVenta.productos.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                  <div>
-                    <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Documento</label>
-                    <SelectorDesplegable
-                      className="w-full"
-                      valor={tipoDocumentoNormalizado}
-                      onChange={valor => setNuevaVenta({ ...nuevaVenta, tipo_documento: valor as Venta['tipo_documento'] })}
-                      opciones={Object.entries(DOCUMENT_LABELS)
-                        .filter(([value]) => value !== 'nota_credito')
-                        .map(([value, label]) => ({ valor: value, etiqueta: label }))}
-                    />
-                  </div>
                   <div>
                     <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Pago recibido</label>
                     <CampoMoneda
