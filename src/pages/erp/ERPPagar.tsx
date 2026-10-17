@@ -109,105 +109,121 @@ export default function ERPPagar() {
       {/* ══ Lo que debemos: gastos/proveedores ══ */}
       {activeTab === 'pagar' && (
         <section className="space-y-4 animate-in fade-in duration-500">
-          <div className="bg-error/5 p-6 rounded-2xl border border-error/20">
-            <p className="text-[10px] font-black uppercase tracking-widest text-error">Total por pagar (proveedores)</p>
-            <p className="text-3xl font-black text-error mt-1">{fmt(totalPorPagar)}</p>
-            <p className="text-xs text-on-surface-variant mt-1">{porPagar.length} cuenta(s) pendiente(s)</p>
-          </div>
-          <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-container-low border-b border-outline-variant/20">
-                  <tr>
-                    {['Fecha', 'Proveedor', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
-                      <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/10">
-                  {porPagar.length === 0 && (
-                    <tr><td colSpan={7} className="p-8 text-center text-on-surface-variant">No hay cuentas por pagar pendientes.</td></tr>
-                  )}
-                  {porPagar.map(g => {
-                    const saldo = getSaldoPendienteGasto(g.id);
-                    const abonos = getAbonosByReferencia(g.id);
-                    return (
-                      <tr key={g.id} className="hover:bg-surface-container-low/50 transition-colors">
-                        <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</td>
-                        <td className="p-4 font-bold text-on-surface">{g.proveedor}</td>
-                        <td className="p-4 font-bold text-on-surface">{fmt(g.monto)}</td>
-                        <td className="p-4 font-extrabold text-error">{fmt(saldo)}</td>
-                        <td className="p-4 text-on-surface-variant text-xs">{formatFecha(g.fecha_vencimiento)}</td>
-                        <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
-                        <td className="p-4">
-                          <button onClick={() => setDeudaModal({ tipo: 'pago', id: g.id })}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-error text-inverse-on-surface text-xs font-bold hover:bg-error/80 transition-colors">
-                            <span className="material-symbols-outlined text-sm">savings</span>
-                            Pagar
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {porPagar.length === 0 && (
+            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-12 text-center">
+              <span className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
+              <h3 className="mt-4 text-lg font-bold text-on-surface">Todo al día</h3>
+              <p className="mt-1 text-sm text-on-surface-variant">No tienes cuentas por pagar pendientes a proveedores.</p>
             </div>
-          </div>
+          )}
+          {porPagar.length > 0 && (
+            <>
+              <div className="bg-error/5 p-6 rounded-2xl border border-error/20">
+                <p className="text-[10px] font-black uppercase tracking-widest text-error">Total por pagar (proveedores)</p>
+                <p className="text-3xl font-black text-error mt-1">{fmt(totalPorPagar)}</p>
+                <p className="text-xs text-on-surface-variant mt-1">{porPagar.length} cuenta(s) pendiente(s)</p>
+              </div>
+              <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-container-low border-b border-outline-variant/20">
+                      <tr>
+                        {['Fecha', 'Proveedor', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
+                          <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/10">
+                      {porPagar.map(g => {
+                        const saldo = getSaldoPendienteGasto(g.id);
+                        const abonos = getAbonosByReferencia(g.id);
+                        return (
+                          <tr key={g.id} className="hover:bg-surface-container-low/50 transition-colors">
+                            <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</td>
+                            <td className="p-4 font-bold text-on-surface">{g.proveedor}</td>
+                            <td className="p-4 font-bold text-on-surface">{fmt(g.monto)}</td>
+                            <td className="p-4 font-extrabold text-error">{fmt(saldo)}</td>
+                            <td className="p-4 text-on-surface-variant text-xs">{formatFecha(g.fecha_vencimiento)}</td>
+                            <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
+                            <td className="p-4">
+                              <button onClick={() => setDeudaModal({ tipo: 'pago', id: g.id })}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-error text-inverse-on-surface text-xs font-bold hover:bg-error/80 transition-colors">
+                                <span className="material-symbols-outlined text-sm">savings</span>
+                                Pagar
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </section>
       )}
 
       {/* ══ Lo que nos deben: boletas/facturas de clientes ══ */}
       {activeTab === 'cobrar' && (
         <section className="space-y-4 animate-in fade-in duration-500">
-          <div className="bg-secondary/5 p-6 rounded-2xl border border-secondary/20">
-            <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Total por cobrar (clientes)</p>
-            <p className="text-3xl font-black text-secondary mt-1">{fmt(totalPorCobrar)}</p>
-            <p className="text-xs text-on-surface-variant mt-1">{porCobrar.length} boleta(s)/factura(s) pendiente(s)</p>
-          </div>
-          <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-container-low border-b border-outline-variant/20">
-                  <tr>
-                    {['Fecha', 'Cliente', 'Documento', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
-                      <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/10">
-                  {porCobrar.length === 0 && (
-                    <tr><td colSpan={8} className="p-8 text-center text-on-surface-variant">No hay boletas o facturas por cobrar pendientes.</td></tr>
-                  )}
-                  {porCobrar.map(v => {
-                    const saldo = getSaldoPendienteVenta(v.id);
-                    const abonos = getAbonosByReferencia(v.id);
-                    return (
-                      <tr key={v.id} className="hover:bg-surface-container-low/50 transition-colors">
-                        <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(v.fecha)}</td>
-                        <td className="p-4 font-bold text-on-surface">{v.cliente}</td>
-                        <td className="p-4 text-on-surface-variant">
-                          <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary">
-                            {DOCUMENT_LABELS[normalizeDocumentType(v.tipo_documento)]}
-                          </span>
-                        </td>
-                        <td className="p-4 font-bold text-on-surface">{fmt(v.monto)}</td>
-                        <td className="p-4 font-extrabold text-secondary">{fmt(saldo)}</td>
-                        <td className="p-4 text-on-surface-variant text-xs">{formatFecha(v.fecha_vencimiento)}</td>
-                        <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
-                        <td className="p-4">
-                          <button onClick={() => setDeudaModal({ tipo: 'cobro', id: v.id })}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-secondary text-inverse-on-surface text-xs font-bold hover:bg-secondary/80 transition-colors">
-                            <span className="material-symbols-outlined text-sm">payments</span>
-                            Cobrar
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {porCobrar.length === 0 && (
+            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-12 text-center">
+              <span className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
+              <h3 className="mt-4 text-lg font-bold text-on-surface">Todo al día</h3>
+              <p className="mt-1 text-sm text-on-surface-variant">No tienes boletas o facturas por cobrar pendientes de los clientes.</p>
             </div>
-          </div>
+          )}
+          {porCobrar.length > 0 && (
+            <>
+              <div className="bg-secondary/5 p-6 rounded-2xl border border-secondary/20">
+                <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Total por cobrar (clientes)</p>
+                <p className="text-3xl font-black text-secondary mt-1">{fmt(totalPorCobrar)}</p>
+                <p className="text-xs text-on-surface-variant mt-1">{porCobrar.length} boleta(s)/factura(s) pendiente(s)</p>
+              </div>
+              <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-container-low border-b border-outline-variant/20">
+                      <tr>
+                        {['Fecha', 'Cliente', 'Documento', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
+                          <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/10">
+                      {porCobrar.map(v => {
+                        const saldo = getSaldoPendienteVenta(v.id);
+                        const abonos = getAbonosByReferencia(v.id);
+                        return (
+                          <tr key={v.id} className="hover:bg-surface-container-low/50 transition-colors">
+                            <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(v.fecha)}</td>
+                            <td className="p-4 font-bold text-on-surface">{v.cliente}</td>
+                            <td className="p-4 text-on-surface-variant">
+                              <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary">
+                                {DOCUMENT_LABELS[normalizeDocumentType(v.tipo_documento)]}
+                              </span>
+                            </td>
+                            <td className="p-4 font-bold text-on-surface">{fmt(v.monto)}</td>
+                            <td className="p-4 font-extrabold text-secondary">{fmt(saldo)}</td>
+                            <td className="p-4 text-on-surface-variant text-xs">{formatFecha(v.fecha_vencimiento)}</td>
+                            <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
+                            <td className="p-4">
+                              <button onClick={() => setDeudaModal({ tipo: 'cobro', id: v.id })}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-secondary text-inverse-on-surface text-xs font-bold hover:bg-secondary/80 transition-colors">
+                                <span className="material-symbols-outlined text-sm">payments</span>
+                                Cobrar
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </section>
       )}
 
