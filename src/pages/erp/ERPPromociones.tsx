@@ -206,11 +206,11 @@ export default function ERPPromociones() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Inicio</label>
-                      <SelectorFecha value={nuevo.fechaInicio} onChange={fecha => setNuevo({ ...nuevo, fechaInicio: fecha })} />
+                      <SelectorFecha value={nuevo.fechaInicio} min={hoy} onChange={fecha => setNuevo({ ...nuevo, fechaInicio: fecha })} />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fin</label>
-                      <SelectorFecha value={nuevo.fechaFin} onChange={fecha => setNuevo({ ...nuevo, fechaFin: fecha })} />
+                      <SelectorFecha value={nuevo.fechaFin} min={hoy} onChange={fecha => setNuevo({ ...nuevo, fechaFin: fecha })} />
                     </div>
                   </div>
                 </div>
