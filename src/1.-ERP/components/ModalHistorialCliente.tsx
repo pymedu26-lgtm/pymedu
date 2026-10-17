@@ -135,31 +135,17 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
       }
     })
 
-    // Monto real facturado (total de la venta), sin importar si se pagó al instante.
-    const totalFacturado = ventasCliente.reduce((s, v) => s + (v.monto || 0), 0)
-    // Lo efectivamente cobrado = abonos manuales + la parte cobrada al instante en POS
-    // (para una venta creada "Pagado", saldo_base = 0 => se cobró todo su monto en su fecha).
-    const totalCobrado = abonosCliente.reduce((s, a) => s + (a.monto_abono ?? a.monto ?? 0), 0)
-      + ventasCliente.reduce((s, v) => s + cobradoAlInstante(v), 0)
-    const ticket = ventasCliente.length > 0
-      ? Math.round(totalFacturado / ventasCliente.length)
-      : 0
-
     return {
       ventasCliente,
       abonosCliente,
       historial,
       pagadoPorVenta,
       total: {
-        facturado: totalFacturado,
-        cobrado: totalCobrado,
-        deuda: cliente.deuda || 0,
-        ticket,
         nVentas: ventasCliente.length,
         nPagos: abonosCliente.length,
       },
     }
-  }, [ventas, abonos, cliente.id, cliente.deuda])
+  }, [ventas, abonos, cliente.id])
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`
 
@@ -215,25 +201,6 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
               <span className="font-bold text-outline">Notas: </span>{cliente.notas}
             </p>
           )}
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-4 border-b border-outline-variant/20 shrink-0">
-          <div className="bg-primary/5 rounded-2xl p-4 border border-primary/20">
-            <p className="text-[10px] font-black uppercase tracking-widest text-primary">Total facturado</p>
-            <p className="text-xl font-black text-primary mt-1">{fmt(total.facturado)}</p>
-          </div>
-          <div className="bg-success/10 rounded-2xl p-4 border border-success/20">
-            <p className="text-[10px] font-black uppercase tracking-widest text-success">Total cobrado</p>
-            <p className="text-xl font-black text-success mt-1">{fmt(total.cobrado)}</p>
-          </div>
-          <div className={cn('rounded-2xl p-4 border', total.deuda > 0 ? 'bg-secondary/10 border-secondary/20' : 'bg-surface-container-low border-outline-variant/20')}>
-            <p className={cn('text-[10px] font-black uppercase tracking-widest', total.deuda > 0 ? 'text-secondary' : 'text-on-surface-variant')}>Saldo pendiente</p>
-            <p className={cn('text-xl font-black mt-1', total.deuda > 0 ? 'text-secondary' : 'text-on-surface')}>{fmt(total.deuda)}</p>
-          </div>
-          <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/20">
-            <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Ticket promedio</p>
-            <p className="text-xl font-black text-on-surface mt-1">{fmt(total.ticket)}</p>
-          </div>
         </div>
 
         <div className="flex gap-1 px-6 pt-4 shrink-0">
