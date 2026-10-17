@@ -50,15 +50,19 @@ const normalizarPorcentaje = (crudo: string) => {
   return v;
 };
 
+/** Estado vacío del formulario de promoción. */
+const formVacio = () => ({
+  nombre: '', tipo: 'porcentaje' as 'porcentaje' | 'monto', valor: '0',
+  fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', productoId: '', estado: 'activa' as 'activa' | 'inactiva',
+});
+
 export default function ERPPromociones() {
-  const { promociones, inventario, addPromocion, deletePromocion } = useERP();
+  const { promociones, inventario, addPromocion, editPromocion, deletePromocion } = useERP();
   const [showModal, setShowModal] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [nuevo, setNuevo] = useState({
-    nombre: '', tipo: 'porcentaje' as 'porcentaje' | 'monto', valor: '0',
-    fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', productoId: '', estado: 'activa' as 'activa' | 'inactiva',
-  });
+  const [nuevo, setNuevo] = useState(formVacio());
 
   const hoy = new Date().toISOString().split('T')[0];
   const vigentes = promociones.filter(p => p.fechaInicio <= hoy && (!p.fechaFin || p.fechaFin >= hoy) && p.estado === 'activa');
@@ -73,9 +77,37 @@ export default function ERPPromociones() {
     return simularPromocion(productoSel, nuevo.tipo, aNumero(nuevo.valor));
   }, [productoSel, nuevo.tipo, nuevo.valor]);
 
+  const abrirNuevo = () => {
+    setEditandoId(null);
+    setNuevo(formVacio());
+    setShowModal(true);
+  };
+
+  const abrirEditar = (id: string) => {
+    const p = promociones.find(x => x.id === id);
+    if (!p) return;
+    setEditandoId(id);
+    setNuevo({
+      nombre: p.nombre,
+      tipo: p.tipo,
+      valor: String(p.valor),
+      fechaInicio: p.fechaInicio,
+      fechaFin: p.fechaFin ?? '',
+      productoId: p.productoId ?? '',
+      estado: p.estado,
+    });
+    setShowModal(true);
+  };
+
+  const cerrarModal = () => {
+    setShowModal(false);
+    setEditandoId(null);
+    setNuevo(formVacio());
+  };
+
   const guardar = () => {
     if (!nuevo.nombre.trim() || aNumero(nuevo.valor) <= 0) return;
-    addPromocion({
+    const datos = {
       nombre: nuevo.nombre.trim(),
       tipo: nuevo.tipo,
       valor: aNumero(nuevo.valor),
@@ -83,9 +115,10 @@ export default function ERPPromociones() {
       fechaFin: nuevo.fechaFin || undefined,
       productoId: nuevo.productoId || undefined,
       estado: nuevo.estado,
-    });
-    setShowModal(false);
-    setNuevo({ nombre: '', tipo: 'porcentaje', valor: '0', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', productoId: '', estado: 'activa' });
+    };
+    if (editandoId) editPromocion(editandoId, datos);
+    else addPromocion(datos);
+    cerrarModal();
   };
 
   const fmt = (n: number) => `$${Math.round(n).toLocaleString('es-CL')}`;
@@ -100,7 +133,7 @@ export default function ERPPromociones() {
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Pon productos o servicios en promoción y revisa su rentabilidad antes de publicar.</p>
         </div>
-        <button onClick={() => setShowModal(true)}
+        <button onClick={abrirNuevo}
           className="flex items-center gap-2 px-5 py-3 bg-tertiary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-tertiary/20 hover:scale-105 transition-transform">
           <span className="material-symbols-outlined text-lg">add_circle</span>
           Nueva Promocion
@@ -158,11 +191,18 @@ export default function ERPPromociones() {
                 {new Date(p.fechaInicio).toLocaleDateString('es-CL')}
                 {p.fechaFin ? ` a ${new Date(p.fechaFin).toLocaleDateString('es-CL')}` : ' - sin fecha de fin'}
               </p>
-              <button
-                onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
-                className="mt-4 p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
-                <span className="material-symbols-outlined text-base">delete</span>
-              </button>
+              <div className="mt-4 flex items-center gap-1">
+                <button
+                  onClick={() => abrirEditar(p.id)}
+                  className="p-1.5 text-on-surface-variant hover:text-tertiary transition-colors rounded-full hover:bg-tertiary/10">
+                  <span className="material-symbols-outlined text-base">edit</span>
+                </button>
+                <button
+                  onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
+                  className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
+                  <span className="material-symbols-outlined text-base">delete</span>
+                </button>
+              </div>
             </div>
           );
         })}
@@ -172,8 +212,8 @@ export default function ERPPromociones() {
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-tertiary">Nueva Promocion</h3>
-              <button onClick={() => setShowModal(false)} className="text-on-surface-variant hover:text-on-surface">
+              <h3 className="text-lg font-bold text-tertiary">{editandoId ? 'Editar Promocion' : 'Nueva Promocion'}</h3>
+              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -286,9 +326,9 @@ export default function ERPPromociones() {
               </div>
             </div>
             <div className="px-6 pb-6 flex gap-3 shrink-0">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
               <button onClick={guardar} disabled={!nuevo.nombre.trim() || aNumero(nuevo.valor) <= 0}
-                className="flex-1 py-3 rounded-2xl bg-tertiary text-inverse-on-surface font-bold shadow-lg shadow-tertiary/20 disabled:opacity-50">Guardar</button>
+                className="flex-1 py-3 rounded-2xl bg-tertiary text-inverse-on-surface font-bold shadow-lg shadow-tertiary/20 disabled:opacity-50">{editandoId ? 'Guardar cambios' : 'Guardar'}</button>
             </div>
           </div>
         </div>
