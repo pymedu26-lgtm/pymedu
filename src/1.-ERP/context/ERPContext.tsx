@@ -214,7 +214,8 @@ export interface Promocion {
   tipo: 'porcentaje' | 'monto';
   valor: number;
   fechaInicio: string;
-  fechaFin: string;
+  /** Sin fecha = promoción sin fecha de fin definida (vigente hasta desactivarla). */
+  fechaFin?: string;
   productoId?: string;
   estado: 'activa' | 'inactiva';
 }

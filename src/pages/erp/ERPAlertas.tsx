@@ -173,7 +173,7 @@ export default function ERPAlertas() {
     }
 
     // 11. Promociones por vencer
-    promociones.filter(p => p.estado === 'activa' && p.fechaFin >= hoyIso).forEach(p => {
+    promociones.filter(p => p.estado === 'activa' && p.fechaFin && p.fechaFin >= hoyIso).forEach(p => {
       const dias = Math.ceil((new Date(p.fechaFin + 'T23:59:59').getTime() - new Date(hoyIso + 'T00:00:00').getTime()) / 86400000);
       if (dias <= 3) {
         items.push({

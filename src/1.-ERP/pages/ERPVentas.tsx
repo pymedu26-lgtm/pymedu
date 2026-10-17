@@ -129,7 +129,7 @@ export default function ERPVentas() {
     return promociones.find(p => 
       p.estado === 'activa' && 
       p.fechaInicio <= nuevaVenta.fecha! && 
-      p.fechaFin >= nuevaVenta.fecha! &&
+      (!p.fechaFin || p.fechaFin >= nuevaVenta.fecha!) &&
       (!p.productoId || p.productoId === productoSeleccionado.id)
     );
   }, [productoSeleccionado, nuevaVenta.fecha, promociones]);

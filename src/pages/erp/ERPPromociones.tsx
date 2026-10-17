@@ -36,6 +36,20 @@ function simularPromocion(producto: Producto, tipo: 'porcentaje' | 'monto', valo
   return { precioBase, costo, precioFinal, gananciaUnit, descuento, margenPct, nivel, mensaje };
 }
 
+/** Convierte un valor escrito con coma decimal (ej: '0,5') a número. */
+const aNumero = (texto: string) => Number(texto.replace(',', '.')) || 0;
+
+/** Normaliza el valor del porcentaje mientras se escribe: coma decimal y sin ceros a la izquierda sueltos. */
+const normalizarPorcentaje = (crudo: string) => {
+  let v = crudo.replace(/\./g, ',').replace(/[^0-9,]/g, '');
+  const partes = v.split(',');
+  if (partes.length > 2) v = `${partes[0]},${partes.slice(1).join('')}`;
+  if (/^0\d/.test(v)) v = `0,${v.slice(1)}`;
+  const [entero, decimal] = v.split(',');
+  if (decimal !== undefined) v = `${entero},${decimal.slice(0, 2)}`;
+  return v;
+};
+
 export default function ERPPromociones() {
   const { promociones, inventario, addPromocion, deletePromocion } = useERP();
   const [showModal, setShowModal] = useState(false);
@@ -47,7 +61,7 @@ export default function ERPPromociones() {
   });
 
   const hoy = new Date().toISOString().split('T')[0];
-  const vigentes = promociones.filter(p => p.fechaInicio <= hoy && p.fechaFin >= hoy && p.estado === 'activa');
+  const vigentes = promociones.filter(p => p.fechaInicio <= hoy && (!p.fechaFin || p.fechaFin >= hoy) && p.estado === 'activa');
   const productosActivos = inventario.filter(p => p.estado === 'activo');
 
   const productoSel = useMemo(
@@ -55,18 +69,18 @@ export default function ERPPromociones() {
     [inventario, nuevo.productoId]
   );
   const simulacion = useMemo(() => {
-    if (!productoSel || nuevo.valor === '' || Number.isNaN(Number(nuevo.valor))) return null;
-    return simularPromocion(productoSel, nuevo.tipo, Number(nuevo.valor));
+    if (!productoSel || nuevo.valor === '') return null;
+    return simularPromocion(productoSel, nuevo.tipo, aNumero(nuevo.valor));
   }, [productoSel, nuevo.tipo, nuevo.valor]);
 
   const guardar = () => {
-    if (!nuevo.nombre.trim() || !nuevo.valor || !nuevo.fechaFin) return;
+    if (!nuevo.nombre.trim() || aNumero(nuevo.valor) <= 0) return;
     addPromocion({
       nombre: nuevo.nombre.trim(),
       tipo: nuevo.tipo,
-      valor: Number(nuevo.valor),
+      valor: aNumero(nuevo.valor),
       fechaInicio: nuevo.fechaInicio,
-      fechaFin: nuevo.fechaFin,
+      fechaFin: nuevo.fechaFin || undefined,
       productoId: nuevo.productoId || undefined,
       estado: nuevo.estado,
     });
@@ -115,7 +129,7 @@ export default function ERPPromociones() {
         )}
         {promociones.map(p => {
           const producto = p.productoId ? inventario.find(i => i.id === p.productoId) : null;
-          const activa = p.estado === 'activa' && p.fechaInicio <= hoy && p.fechaFin >= hoy;
+          const activa = p.estado === 'activa' && p.fechaInicio <= hoy && (!p.fechaFin || p.fechaFin >= hoy);
           const renta = producto ? simularPromocion(producto, p.tipo, p.valor) : null;
           return (
             <div key={p.id} className={cn('rounded-3xl border p-5 shadow-sm', activa ? 'border-tertiary/40 bg-tertiary/5' : 'border-outline-variant/20 bg-surface-container-lowest')}>
@@ -141,7 +155,8 @@ export default function ERPPromociones() {
                 </div>
               )}
               <p className="text-xs text-on-surface-variant mt-2">
-                {new Date(p.fechaInicio).toLocaleDateString('es-CL')} → {new Date(p.fechaFin).toLocaleDateString('es-CL')}
+                {new Date(p.fechaInicio).toLocaleDateString('es-CL')}
+                {p.fechaFin ? ` a ${new Date(p.fechaFin).toLocaleDateString('es-CL')}` : ' - sin fecha de fin'}
               </p>
               <button
                 onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
@@ -196,7 +211,7 @@ export default function ERPPromociones() {
                           className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
                       ) : (
                         <div className="relative">
-                          <input type="number" min={0} max={100} value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: e.target.value })}
+                          <input type="text" inputMode="decimal" value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: normalizarPorcentaje(e.target.value) })}
                             className="w-full px-4 pr-12 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
                           <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant pointer-events-none">percent</span>
                         </div>
@@ -209,7 +224,7 @@ export default function ERPPromociones() {
                       <SelectorFecha value={nuevo.fechaInicio} min={hoy} onChange={fecha => setNuevo({ ...nuevo, fechaInicio: fecha })} />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fin</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fin (opcional)</label>
                       <SelectorFecha value={nuevo.fechaFin} min={hoy} onChange={fecha => setNuevo({ ...nuevo, fechaFin: fecha })} />
                     </div>
                   </div>
@@ -272,7 +287,7 @@ export default function ERPPromociones() {
             </div>
             <div className="px-6 pb-6 flex gap-3 shrink-0">
               <button onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={guardar} disabled={!nuevo.nombre.trim() || Number(nuevo.valor) <= 0 || !nuevo.fechaFin}
+              <button onClick={guardar} disabled={!nuevo.nombre.trim() || aNumero(nuevo.valor) <= 0}
                 className="flex-1 py-3 rounded-2xl bg-tertiary text-inverse-on-surface font-bold shadow-lg shadow-tertiary/20 disabled:opacity-50">Guardar</button>
             </div>
           </div>
