@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Cliente, Venta, Abono } from '../context/ERPContext'
 import { cn } from '@/lib/utils'
 
@@ -7,38 +7,6 @@ interface Props {
   ventas: Venta[]
   abonos: Abono[]
   onClose: () => void
-}
-
-type Pestana = 'ventas' | 'pagos'
-
-const METODO_LABEL: Record<string, string> = {
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  debito: 'Débito',
-  credito: 'Crédito',
-  mixto: 'Mixto',
-  cheque: 'Cheque',
-}
-
-const TIPO_DOC_LABEL: Record<string, string> = {
-  boleta_electronica: 'Boleta electrónica',
-  factura_electronica: 'Factura electrónica',
-  boleta_exenta: 'Boleta exenta',
-  factura_exenta: 'Factura exenta',
-  nota_venta_interna: 'Nota de venta',
-  cotizacion: 'Cotización',
-  nota_credito: 'Nota de crédito',
-  boleta: 'Boleta',
-  factura: 'Factura',
-  nota_venta: 'Nota de venta',
-  sin_documento: 'Sin documento',
-}
-
-const ORIGEN_LABEL: Record<string, string> = {
-  manual: 'Manual',
-  pos: 'POS',
-  banco: 'Banco',
-  ajuste: 'Ajuste',
 }
 
 function getYM(iso: string): string {
@@ -53,29 +21,8 @@ function formatMes(ym: string): string {
   return `${meses[parseInt(m) - 1] ?? '—'} ${y}`
 }
 
-function formatFecha(iso: string): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-function formatCurrency(n: number): string {
-  const val = Number.isFinite(n) ? n : 0
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(val)
-}
-
-function resumenProductos(v: Venta): string {
-  const items = v.productos ?? []
-  if (items.length === 0) return v.nota || '—'
-  const primera = items[0]?.productoNombre || 'Ítem'
-  return items.length > 1 ? `${primera} +${items.length - 1}` : primera
-}
-
 export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose }: Props) {
-  const [pestana, setPestana] = useState<Pestana>('ventas')
-
-  const { ventasCliente, abonosCliente, historial, pagadoPorVenta } = useMemo(() => {
+  const { historial } = useMemo(() => {
     const ventasCliente = ventas
       .filter(v => {
         const nombreVenta = typeof v.cliente === 'string' ? v.cliente.trim().toLowerCase() : ''
@@ -88,12 +35,6 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
     const abonosCliente = abonos
       .filter(a => a.tipo === 'cobro' && ventaIds.has(a.referencia_id))
       .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
-
-    const pagadoPorVenta = new Map<string, number>()
-    abonosCliente.forEach(a => {
-      const monto = a.monto_abono ?? a.monto ?? 0
-      pagadoPorVenta.set(a.referencia_id, (pagadoPorVenta.get(a.referencia_id) ?? 0) + monto)
-    })
 
     const baseVenta = (v: Venta) => v.saldo_base ?? v.saldo_pendiente ?? (v.estado === 'Pendiente' ? (v.monto || 0) : 0)
 
@@ -135,21 +76,10 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
       }
     })
 
-    return {
-      ventasCliente,
-      abonosCliente,
-      historial,
-      pagadoPorVenta,
-    }
+    return { historial }
   }, [ventas, abonos, cliente.id])
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`
-
-  const ventasPorId = useMemo(() => {
-    const map = new Map<string, Venta>()
-    ventasCliente.forEach(v => map.set(v.id, v))
-    return map
-  }, [ventasCliente])
 
   const detalleCliente: { label: string; valor: string }[] = [
     { label: 'RUT', valor: cliente.rut || '—' },
@@ -160,16 +90,7 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
     { label: 'Límite de crédito', valor: cliente.limite_credito ? fmt(cliente.limite_credito) : 'Sin límite' },
   ]
 
-  const mesesDisponibles = useMemo(() => {
-    const set = new Set<string>()
-    ventasCliente.forEach(v => set.add(getYM(v.fecha)))
-    abonosCliente.forEach(a => set.add(getYM(a.fecha)))
-    return Array.from(set).sort((a, b) => b.localeCompare(a))
-  }, [ventasCliente, abonosCliente])
-
-  const [mesFiltro, setMesFiltro] = useState<string>('todos')
-
-  const tabs: { id: Pestana; label: string; count?: number }[] = []
+  const mesesDisponibles = useMemo(() => historial.map(h => h.ym).sort((a, b) => b.localeCompare(a)), [historial])
 
   return (
     <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -203,8 +124,6 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
             </p>
           )}
         </div>
-
-
 
         <div className="p-6 overflow-y-auto flex-1">
           <div className="space-y-4">
