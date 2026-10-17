@@ -23,7 +23,9 @@ function simularPromocion(producto: Producto, tipo: 'porcentaje' | 'monto', valo
     mensaje = `No ganas nada: el precio final ($${Math.round(precioFinal).toLocaleString('es-CL')}) iguala o baja del costo ($${Math.round(costo).toLocaleString('es-CL')}). Pierdes $${Math.abs(Math.round(gananciaUnit)).toLocaleString('es-CL')} por unidad vendida.`;
   } else if (precioFinal <= 0) {
     nivel = 'rojo';
-    mensaje = `El precio final quedaría en $0: esa promoción regala el producto (costo $${Math.round(costo).toLocaleString('es-CL')}).`;
+    mensaje = costo > 0
+      ? `El precio final quedaría en $0: pierdes $${Math.round(costo).toLocaleString('es-CL')} por unidad (lo que te costó el producto).`
+      : `El precio final quedaría en $0: el producto sale gratis. Su costo está en $0, configúralo en el inventario para calcular la pérdida real.`;
   } else if (gananciaUnit <= 0) {
     nivel = 'rojo';
     mensaje = `Pierdes $${Math.abs(Math.round(gananciaUnit)).toLocaleString('es-CL')} por unidad: el precio final está bajo el costo de $${Math.round(costo).toLocaleString('es-CL')}.`;
@@ -40,7 +42,7 @@ export default function ERPPromociones() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState({
-    nombre: '', tipo: 'porcentaje' as 'porcentaje' | 'monto', valor: '',
+    nombre: '', tipo: 'porcentaje' as 'porcentaje' | 'monto', valor: '0',
     fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', productoId: '', estado: 'activa' as 'activa' | 'inactiva',
   });
 
@@ -53,7 +55,7 @@ export default function ERPPromociones() {
     [inventario, nuevo.productoId]
   );
   const simulacion = useMemo(() => {
-    if (!productoSel || !nuevo.valor || Number(nuevo.valor) <= 0) return null;
+    if (!productoSel || nuevo.valor === '' || Number.isNaN(Number(nuevo.valor))) return null;
     return simularPromocion(productoSel, nuevo.tipo, Number(nuevo.valor));
   }, [productoSel, nuevo.tipo, nuevo.valor]);
 
@@ -69,7 +71,7 @@ export default function ERPPromociones() {
       estado: nuevo.estado,
     });
     setShowModal(false);
-    setNuevo({ nombre: '', tipo: 'porcentaje', valor: '', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', productoId: '', estado: 'activa' });
+    setNuevo({ nombre: '', tipo: 'porcentaje', valor: '0', fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', productoId: '', estado: 'activa' });
   };
 
   const fmt = (n: number) => `$${Math.round(n).toLocaleString('es-CL')}`;
@@ -193,8 +195,11 @@ export default function ERPPromociones() {
                         <CampoMoneda valor={nuevo.valor} onChange={valor => setNuevo({ ...nuevo, valor: String(valor) })}
                           className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
                       ) : (
-                        <input type="number" min={0} max={100} value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: e.target.value })}
-                          className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
+                        <div className="relative">
+                          <input type="number" min={0} max={100} value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: e.target.value })}
+                            className="w-full px-4 pr-12 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
+                          <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant pointer-events-none">percent</span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -267,7 +272,7 @@ export default function ERPPromociones() {
             </div>
             <div className="px-6 pb-6 flex gap-3 shrink-0">
               <button onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={guardar} disabled={!nuevo.nombre.trim() || !nuevo.valor || !nuevo.fechaFin}
+              <button onClick={guardar} disabled={!nuevo.nombre.trim() || Number(nuevo.valor) <= 0 || !nuevo.fechaFin}
                 className="flex-1 py-3 rounded-2xl bg-tertiary text-inverse-on-surface font-bold shadow-lg shadow-tertiary/20 disabled:opacity-50">Guardar</button>
             </div>
           </div>
