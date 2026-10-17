@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void
 }
 
-type Pestana = 'resumen' | 'ventas' | 'pagos'
+type Pestana = 'ventas' | 'pagos'
 
 const METODO_LABEL: Record<string, string> = {
   efectivo: 'Efectivo',
@@ -75,7 +75,7 @@ function resumenProductos(v: Venta): string {
 export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose }: Props) {
   const [pestana, setPestana] = useState<Pestana>('ventas')
 
-  const { ventasCliente, abonosCliente, historial, pagadoPorVenta, total } = useMemo(() => {
+  const { ventasCliente, abonosCliente, historial, pagadoPorVenta } = useMemo(() => {
     const ventasCliente = ventas
       .filter(v => {
         const nombreVenta = typeof v.cliente === 'string' ? v.cliente.trim().toLowerCase() : ''
@@ -140,10 +140,6 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
       abonosCliente,
       historial,
       pagadoPorVenta,
-      total: {
-        nVentas: ventasCliente.length,
-        nPagos: abonosCliente.length,
-      },
     }
   }, [ventas, abonos, cliente.id])
 
@@ -173,10 +169,7 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
 
   const [mesFiltro, setMesFiltro] = useState<string>('todos')
 
-  const tabs: { id: Pestana; label: string; count?: number }[] = [
-    { id: 'ventas', label: 'Ventas', count: total.nVentas },
-    { id: 'pagos', label: 'Pagos', count: total.nPagos },
-  ]
+  const tabs: { id: Pestana; label: string; count?: number }[] = []
 
   return (
     <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -211,25 +204,7 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
           )}
         </div>
 
-        <div className="flex gap-1 px-6 pt-4 shrink-0">
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setPestana(t.id)}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-colors',
-                pestana === t.id ? 'bg-primary text-inverse-on-surface shadow-lg shadow-primary/20' : 'text-on-surface-variant hover:bg-surface-container-low'
-              )}
-            >
-              {t.label}
-              {t.count !== undefined && (
-                <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-black', pestana === t.id ? 'bg-white/20' : 'bg-surface-container-high')}>
-                  {t.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+
 
         <div className="p-6 overflow-y-auto flex-1">
           <div className="space-y-4">
@@ -285,86 +260,7 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
             </div>
           </div>
 
-          {pestana === 'ventas' && (
-            ventasCliente.length === 0 ? (
-              <p className="text-center text-on-surface-variant py-10">Este cliente no registra ventas.</p>
-            ) : (
-              <div className="rounded-2xl border border-outline-variant/20 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-container-low">
-                    <tr>
-                      {['Fecha', 'Documento', 'Detalle', 'Total', 'Cobrado', 'Saldo', 'Estado'].map((h, i) => (
-                        <th key={h} className={cn('p-3 text-xs font-bold text-outline uppercase tracking-wider', i >= 3 && i <= 5 ? 'text-right' : 'text-left')}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/10">
-                    {ventasCliente.map(v => {
-                      const totalV = v.monto || 0
-                      const base = v.saldo_base ?? v.saldo_pendiente ?? (v.estado === 'Pendiente' ? totalV : 0)
-                      const cobrado = pagadoPorVenta.get(v.id) ?? (v.estado === 'Pagado' ? totalV : 0)
-                      const saldo = Math.max(0, base - (pagadoPorVenta.get(v.id) ?? 0))
-                      return (
-                        <tr key={v.id} className="hover:bg-surface-container-low/50 align-top">
-                          <td className="p-3 text-on-surface-variant whitespace-nowrap">{v.fecha ? v.fecha.split('T')[0] : '—'}</td>
-                          <td className="p-3 text-on-surface">{TIPO_DOC_LABEL[v.tipo_documento ?? ''] ?? (v.tipo_documento || 'Boleta')}</td>
-                          <td className="p-3 text-on-surface-variant max-w-[220px]">{resumenProductos(v)}</td>
-                          <td className="p-3 text-right font-bold text-on-surface">{fmt(totalV)}</td>
-                          <td className="p-3 text-right text-success">{fmt(cobrado)}</td>
-                          <td className={cn('p-3 text-right font-bold', saldo > 0 ? 'text-secondary' : 'text-success')}>{fmt(saldo)}</td>
-                          <td className="p-3">
-                            <span className={cn(
-                              'inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide',
-                              saldo > 0 ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'
-                            )}>
-                              {saldo > 0 ? 'Pendiente' : 'Pagado'}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          )}
 
-          {pestana === 'pagos' && (
-            abonosCliente.length === 0 ? (
-              <p className="text-center text-on-surface-variant py-10">Este cliente no registra pagos.</p>
-            ) : (
-              <div className="rounded-2xl border border-outline-variant/20 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-container-low">
-                    <tr>
-                      {['Fecha', 'Monto', 'Método', 'Origen', 'Venta asociada', 'Nota'].map((h, i) => (
-                        <th key={h} className={cn('p-3 text-xs font-bold text-outline uppercase tracking-wider', i === 1 ? 'text-right' : 'text-left')}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/10">
-                    {abonosCliente.map(a => {
-                      const venta = ventasPorId.get(a.referencia_id)
-                      return (
-                        <tr key={a.id} className="hover:bg-surface-container-low/50 align-top">
-                          <td className="p-3 text-on-surface-variant whitespace-nowrap">{a.fecha ? a.fecha.split('T')[0] : '—'}</td>
-                          <td className="p-3 text-right font-extrabold text-success whitespace-nowrap">{fmt(a.monto_abono ?? a.monto ?? 0)}</td>
-                          <td className="p-3 text-on-surface">{METODO_LABEL[a.metodo_pago] || a.metodo_pago || '—'}</td>
-                          <td className="p-3 text-on-surface-variant">{ORIGEN_LABEL[a.origen || ''] || a.origen || 'Manual'}</td>
-                          <td className="p-3 text-on-surface-variant">
-                            {venta
-                              ? `${TIPO_DOC_LABEL[venta.tipo_documento || ''] || 'Venta'} • ${fmt(venta.monto || 0)}`
-                              : '—'}
-                          </td>
-                          <td className="p-3 text-on-surface-variant">{a.nota || '—'}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          )}
         </div>
 
         <div className="flex justify-end p-6 border-t border-outline-variant/20 bg-surface-container-low/50 shrink-0">
