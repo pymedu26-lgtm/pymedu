@@ -173,11 +173,6 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
 
   const [mesFiltro, setMesFiltro] = useState<string>('todos')
 
-  const historialFiltrado = useMemo(() => {
-    if (mesFiltro === 'todos') return historial
-    return historial.filter(h => h.ym === mesFiltro)
-  }, [historial, mesFiltro])
-
   const tabs: { id: Pestana; label: string; count?: number }[] = [
     { id: 'resumen', label: 'Resumen' },
     { id: 'ventas', label: 'Ventas', count: total.nVentas },
@@ -243,43 +238,57 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
               <p className="text-center text-on-surface-variant py-10">Sin movimientos registrados para este cliente.</p>
             ) : (
               <>
-                <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <label className="text-xs font-bold uppercase tracking-widest text-outline">Filtrar por mes</label>
-                  <select
-                    value={mesFiltro}
-                    onChange={e => setMesFiltro(e.target.value)}
-                    className="px-4 py-2 rounded-xl border border-outline-variant/40 text-sm bg-surface-container-lowest text-on-surface"
-                  >
-                    <option value="todos">Todos los meses</option>
-                    {mesesDisponibles.map(m => (
-                      <option key={m} value={m}>
-                        {formatMes(m)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="rounded-2xl border border-outline-variant/20 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-surface-container-low">
-                      <tr>
-                        {['Mes', 'Ventas del mes', 'Pagos del mes', 'Acum. ventas', 'Acum. pagos', 'Saldo'].map((h, i) => (
-                          <th key={h} className={cn('p-3 text-xs font-bold text-outline uppercase tracking-wider', i === 0 ? 'text-left' : 'text-right')}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/10">
-                      {historialFiltrado.map(h => (
-                        <tr key={h.ym} className="hover:bg-surface-container-low/50">
-                          <td className="p-3 font-bold text-on-surface">{h.mes}</td>
-                          <td className="p-3 text-right text-on-surface">{fmt(h.ventasMes)}</td>
-                          <td className="p-3 text-right text-success">{fmt(h.pagosMes)}</td>
-                          <td className="p-3 text-right text-on-surface-variant">{fmt(h.acumVentas)}</td>
-                          <td className="p-3 text-right text-on-surface-variant">{fmt(h.acumPagos)}</td>
-                          <td className={cn('p-3 text-right font-extrabold', h.saldoFin > 0 ? 'text-secondary' : 'text-success')}>{fmt(h.saldoFin)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {mesesDisponibles.length === 0 ? (
+                      <div className="col-span-full rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4 text-center text-sm text-on-surface-variant">
+                        Sin movimientos por mes
+                      </div>
+                    ) : (
+                      mesesDisponibles.map(m => {
+                        const h = historial.find(x => x.ym === m)
+                        if (!h) return null
+                        return (
+                          <div
+                            key={m}
+                            className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4 flex flex-col gap-2"
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-black uppercase tracking-widest text-outline">{formatMes(m)}</p>
+                              <span
+                                className={cn(
+                                  'inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide',
+                                  h.saldoFin > 0 ? 'bg-secondary/10 text-secondary' : 'bg-success/10 text-success'
+                                )}
+                              >
+                                {h.saldoFin > 0 ? 'Con deuda' : 'Pagado'}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-on-surface-variant">Ventas</span>
+                                <span className="font-bold text-on-surface">{fmt(h.ventasMes)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-on-surface-variant">Pagos</span>
+                                <span className="font-bold text-success">{fmt(h.pagosMes)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-on-surface-variant">Deuda/Saldo</span>
+                                <span className={cn('font-extrabold', h.saldoFin > 0 ? 'text-secondary' : 'text-success')}>
+                                  {fmt(h.saldoFin)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between text-[10px] text-on-surface-variant border-t border-outline-variant/10 pt-2 mt-auto">
+                              <span>Acum. ventas {fmt(h.acumVentas)}</span>
+                              <span>Acum. pagos {fmt(h.acumPagos)}</span>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
                 </div>
               </>
             )
