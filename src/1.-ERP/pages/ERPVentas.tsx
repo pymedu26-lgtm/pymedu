@@ -563,8 +563,14 @@ const stockInsuficiente = productoSeleccionado
 
   const handleGuardar = () => {
     if (nuevaVenta.productos && nuevaVenta.productos.length > 0 && nuevaVenta.fecha) {
-      const pagoInicial = Number(montoPagado || (nuevaVenta.estado === 'Pagado' ? totalesVenta.total : 0));
-      const saldoPendiente = Math.max(0, totalesVenta.total - pagoInicial);
+      /** Estado elegido a mano por el usuario: respeta su marca, no se recalcula. */
+      const estadoElegido: Venta['estado'] = nuevaVenta.estado === 'Pendiente' ? 'Pendiente' : 'Pagado';
+      const pagoInicial = estadoElegido === 'Pagado'
+        ? totalesVenta.total
+        : Number(montoPagado || 0);
+      const saldoPendiente = estadoElegido === 'Pagado'
+        ? 0
+        : Math.max(0, totalesVenta.total - pagoInicial);
 
       // Candado de stock: la suma acumulada de cada producto en la venta no puede
       // superar stock actual + (lo que esta venta en edicion ya tenia reservado).
@@ -598,7 +604,7 @@ const stockInsuficiente = productoSeleccionado
         monto: totalesVenta.total,
         /** Propina separada de un documento que SI es venta indicada (no infla IVA). */
         propina: propinaCalculada,
-        estado: saldoPendiente > 0 ? 'Pendiente' : 'Pagado',
+        estado: estadoElegido,
         tipo_documento: tipoDocumentoNormalizado,
         metodo_pago: nuevaVenta.metodo_pago,
         modo_integracion: nuevaVenta.modo_integracion,
@@ -1300,7 +1306,37 @@ const stockInsuficiente = productoSeleccionado
               )}
 
               {nuevaVenta.productos && nuevaVenta.productos.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                  <div className="md:col-span-3">
+                    <p className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Estado de la venta</p>
+                    <div className="flex gap-2">
+                      {(['Pagado', 'Pendiente'] as const).map(op => {
+                        const activo = (nuevaVenta.estado || 'Pagado') === op;
+                        return (
+                          <button
+                            key={op}
+                            type="button"
+                            onClick={() => {
+                              if (op === 'Pagado') setMontoPagado(String(totalesVenta.total));
+                              else setMontoPagado('');
+                              setNuevaVenta(prev => ({ ...prev, estado: op }));
+                            }}
+                            className={cn(
+                              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all border',
+                              activo
+                                ? op === 'Pagado'
+                                  ? 'bg-success text-on-success border-success shadow-lg shadow-success/20'
+                                  : 'bg-secondary text-on-surface border-secondary shadow-lg shadow-secondary/20'
+                                : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/40 hover:border-primary/40'
+                            )}
+                          >
+                            <span className="material-symbols-outlined text-lg">{op === 'Pagado' ? 'check_circle' : 'schedule'}</span>
+                            {op}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Pago recibido</label>
                     <CampoMoneda
@@ -1308,18 +1344,18 @@ const stockInsuficiente = productoSeleccionado
                       onChange={(valor) => {
                         setMontoPagado(String(valor));
                         const saldo = Math.max(0, totalesVenta.total - valor);
-                        setNuevaVenta({ ...nuevaVenta, estado: saldo > 0 ? 'Pendiente' : 'Pagado' });
+                        setNuevaVenta(prev => ({ ...prev, estado: saldo > 0 ? 'Pendiente' : 'Pagado' }));
                       }}
                       className="px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                     />
                   </div>
                   {impactoVenta.saldoPendiente > 0 && (
                     <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Fecha compromiso de pago</label>
-                    <SelectorFecha
-                      value={nuevaVenta.fecha_vencimiento || ''}
-                      onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha_vencimiento: fecha })}
-                    />
+                      <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Fecha compromiso de pago</label>
+                      <SelectorFecha
+                        value={nuevaVenta.fecha_vencimiento || ''}
+                        onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha_vencimiento: fecha })}
+                      />
                     </div>
                   )}
                 </div>
