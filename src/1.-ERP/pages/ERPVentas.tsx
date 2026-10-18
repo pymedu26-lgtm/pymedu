@@ -265,8 +265,8 @@ const stockInsuficiente = productoSeleccionado
       cantidad,
       precioBase: precio,
       costoUnitario: esInventario ? (productoSeleccionado?.costo ?? 0) : 0,
-      descuentoTipo: 'ninguno',
-      descuentoValor: 0,
+      descuentoTipo: aplicaDescuento ? productoActual.descuentoTipo : 'ninguno',
+      descuentoValor: aplicaDescuento ? productoActual.descuentoValor : 0,
       /** Sin categoria informada queda 'Sin categoria', no cadena vacia. */
       categoria: productoActual.categoria.trim() || 'Sin categoria',
       subtotal: totales.subtotal,
@@ -289,7 +289,8 @@ const stockInsuficiente = productoSeleccionado
         const actual = prods[idx];
         const cantidadTotal = actual.cantidad + item.cantidad;
         const incluyeIva = item.total === item.precioBase * item.cantidad;
-        const totales = calcularTotalesItem(item.precioBase, cantidadTotal, 'ninguno', 0, incluyeIva);
+        const tipoDesc = actual.descuentoTipo && actual.descuentoTipo !== 'ninguno' ? actual.descuentoTipo : 'ninguno';
+        const totales = calcularTotalesItem(item.precioBase, cantidadTotal, tipoDesc, tipoDesc === 'ninguno' ? 0 : (actual.descuentoValor || 0), incluyeIva);
         const newProds = prods.slice();
         newProds[idx] = { ...actual, cantidad: cantidadTotal, subtotal: totales.subtotal, iva: totales.iva, total: totales.total };
         return { ...prev, productos: newProds };
@@ -1246,6 +1247,16 @@ const stockInsuficiente = productoSeleccionado
                   </div>
                 </div>
 
+                {promocionActiva && productoActual.esInventario && (
+                  <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-tertiary/10 border border-tertiary/30 text-tertiary text-sm font-bold">
+                    <span className="material-symbols-outlined text-base">local_offer</span>
+                    Promoción "{promocionActiva.nombre}" aplicada automáticamente
+                    <span className="font-black">
+                      ({promocionActiva.tipo === 'porcentaje' ? `-${promocionActiva.valor}%` : `-$${promocionActiva.valor.toLocaleString('es-CL')}`})
+                    </span>
+                  </div>
+                )}
+
                 <div className="rounded-xl bg-primary/5 border border-primary/15 px-4 py-3 grid grid-cols-2 lg:grid-cols-4 items-center gap-4">
                   <div className="text-center">
                     <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/70">Neto</p>
@@ -1289,9 +1300,20 @@ const stockInsuficiente = productoSeleccionado
                             <td className="px-4 py-2">
                               <span className="font-medium text-on-surface">{prod.productoNombre}</span>
                               {prod.esInventariable === false && <span className="block text-[10px] text-on-surface-variant/60">Item libre / no inventariable</span>}
+                              {prod.descuentoTipo && prod.descuentoTipo !== 'ninguno' && (
+                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold">
+                                  <span className="material-symbols-outlined text-[12px]">local_offer</span>
+                                  Promoción {prod.descuentoTipo === 'porcentaje' ? `-${prod.descuentoValor}%` : `-$${prod.descuentoValor.toLocaleString('es-CL')}`}
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-2 text-right">{prod.cantidad}</td>
-                            <td className="px-4 py-2 text-right font-bold text-on-surface">${prod.total.toLocaleString('es-CL')}</td>
+                            <td className="px-4 py-2 text-right">
+                              {prod.descuentoTipo && prod.descuentoTipo !== 'ninguno' && (
+                                <span className="block text-xs text-on-surface-variant line-through">${(prod.precioBase * prod.cantidad).toLocaleString('es-CL')}</span>
+                              )}
+                              <span className="font-bold text-on-surface">${prod.total.toLocaleString('es-CL')}</span>
+                            </td>
                             <td className="px-4 py-2 text-center">
                               <button onClick={() => handleRemoveProducto(idx)} className="text-on-surface-variant hover:text-error">
                                 <span className="material-symbols-outlined text-sm">close</span>
