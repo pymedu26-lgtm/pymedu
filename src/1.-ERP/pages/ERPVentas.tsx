@@ -1242,8 +1242,15 @@ const stockInsuficiente = productoSeleccionado
                     <CampoMoneda
                       valor={productoActual.precio || ''}
                       onChange={(valor) => setProductoActual({...productoActual, precio: valor})}
+                      disabled={productoActual.esInventario && !!productoSeleccionado}
                       className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                     />
+                    {productoActual.esInventario && productoSeleccionado && (
+                      <p className="flex items-center gap-1 text-xs mt-1 text-on-surface-variant">
+                        <span className="material-symbols-outlined text-sm">lock</span>
+                        Precio fijo del inventario
+                      </p>
+                    )}
                   </div>
                 </div>
 
