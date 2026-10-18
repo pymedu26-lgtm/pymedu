@@ -223,9 +223,9 @@ const stockInsuficiente = productoSeleccionado
   ) => {
     const bruto = precioBase * cantidad;
     let descuento = 0;
-    if (descuentoTipo === 'porcentaje') descuento = bruto * (descuentoValor / 100);
+    if (descuentoTipo === 'porcentaje') descuento = Math.round(bruto * (descuentoValor / 100));
     else if (descuentoTipo === 'monto') descuento = descuentoValor;
-    const base = Math.max(0, bruto - descuento);
+    const base = Math.max(0, Math.round(bruto - descuento));
     let subtotal = base, iva = 0, total = base;
     if (incluyeIva) {
       subtotal = Math.round(base / 1.19);
@@ -364,7 +364,7 @@ const stockInsuficiente = productoSeleccionado
 
   useEffect(() => {
     if (showModal && nuevaVenta.estado === 'Pagado' && totalesVenta.total > 0) {
-      setMontoPagado(String(totalesVenta.total));
+      setMontoPagado(String(Math.round(totalesVenta.total)));
     }
   }, [showModal, nuevaVenta.estado, totalesVenta.total]);
 
@@ -1339,7 +1339,7 @@ const stockInsuficiente = productoSeleccionado
                             key={op}
                             type="button"
                             onClick={() => {
-                              if (op === 'Pagado') setMontoPagado(String(totalesVenta.total));
+                              if (op === 'Pagado') setMontoPagado(String(Math.round(totalesVenta.total)));
                               else setMontoPagado('');
                               setNuevaVenta(prev => ({ ...prev, estado: op }));
                             }}
