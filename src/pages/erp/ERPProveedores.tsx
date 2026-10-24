@@ -104,7 +104,7 @@ export default function ERPProveedores() {
     <div className="p-8 space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold text-error flex items-center gap-3">
+          <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
             <span className="material-symbols-outlined text-4xl">local_shipping</span>
             Proveedores
           </h2>
@@ -130,9 +130,9 @@ export default function ERPProveedores() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-error/5 p-5 rounded-2xl border border-error/20">
-          <p className="text-[10px] font-black uppercase tracking-widest text-error">Total proveedores</p>
-          <p className="text-3xl font-black text-error mt-1">{proveedores.length}</p>
+        <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20">
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary">Total proveedores</p>
+          <p className="text-3xl font-black text-primary mt-1">{proveedores.length}</p>
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20">
           <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Deuda total</p>
@@ -178,24 +178,24 @@ export default function ERPProveedores() {
                   <td className="p-4 text-on-surface-variant">{p.condicion_pago || '—'}</td>
                   <td className="p-4">
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => abrirEditar(p)}
-                        className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
-                        title="Editar">
-                        <span className="material-symbols-outlined text-base">edit</span>
-                      </button>
-                      <button
-                        onClick={() => setHistorialProveedor(p)}
-                        className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
-                        title="Historial de pagos/deudas">
-                        <span className="material-symbols-outlined text-base">history</span>
-                      </button>
-                      <button
-                        onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
-                        className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
-                        title="Eliminar">
-                        <span className="material-symbols-outlined text-base">delete</span>
-                      </button>
+                  <button
+                    onClick={() => abrirEditar(p)}
+                    className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
+                    title="Editar">
+                    <span className="material-symbols-outlined text-base">edit</span>
+                  </button>
+                  <button
+                    onClick={() => setHistorialProveedor(p)}
+                    className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
+                    title="Historial de pagos/deudas">
+                    <span className="material-symbols-outlined text-base">history</span>
+                  </button>
+                  <button
+                    onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
+                    className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
+                    title="Eliminar">
+                    <span className="material-symbols-outlined text-base">delete</span>
+                  </button>
                     </div>
                   </td>
                 </tr>
@@ -209,51 +209,51 @@ export default function ERPProveedores() {
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-error">{editandoId ? 'Editar Proveedor' : 'Nuevo Proveedor'}</h3>
-              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-6 space-y-4 overflow-y-auto">
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre / Razón social</label>
-                <input type="text" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">RUT (opcional)</label>
-                <input type="text" value={nuevo.rut} onChange={e => setNuevo({ ...nuevo, rut: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoría</label>
-                <select value={nuevo.categoria} onChange={e => setNuevo({ ...nuevo, categoria: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface">
-                  {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Teléfono</label>
-                  <input type="text" value={nuevo.telefono} onChange={e => setNuevo({ ...nuevo, telefono: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Email</label>
-                  <input type="text" value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Condición de pago</label>
-                <input type="text" placeholder="Ej: 30 días" value={nuevo.condicion_pago} onChange={e => setNuevo({ ...nuevo, condicion_pago: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
-              </div>
-            </div>
-            <div className="px-6 pb-6 flex gap-3 shrink-0">
-              <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-error text-inverse-on-surface font-bold shadow-lg shadow-error/20 disabled:opacity-50">{editandoId ? 'Guardar Cambios' : 'Guardar Proveedor'}</button>
-            </div>
+              <h3 className="text-lg font-bold text-primary">{editandoId ? 'Editar Proveedor' : 'Nuevo Proveedor'}</h3>
+        <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
+          <span className="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div className="p-6 space-y-4 overflow-y-auto">
+        <div>
+          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre / Razón social</label>
+          <input type="text" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
+            className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">RUT (opcional)</label>
+          <input type="text" value={nuevo.rut} onChange={e => setNuevo({ ...nuevo, rut: e.target.value })}
+            className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoría</label>
+          <select value={nuevo.categoria} onChange={e => setNuevo({ ...nuevo, categoria: e.target.value })}
+            className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface">
+            {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Teléfono</label>
+            <input type="text" value={nuevo.telefono} onChange={e => setNuevo({ ...nuevo, telefono: e.target.value })}
+              className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Email</label>
+            <input type="text" value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })}
+              className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Condición de pago</label>
+          <input type="text" placeholder="Ej: 30 días" value={nuevo.condicion_pago} onChange={e => setNuevo({ ...nuevo, condicion_pago: e.target.value })}
+            className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+        </div>
+      </div>
+      <div className="px-6 pb-6 flex gap-3 shrink-0">
+        <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+        <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50">{editandoId ? 'Guardar Cambios' : 'Guardar Proveedor'}</button>
+      </div>
           </div>
         </div>
       )}

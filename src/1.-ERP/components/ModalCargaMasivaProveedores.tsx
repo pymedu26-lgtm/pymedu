@@ -277,7 +277,7 @@ export default function ModalCargaMasivaProveedores({
       <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col border border-outline-variant/40">
         <div className="p-6 border-b border-outline-variant/30 flex justify-between items-center">
           <div>
-            <h3 className="text-2xl font-black text-error">Carga Masiva de Proveedores</h3>
+            <h3 className="text-2xl font-black text-primary">Carga Masiva de Proveedores</h3>
             <p className="text-on-surface-variant text-sm mt-1">Importa múltiples proveedores desde Excel en un solo paso.</p>
           </div>
           <button onClick={() => { limpiar(); onClose(); }} className="text-on-surface-variant hover:text-error transition-colors">
@@ -292,12 +292,12 @@ export default function ModalCargaMasivaProveedores({
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
               onDragEnter={onDragEnter}
               onDragLeave={onDragLeave}
-              className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-all ${arrastrando ? 'border-error bg-error/5' : 'border-outline-variant/50 hover:border-error/40'}`}
+              className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-all ${arrastrando ? 'border-primary bg-primary/5' : 'border-outline-variant/50 hover:border-primary/40'}`}
             >
-              <span className="material-symbols-outlined text-6xl text-error mb-4">cloud_upload</span>
+              <span className="material-symbols-outlined text-6xl text-primary mb-4">cloud_upload</span>
               <h4 className="text-xl font-bold text-on-surface mb-2">Arrastra tu archivo aquí</h4>
               <p className="text-on-surface-variant mb-4">o</p>
-              <button onClick={() => inputRef.current?.click()} className="px-6 py-3 bg-error text-inverse-on-surface rounded-full font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform">
+              <button onClick={() => inputRef.current?.click()} className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
                 Seleccionar archivo
               </button>
               <input ref={inputRef} type="file" accept=".xlsx" onChange={onFileChange} className="hidden" />
@@ -313,13 +313,13 @@ export default function ModalCargaMasivaProveedores({
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-3xl text-error">description</span>
+                  <span className="material-symbols-outlined text-3xl text-primary">description</span>
                   <div>
                     <p className="font-bold text-on-surface">{archivo.name}</p>
                     <p className="text-xs text-on-surface-variant">{(archivo.size / 1024).toFixed(2)} KB</p>
                   </div>
                 </div>
-                <button onClick={limpiar} className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-error/10 hover:text-error transition-all">
+                <button onClick={limpiar} className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-primary/10 hover:text-primary transition-all">
                   <span className="material-symbols-outlined text-lg">close</span>
                   Cambiar archivo
                 </button>
@@ -327,7 +327,7 @@ export default function ModalCargaMasivaProveedores({
 
               {cargando && (
                 <div className="flex flex-col items-center justify-center py-10">
-                  <div className="w-12 h-12 border-4 border-error/20 border-t-error rounded-full animate-spin"></div>
+                  <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
                   <p className="text-on-surface-variant mt-4 font-medium">Procesando archivo...</p>
                 </div>
               )}
@@ -349,7 +349,7 @@ export default function ModalCargaMasivaProveedores({
                       </p>
                     </div>
                     <div className="flex gap-2 flex-wrap">
-                      <button onClick={seleccionarTodo} className="px-4 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-error/5 transition-all">
+                      <button onClick={seleccionarTodo} className="px-4 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-primary/5 transition-all">
                         Seleccionar válidas
                       </button>
                       <button onClick={limpiarSeleccion} className="px-4 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-surface-container-low transition-all">
@@ -385,7 +385,7 @@ export default function ModalCargaMasivaProveedores({
                                   checked={checked}
                                   disabled={bloqueado}
                                   onChange={() => toggleSeleccion(p.clave)}
-                                  className="w-4 h-4 accent-error"
+                                  className="w-4 h-4 accent-primary"
                                 />
                               </td>
                               <td className="px-4 py-2 text-on-surface-variant font-medium">{p.fila}</td>
@@ -431,7 +431,7 @@ export default function ModalCargaMasivaProveedores({
               <button
                 onClick={importarSeleccionadas}
                 disabled={seleccionadas.size === 0}
-                className="px-6 py-2.5 bg-error text-inverse-on-surface rounded-full font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
+                className="px-6 py-2.5 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
               >
                 <span className="material-symbols-outlined text-lg">download</span>
                 Importar {seleccionadas.size > 0 ? `(${seleccionadas.size})` : ''}

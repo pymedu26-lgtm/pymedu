@@ -104,7 +104,7 @@ export default function ModalHistorialProveedor({ proveedor, gastos, abonos, onC
       <div className="bg-surface-container-lowest rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-start justify-between p-6 border-b border-outline-variant/20 shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-error">Historial de pagos y deudas</h2>
+            <h2 className="text-xl font-bold text-primary">Historial de pagos y deudas</h2>
             <p className="text-sm text-on-surface-variant mt-1">
               {proveedor.nombre}
               {proveedor.rut ? ` • ${proveedor.rut}` : ''}
@@ -146,7 +146,7 @@ export default function ModalHistorialProveedor({ proveedor, gastos, abonos, onC
               'px-4 py-2 rounded-xl border text-sm font-bold transition-colors',
               soloDeuda
                 ? 'bg-secondary/10 border-secondary/40 text-secondary'
-                : 'bg-surface-container-lowest border-outline-variant/40 text-on-surface-variant hover:border-error/40'
+                : 'bg-surface-container-lowest border-outline-variant/40 text-on-surface-variant hover:border-primary/40'
             )}
           >
             Meses con deuda
@@ -176,7 +176,7 @@ export default function ModalHistorialProveedor({ proveedor, gastos, abonos, onC
                     className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4 flex flex-col gap-2"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-black uppercase tracking-widest text-error">{h.mes}</p>
+                      <p className="text-sm font-black uppercase tracking-widest text-primary">{h.mes}</p>
                       <span
                         className={cn(
                           'inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide',
@@ -210,7 +210,7 @@ export default function ModalHistorialProveedor({ proveedor, gastos, abonos, onC
         </div>
 
         <div className="flex justify-end p-6 border-t border-outline-variant/20 bg-surface-container-low/50 shrink-0">
-          <button onClick={onClose} className="px-6 py-3 rounded-2xl bg-error text-inverse-on-surface font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform">
+          <button onClick={onClose} className="px-6 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
             Cerrar
           </button>
         </div>
