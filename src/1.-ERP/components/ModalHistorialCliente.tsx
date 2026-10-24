@@ -211,10 +211,7 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
                           {fmt(h.saldoFin)}
                         </span>
                       </div>
-                      <div className="flex justify-between text-[10px] text-on-surface-variant mt-1">
-                        <span>Acum. ventas {fmt(h.acumVentas)}</span>
-                        <span>Acum. pagos {fmt(h.acumPagos)}</span>
-                      </div>
+
                     </div>
                   </div>
                 ))
