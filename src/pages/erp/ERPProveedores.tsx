@@ -123,7 +123,7 @@ export default function ERPProveedores() {
           </button>
           <button onClick={abrirNuevo}
             className="flex items-center gap-2 px-6 py-3 bg-error text-inverse-on-surface rounded-full font-bold text-sm shadow-lg shadow-error/20 hover:scale-105 transition-transform">
-            <span className="material-symbols-outlined text-lg">add</span>
+            <span className="material-symbols-outlined text-lg">person_add</span>
             Nuevo Proveedor
           </button>
         </div>
