@@ -3,7 +3,6 @@ import { Proveedor, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
 import ModalHistorialProveedor from '../../1.-ERP/components/ModalHistorialProveedor';
-import { Upload, Download } from "lucide-react";
 
 const ModalCargaMasivaProveedores = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaProveedores'));
 
@@ -114,12 +113,12 @@ export default function ERPProveedores() {
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => setShowCargaMasiva(true)}
             className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-error border border-error/30 rounded-full font-bold text-sm shadow-sm hover:bg-error/5 transition-all">
-            <Upload size={18} />
+            <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportarProveedoresCSV}
             className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-error border border-error/30 rounded-full font-bold text-sm shadow-sm hover:bg-error/5 transition-all">
-            <Download size={18} />
+            <span className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
           <button onClick={abrirNuevo}
