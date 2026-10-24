@@ -72,7 +72,7 @@ export default function ModalHistorialCliente({ cliente, ventas, abonos, onClose
         pagosMes,
         acumVentas,
         acumPagos,
-        saldoFin: acumVentas - acumPagos,
+        saldoFin: ventasMes - pagosMes,
       }
     })
 
