@@ -3,6 +3,9 @@ import { Proveedor, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
 import ModalHistorialProveedor from '../../1.-ERP/components/ModalHistorialProveedor';
+import { Upload, Download } from "lucide-react";
+
+const ModalCargaMasivaProveedores = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaProveedores'));
 
 const CATEGORIAS = ['Insumos / Mercaderia', 'Servicios Basicos', 'Arriendo', 'Sueldos', 'Publicidad', 'Tecnologia', 'Transporte', 'Otros'];
 
@@ -10,6 +13,7 @@ export default function ERPProveedores() {
   const { proveedores, addProveedor, updateProveedor, deleteProveedor, gastos, abonos } = useERP();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -20,10 +24,42 @@ export default function ERPProveedores() {
 
   const proveedoresFiltrados = proveedores.filter(p =>
     p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.categoria.toLowerCase().includes(busqueda.toLowerCase())
+    (p.categoria || '').toLowerCase().includes(busqueda.toLowerCase())
   );
 
   const totalDeuda = proveedores.reduce((a, p) => a + p.deuda, 0);
+
+  const celdaCSV = (valor: unknown) => {
+    const s = String(valor ?? '');
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const descargarCSV = (nombreArchivo: string, headers: string[], rows: (string | number)[][]) => {
+    const csv = [headers, ...rows].map(e => e.map(celdaCSV).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nombreArchivo;
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportarProveedoresCSV = () => {
+    const headers = ['Nombre', 'RUT', 'Teléfono', 'Email', 'Categoría', 'Condición de pago', 'Deuda'];
+    const rows = proveedoresFiltrados.map(p => [
+      p.nombre,
+      p.rut || '',
+      p.telefono || '',
+      p.email || '',
+      p.categoria || '',
+      p.condicion_pago || '',
+      p.deuda || 0,
+    ]);
+    descargarCSV(`proveedores_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+  };
 
   const abrirNuevo = () => {
     setEditandoId(null);
@@ -75,11 +111,23 @@ export default function ERPProveedores() {
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus proveedores y cuentas por pagar.</p>
         </div>
-        <button onClick={abrirNuevo}
-          className="flex items-center gap-2 px-5 py-3 bg-error text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-error/20 hover:scale-105 transition-transform">
-          <span className="material-symbols-outlined text-lg">add</span>
-          Nuevo Proveedor
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={() => setShowCargaMasiva(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-error border border-error/30 rounded-full font-bold text-sm shadow-sm hover:bg-error/5 transition-all">
+            <Upload size={18} />
+            Carga Masiva
+          </button>
+          <button onClick={exportarProveedoresCSV}
+            className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-error border border-error/30 rounded-full font-bold text-sm shadow-sm hover:bg-error/5 transition-all">
+            <Download size={18} />
+            Exportar
+          </button>
+          <button onClick={abrirNuevo}
+            className="flex items-center gap-2 px-6 py-3 bg-error text-inverse-on-surface rounded-full font-bold text-sm shadow-lg shadow-error/20 hover:scale-105 transition-transform">
+            <span className="material-symbols-outlined text-lg">add</span>
+            Nuevo Proveedor
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -209,6 +257,17 @@ export default function ERPProveedores() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCargaMasiva && (
+        <Suspense fallback={null}>
+          <ModalCargaMasivaProveedores
+            isOpen={showCargaMasiva}
+            onClose={() => setShowCargaMasiva(false)}
+            onImport={(nuevos) => { nuevos.forEach(p => addProveedor(p)); }}
+            proveedoresExistentes={proveedores}
+          />
+        </Suspense>
       )}
 
       <ConfirmDeleteModal
