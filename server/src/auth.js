@@ -147,6 +147,59 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ perfil: sanitizarPerfil(req.perfil) });
 });
 
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email requerido' });
+    }
+
+    const perfil = await db.prepare('SELECT * FROM perfiles WHERE email = ? AND activo = 1').get(email);
+    if (!perfil) {
+      return res.json({ ok: true });
+    }
+
+    const token = jwt.sign({ id: perfil.id, email: perfil.email, tipo: 'reset' }, JWT_SECRET, { expiresIn: '1h' });
+    const resetUrl = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/reset-password?token=${token}` : `/reset-password?token=${token}`;
+
+    console.log('[auth] Password reset solicitado para:', perfil.email, 'URL:', resetUrl);
+    res.json({ ok: true, resetUrl });
+  } catch (error) {
+    console.error('[auth] Error en forgot-password:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token y contraseña requeridos' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch {
+      return res.status(400).json({ error: 'Token inválido o expirado' });
+    }
+
+    if (decoded.tipo !== 'reset') {
+      return res.status(400).json({ error: 'Token inválido' });
+    }
+
+    const passwordHash = bcrypt.hashSync(password, 10);
+    await db.prepare('UPDATE perfiles SET password_hash = ? WHERE id = ?').run(passwordHash, decoded.id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[auth] Error en reset-password:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // Actualiza datos propios del perfil (negocio, cuenta, notificaciones y/o contrasena).
 const CAMPOS_EDITABLES = new Map([
   ['nombre_completo', 'string'],

@@ -11,6 +11,7 @@ import RequireRole from './components/RequireRole';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import PlaceholderPage from './pages/erp/PlaceholderPage';
 import Suscripcion from './pages/erp/Suscripcion';
@@ -196,11 +197,12 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           {/* ── Public Routes ── */}
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-          </Route>
+        <Route element={<PublicLayout />}>
+          <Route index element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+        </Route>
 
           {/* ── Protected Routes ── */}
           <Route element={<AuthGuard />}>

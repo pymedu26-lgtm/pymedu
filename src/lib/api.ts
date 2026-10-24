@@ -53,6 +53,10 @@ export const api = {
   login: (email: string, password: string) =>
     request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/login', json({ email, password })),
 
+  forgotPassword: (email: string) =>
+    request<{ ok: boolean; resetUrl?: string }>('/api/auth/forgot-password', json({ email })),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: boolean }>('/api/auth/reset-password', json({ token, password })),
   register: (email: string, password: string, full_name: string, extra: Record<string, unknown> = {}) =>
     request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/register', json({ email, password, full_name, ...extra })),
 
