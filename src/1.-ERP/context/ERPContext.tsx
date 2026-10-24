@@ -265,6 +265,7 @@ interface ERPContextType {
   updateCliente: (id: string, cliente: Partial<Cliente>) => void;
   deleteCliente: (id: string) => void;
   addProveedor: (proveedor: Omit<Proveedor, 'id' | 'deuda'>) => void;
+  updateProveedor: (id: string, proveedor: Partial<Proveedor>) => void;
   deleteProveedor: (id: string) => void;
   addProducto: (producto: Omit<Producto, 'id'>) => void;
   editProducto: (id: string, producto: Partial<Producto>) => void;
@@ -960,6 +961,10 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     setProveedores(prev => [{ ...p, id: newId, deuda: 0 }, ...prev]);
   };
 
+  const updateProveedor = (id: string, p: Partial<Proveedor>) => {
+    setProveedores(prev => prev.map(pr => (pr.id === id ? { ...pr, ...p } : pr)));
+  };
+
   const deleteProveedor = (id: string) => {
     setProveedores(prev => prev.filter(p => p.id !== id));
   };
@@ -1082,7 +1087,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     <ERPContext.Provider value={{
       ventas, gastos, clientes, proveedores, movimientos, inventario, movimientosInventario, promociones, abonos,
       documentosTributarios, integracionEventos, pagosPOS, configuracionCumplimiento, saldoActual,
-      addVenta, updateVenta, addGasto, updateGasto, addCliente, updateCliente, addProveedor, addProducto, editProducto, addMovimientoInventario, addPromocion, editPromocion,
+      addVenta, updateVenta, addGasto, updateGasto, addCliente, updateCliente, addProveedor, updateProveedor, addProducto, editProducto, addMovimientoInventario, addPromocion, editPromocion,
       deleteVenta, deleteGasto, deleteCliente, deleteProveedor, deleteProducto, deletePromocion,
       addAbono, createNotaCredito, reconcilePagoPOS, previewVentaImpacto, getDocumentosByPeriodo, getF29Preparador,
       getAbonosByReferencia, getSaldoPendienteVenta, getSaldoPendienteGasto, updatePpmTasa,

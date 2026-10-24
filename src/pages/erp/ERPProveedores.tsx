@@ -1,17 +1,20 @@
-import { useState } from 'react';
-import { useERP } from '../../1.-ERP/context/ERPContext';
+import { useState, lazy, Suspense } from 'react';
+import { Proveedor, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
+import ModalHistorialProveedor from '../../1.-ERP/components/ModalHistorialProveedor';
 
 const CATEGORIAS = ['Insumos / Mercaderia', 'Servicios Basicos', 'Arriendo', 'Sueldos', 'Publicidad', 'Tecnologia', 'Transporte', 'Otros'];
 
 export default function ERPProveedores() {
-  const { proveedores, addProveedor, deleteProveedor } = useERP();
+  const { proveedores, addProveedor, updateProveedor, deleteProveedor, gastos, abonos } = useERP();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [nuevo, setNuevo] = useState({ nombre: '', categoria: CATEGORIAS[0], telefono: '', email: '', condicion_pago: '' });
+  const [historialProveedor, setHistorialProveedor] = useState<Proveedor | null>(null);
+  const [nuevo, setNuevo] = useState({ nombre: '', categoria: CATEGORIAS[0], telefono: '', email: '', condicion_pago: '', rut: '' });
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
@@ -22,17 +25,44 @@ export default function ERPProveedores() {
 
   const totalDeuda = proveedores.reduce((a, p) => a + p.deuda, 0);
 
+  const abrirNuevo = () => {
+    setEditandoId(null);
+    setNuevo({ nombre: '', categoria: CATEGORIAS[0], telefono: '', email: '', condicion_pago: '', rut: '' });
+    setShowModal(true);
+  };
+
+  const abrirEditar = (p: Proveedor) => {
+    setEditandoId(p.id);
+    setNuevo({
+      nombre: p.nombre,
+      categoria: p.categoria || CATEGORIAS[0],
+      telefono: p.telefono || '',
+      email: p.email || '',
+      condicion_pago: p.condicion_pago || '',
+      rut: p.rut || '',
+    });
+    setShowModal(true);
+  };
+
+  const cerrarModal = () => {
+    setShowModal(false);
+    setEditandoId(null);
+  };
+
   const guardar = () => {
     if (!nuevo.nombre.trim()) return;
-    addProveedor({
+    const datos = {
       nombre: nuevo.nombre.trim(),
       categoria: nuevo.categoria,
       telefono: nuevo.telefono,
       email: nuevo.email || undefined,
       condicion_pago: nuevo.condicion_pago || undefined,
-    });
-    setShowModal(false);
-    setNuevo({ nombre: '', categoria: CATEGORIAS[0], telefono: '', email: '', condicion_pago: '' });
+      rut: nuevo.rut || undefined,
+    };
+    if (editandoId) updateProveedor(editandoId, datos);
+    else addProveedor(datos);
+    cerrarModal();
+    setNuevo({ nombre: '', categoria: CATEGORIAS[0], telefono: '', email: '', condicion_pago: '', rut: '' });
   };
 
   return (
@@ -45,7 +75,7 @@ export default function ERPProveedores() {
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus proveedores y cuentas por pagar.</p>
         </div>
-        <button onClick={() => setShowModal(true)}
+        <button onClick={abrirNuevo}
           className="flex items-center gap-2 px-5 py-3 bg-error text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-error/20 hover:scale-105 transition-transform">
           <span className="material-symbols-outlined text-lg">add</span>
           Nuevo Proveedor
@@ -100,11 +130,26 @@ export default function ERPProveedores() {
                   </td>
                   <td className="p-4 text-on-surface-variant">{p.condicion_pago || '—'}</td>
                   <td className="p-4">
-                    <button
-                      onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
-                      className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
-                      <span className="material-symbols-outlined text-base">delete</span>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => abrirEditar(p)}
+                        className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
+                        title="Editar">
+                        <span className="material-symbols-outlined text-base">edit</span>
+                      </button>
+                      <button
+                        onClick={() => setHistorialProveedor(p)}
+                        className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
+                        title="Historial de pagos/deudas">
+                        <span className="material-symbols-outlined text-base">history</span>
+                      </button>
+                      <button
+                        onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
+                        className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
+                        title="Eliminar">
+                        <span className="material-symbols-outlined text-base">delete</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -117,8 +162,8 @@ export default function ERPProveedores() {
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-error">Nuevo Proveedor</h3>
-              <button onClick={() => setShowModal(false)} className="text-on-surface-variant hover:text-on-surface">
+              <h3 className="text-lg font-bold text-error">{editandoId ? 'Editar Proveedor' : 'Nuevo Proveedor'}</h3>
+              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -126,6 +171,11 @@ export default function ERPProveedores() {
               <div>
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre / Razón social</label>
                 <input type="text" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">RUT (opcional)</label>
+                <input type="text" value={nuevo.rut} onChange={e => setNuevo({ ...nuevo, rut: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
               </div>
               <div>
@@ -154,8 +204,8 @@ export default function ERPProveedores() {
               </div>
             </div>
             <div className="px-6 pb-6 flex gap-3 shrink-0">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-error text-inverse-on-surface font-bold shadow-lg shadow-error/20 disabled:opacity-50">Guardar Proveedor</button>
+              <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-error text-inverse-on-surface font-bold shadow-lg shadow-error/20 disabled:opacity-50">{editandoId ? 'Guardar Cambios' : 'Guardar Proveedor'}</button>
             </div>
           </div>
         </div>
@@ -166,6 +216,15 @@ export default function ERPProveedores() {
         onClose={() => { setDeleteModalOpen(false); setItemToDelete(null); }}
         onConfirm={() => { if (itemToDelete) deleteProveedor(itemToDelete); }}
         title="Eliminar Proveedor" />
+
+      {historialProveedor && (
+        <ModalHistorialProveedor
+          proveedor={historialProveedor}
+          gastos={gastos}
+          abonos={abonos}
+          onClose={() => setHistorialProveedor(null)}
+        />
+      )}
     </div>
   );
 }
