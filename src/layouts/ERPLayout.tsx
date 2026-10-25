@@ -455,7 +455,7 @@ name: 'Mi institución',
                   <>
                     {!sidebarOpen && (
                       <div
-                        className="fixed inset-0 left-[64px] z-[40] bg-black/10 backdrop-blur-[2px]"
+                        className="fixed inset-0 left-[64px] z-[40] bg-black/10 backdrop-blur-[2px] rounded-r-2xl"
                         onClick={() => toggleGroup(group.key)}
                       />
                     )}
@@ -465,7 +465,7 @@ name: 'Mi institución',
                       className={cn(
                         sidebarOpen
                           ? 'mt-2.5 space-y-1.5'
-                          : 'fixed left-[64px] z-[70] w-72 space-y-2 bg-primary-container p-4 shadow-2xl border-l border-white/10 overflow-y-auto hide-scrollbar'
+                          : 'fixed left-[64px] z-[70] w-72 space-y-2 bg-primary-container p-4 shadow-2xl border border-white/10 overflow-y-auto hide-scrollbar rounded-r-2xl'
                       )}
                     >
                       {!sidebarOpen && (
