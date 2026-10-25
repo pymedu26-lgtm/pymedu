@@ -7,6 +7,11 @@ import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
 import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
+import { useColoresTema } from '@/lib/useColoresTema';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, LineChart, Line
+} from 'recharts';
 
 const ModalCargaMasivaGastos = lazy(() => import('../components/ModalCargaMasivaGastos'));
 
@@ -19,8 +24,11 @@ const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'cheque', label: 'Cheque' },
 ];
 
+const COLORES_GASTO = ['error', 'warning', 'tertiary', 'info', 'secondary', 'violet', 'teal'] as const;
+
 export default function ERPGastos() {
   const { gastos, ventas, addGasto, updateGasto, deleteGasto, getSaldoPendienteGasto } = useERP();
+  const c = useColoresTema();
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState('Todas');
   const [showModal, setShowModal] = useState(false);
@@ -143,6 +151,45 @@ export default function ERPGastos() {
     if (!fechaInicio && !fechaFin) return 'Sin rango de fechas';
     return `${formatFecha(fechaInicio)} → ${formatFecha(fechaFin)}`;
   }, [filtrosPeriodo]);
+
+  const gastosPorDia = useMemo(() => {
+    const porFecha: Record<string, number> = {};
+    gastosDelPeriodo.forEach(g => {
+      const fecha = (g.fecha || '').split('T')[0];
+      if (!fecha) return;
+      porFecha[fecha] = (porFecha[fecha] || 0) + g.monto;
+    });
+    const fechas = Object.keys(porFecha).sort();
+    const mismoMes = fechas.length > 0 && fechas.every(f => f.slice(0, 7) === fechas[0]?.slice(0, 7));
+    return fechas.map(fecha => ({
+      dia: mismoMes ? `Dia ${Number(fecha.slice(8, 10))}` : formatFecha(fecha),
+      monto: porFecha[fecha],
+    }));
+  }, [gastosDelPeriodo]);
+
+  const saltoEtiquetasGastos = gastosPorDia.length > 34 ? Math.ceil(gastosPorDia.length / 12) : 0;
+
+  const gastosPorProveedor = useMemo(() => {
+    const mapa: Record<string, number> = {};
+    gastosDelPeriodo.forEach(g => {
+      const key = g.proveedor?.trim() || 'Sin proveedor';
+      mapa[key] = (mapa[key] || 0) + g.monto;
+    });
+    return Object.entries(mapa)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name, value]) => ({ name, value }));
+  }, [gastosDelPeriodo]);
+
+  const gastosPorMetodoPago = useMemo(() => {
+    const mapa: Record<string, number> = {};
+    gastosDelPeriodo.forEach(g => {
+      const met = g.metodo_pago || 'efectivo';
+      const label = met.charAt(0).toUpperCase() + met.slice(1);
+      mapa[label] = (mapa[label] || 0) + g.monto;
+    });
+    return Object.entries(mapa).map(([name, value]) => ({ name, value }));
+  }, [gastosDelPeriodo]);
 
   const handleGuardar = () => {
     if (!nuevoGasto.monto || !nuevoGasto.fecha || !nuevoGasto.categoria) return;
@@ -284,42 +331,141 @@ export default function ERPGastos() {
         />
       </div>
 
-      {porCategoria.length > 0 && (
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-5 mb-5">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
-            <h3 className="font-bold text-on-surface text-sm flex items-center gap-2">
-              <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
-              Categorías de Gasto
-            </h3>
-            <span className="text-xs text-on-surface-variant font-bold">
-              Total {fmt(totalPorCategoria)} · 100%
-            </span>
+      {gastosDelPeriodo.length > 0 && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">analytics</span>
+            <h3 className="text-lg font-extrabold text-on-surface">Análisis de gastos</h3>
+            <span className="text-xs text-on-surface-variant font-bold">{rangoDelGrafico}</span>
           </div>
-          <p className="text-[11px] text-outline mb-3">{rangoDelGrafico}</p>
-          <div className="space-y-2.5">
-            {porCategoria.map(([cat, monto]) => {
-              const pct = totalPorCategoria > 0 ? (monto / totalPorCategoria) * 100 : 0;
-              const pctTexto = pct.toLocaleString('es-CL', { maximumFractionDigits: 1 });
-              const fueraDeFiltro = categoria !== 'Todas' && cat !== categoria;
-              return (
-                <div key={cat} className={cn('flex items-center gap-2 sm:gap-3', fueraDeFiltro && 'opacity-40')}>
-                  <span className="text-xs text-on-surface-variant font-bold truncate min-w-0 flex-1 sm:flex-none sm:w-36" title={cat}>
-                    {cat}
-                  </span>
-                  <div className="flex-1 min-w-[2.5rem] h-2.5 bg-surface-container-high rounded-full overflow-hidden">
-                    <div className="h-full bg-error/60 rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-xs font-extrabold text-on-surface w-12 sm:w-14 text-right tabular-nums shrink-0">
-                    {pctTexto}%
-                  </span>
-                  <span className="text-xs text-on-surface-variant tabular-nums shrink-0 sm:w-24 sm:text-right">
-                    {fmt(monto)}
-                  </span>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
+              <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Gastos por día</h4>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={gastosPorDia}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
+                    <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval={saltoEtiquetasGastos} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
+                    <RechartsTooltip
+                      contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']}
+                    />
+                    <Line type="monotone" dataKey="monto" stroke={c.error} strokeWidth={3} dot={{ r: 4, fill: c.error }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
+                <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Por categoría</h4>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={porCategoria.slice(0, 6).map(([name, value]) => ({ name, value }))}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={70}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {porCategoria.slice(0, 6).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={c[COLORES_GASTO[index % COLORES_GASTO.length]]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }} formatter={(value: number) => [`$${Number(value).toLocaleString()}`, 'Monto']} />
+                      <Legend wrapperStyle={{ fontSize: '10px', color: c.onSurfaceVariant }} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              );
-            })}
+              </div>
+
+              <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
+                <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Método de pago</h4>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={gastosPorMetodoPago}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
+                      <YAxis hide />
+                      <RechartsTooltip contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }} formatter={(value: number) => [`$${Number(value).toLocaleString()}`, 'Monto']} />
+                      <Bar dataKey="value" fill={c.warning} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
           </div>
+
+          {gastosPorProveedor.length > 0 && (
+            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
+                <h4 className="font-bold text-on-surface text-sm flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base text-primary">local_shipping</span>
+                  Top proveedores por gasto
+                </h4>
+                <span className="text-xs text-on-surface-variant font-bold">
+                  Total {fmt(totalPorCategoria)} · {rangoDelGrafico}
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {gastosPorProveedor.map(({ name, value }, idx) => {
+                  const pct = totalPorCategoria > 0 ? (value / totalPorCategoria) * 100 : 0;
+                  const pctTexto = pct.toLocaleString('es-CL', { maximumFractionDigits: 1 });
+                  return (
+                    <div key={name} className="flex items-center gap-2 sm:gap-3">
+                      <span className="text-xs text-on-surface-variant font-bold truncate min-w-0 flex-1 sm:flex-none sm:w-44" title={name}>
+                        #{idx + 1} {name}
+                      </span>
+                      <div className="flex-1 min-w-[2.5rem] h-2.5 bg-surface-container-high rounded-full overflow-hidden">
+                        <div className="h-full bg-error/60 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs font-extrabold text-on-surface w-12 sm:w-14 text-right tabular-nums shrink-0">{pctTexto}%</span>
+                      <span className="text-xs text-on-surface-variant tabular-nums shrink-0 sm:w-24 sm:text-right">{fmt(value)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {porCategoria.length > 0 && (
+            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
+                <h4 className="font-bold text-on-surface text-sm flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
+                  Distribución por categoría
+                </h4>
+                <span className="text-xs text-on-surface-variant font-bold">
+                  Total {fmt(totalPorCategoria)} · 100%
+                </span>
+              </div>
+              <p className="text-[11px] text-outline mb-3">{rangoDelGrafico}</p>
+              <div className="space-y-2.5">
+                {porCategoria.map(([cat, monto]) => {
+                  const pct = totalPorCategoria > 0 ? (monto / totalPorCategoria) * 100 : 0;
+                  const pctTexto = pct.toLocaleString('es-CL', { maximumFractionDigits: 1 });
+                  const fueraDeFiltro = categoria !== 'Todas' && cat !== categoria;
+                  return (
+                    <div key={cat} className={cn('flex items-center gap-2 sm:gap-3', fueraDeFiltro && 'opacity-40')}>
+                      <span className="text-xs text-on-surface-variant font-bold truncate min-w-0 flex-1 sm:flex-none sm:w-36" title={cat}>
+                        {cat}
+                      </span>
+                      <div className="flex-1 min-w-[2.5rem] h-2.5 bg-surface-container-high rounded-full overflow-hidden">
+                        <div className="h-full bg-error/60 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs font-extrabold text-on-surface w-12 sm:w-14 text-right tabular-nums shrink-0">{pctTexto}%</span>
+                      <span className="text-xs text-on-surface-variant tabular-nums shrink-0 sm:w-24 sm:text-right">{fmt(monto)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
