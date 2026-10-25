@@ -333,31 +333,39 @@ export default function ERPGastos() {
 
       {gastosDelPeriodo.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-            <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Categorías de Gasto</h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={porCategoria.slice(0, 6).map(([name, value]) => ({ name, value }))}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={70}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {porCategoria.slice(0, 6).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={c[COLORES_GASTO[index % COLORES_GASTO.length]]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip
-                    contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [`$${Number(value).toLocaleString()}`, 'Monto']}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '10px', color: c.onSurfaceVariant }} />
-                </PieChart>
-              </ResponsiveContainer>
+          <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
+              <h3 className="font-bold text-on-surface text-sm flex items-center gap-2">
+                <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
+                Categorías de Gasto
+              </h3>
+              <span className="text-xs text-on-surface-variant font-bold">
+                Total {fmt(totalPorCategoria)} · 100%
+              </span>
+            </div>
+            <p className="text-[11px] text-outline mb-3">{rangoDelGrafico}</p>
+            <div className="space-y-2.5">
+              {porCategoria.slice(0, 6).map(([cat, monto]) => {
+                const pct = totalPorCategoria > 0 ? (monto / totalPorCategoria) * 100 : 0;
+                const pctTexto = pct.toLocaleString('es-CL', { maximumFractionDigits: 1 });
+                const fueraDeFiltro = categoria !== 'Todas' && cat !== categoria;
+                return (
+                  <div key={cat} className={cn('flex items-center gap-2 sm:gap-3', fueraDeFiltro && 'opacity-40')}>
+                    <span className="text-xs text-on-surface-variant font-bold truncate min-w-0 flex-1 sm:flex-none sm:w-36" title={cat}>
+                      {cat}
+                    </span>
+                    <div className="flex-1 min-w-[2.5rem] h-2.5 bg-surface-container-high rounded-full overflow-hidden">
+                      <div className="h-full bg-error/60 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-xs font-extrabold text-on-surface w-12 sm:w-14 text-right tabular-nums shrink-0">
+                      {pctTexto}%
+                    </span>
+                    <span className="text-xs text-on-surface-variant tabular-nums shrink-0 sm:w-24 sm:text-right">
+                      {fmt(monto)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
