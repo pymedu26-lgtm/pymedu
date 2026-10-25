@@ -63,12 +63,27 @@ export default function ERPGastos() {
     return { inicio, fin };
   };
 
+  const rangoUltimos3Meses = () => {
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1).toISOString().split('T')[0];
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
+    return { inicio, fin };
+  };
+
   useEffect(() => {
     if (periodoSeleccionado === 'personalizado') return;
 
     const { inicio, fin } = periodoSeleccionado === 'mes_anterior' ? rangoMes(-1) : rangoMes(0);
     setFiltrosPeriodo({ fechaInicio: inicio, fechaFin: fin });
   }, [periodoSeleccionado]);
+
+  useEffect(() => {
+    if (periodoSeleccionado === 'personalizado' && !filtrosPeriodo.fechaInicio && !filtrosPeriodo.fechaFin) {
+      const { inicio, fin } = rangoUltimos3Meses();
+      setFiltrosPeriodo({ fechaInicio: inicio, fechaFin: fin });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Rango real de datos disponibles: acota hasta donde el usuario puede navegar. */
   const rangoDisponible = useMemo(() => {
@@ -77,11 +92,11 @@ export default function ERPGastos() {
     return { min: fechas[0], max: fechas[fechas.length - 1] };
   }, [gastos]);
 
-  /** El rango manual parte con el mes actual; las fechas quedan editables. */
+  /** El rango manual parte con últimos 3 meses por defecto. */
   const elegirPeriodo = (valor: string) => {
     setPeriodoSeleccionado(valor);
     if (valor === 'personalizado') {
-      const { inicio, fin } = rangoMes(0);
+      const { inicio, fin } = rangoUltimos3Meses();
       setFiltrosPeriodo({ fechaInicio: inicio, fechaFin: fin });
     }
   };

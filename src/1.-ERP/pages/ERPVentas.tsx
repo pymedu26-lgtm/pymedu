@@ -74,6 +74,14 @@ export default function ERPVentas() {
   const [avisoStock, setAvisoStock] = useState('');
   const [activeTab, setActiveTab] = useState<'lista' | 'analisis'>('lista');
 
+  useEffect(() => {
+    if (periodoSeleccionado === 'personalizado' && !filtros.fechaInicio && !filtros.fechaFin) {
+      const { inicio, fin } = rangoUltimos3Meses();
+      setFiltros(prev => ({ ...prev, fechaInicio: inicio, fechaFin: fin }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** Propina 10% opcional: campo separado (Caja), no infla IVA ni documento tributario. */
   const [aplicarPropina, setAplicarPropina] = useState(false);
   /** Venta seleccionada en la tabla → abre Nota de Venta formato Chile (imprimir/PDF). */
@@ -378,6 +386,14 @@ const stockInsuficiente = productoSeleccionado
     return { inicio, fin };
   };
 
+  /** Últimos 3 meses: mes actual + 2 meses atrás */
+  const rangoUltimos3Meses = () => {
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1).toISOString().split('T')[0];
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
+    return { inicio, fin };
+  };
+
   useEffect(() => {
     if (periodoSeleccionado === 'personalizado') return;
 
@@ -392,11 +408,11 @@ const stockInsuficiente = productoSeleccionado
     return { min: fechas[0], max: fechas[fechas.length - 1] };
   }, [ventas]);
 
-  /** El rango manual parte con el mes actual; las fechas quedan editables. */
+  /** El rango manual parte con últimos 3 meses por defecto. */
   const elegirPeriodo = (valor: string) => {
     setPeriodoSeleccionado(valor);
     if (valor === 'personalizado') {
-      const { inicio, fin } = rangoMes(0);
+      const { inicio, fin } = rangoUltimos3Meses();
       setFiltros(prev => ({ ...prev, fechaInicio: inicio, fechaFin: fin }));
     }
   };
@@ -525,6 +541,32 @@ const stockInsuficiente = productoSeleccionado
       porFecha[fecha] = (porFecha[fecha] || 0) + v.monto;
     });
     const fechas = Object.keys(porFecha).sort();
+    if (fechas.length === 0) return [];
+
+    const rangoDias = fechas.length > 0
+      ? Math.ceil((new Date(fechas[fechas.length - 1]).getTime() - new Date(fechas[0]).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    if (rangoDias > 62) {
+      const porMes: Record<string, { key: string; monto: number }> = {};
+      ventasFiltradas.forEach(v => {
+        const fecha = (v.fecha || '').split('T')[0];
+        if (!fecha) return;
+        const key = fecha.slice(0, 7);
+        if (!porMes[key]) {
+          const [year, month] = key.split('-');
+          porMes[key] = { key, monto: 0 };
+        }
+        porMes[key].monto += v.monto;
+      });
+      const meses = Object.keys(porMes).sort();
+      return meses.map(key => {
+        const [year, month] = key.split('-');
+        const label = new Date(Number(year), Number(month) - 1).toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+        return { dia: label.charAt(0).toUpperCase() + label.slice(1), monto: porMes[key].monto };
+      });
+    }
+
     const mismoMes = fechas.every(f => f.slice(0, 7) === fechas[0]?.slice(0, 7));
     return fechas.map(fecha => ({
       dia: mismoMes ? `Dia ${Number(fecha.slice(8, 10))}` : formatFecha(fecha),
@@ -760,7 +802,7 @@ const stockInsuficiente = productoSeleccionado
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Ventas por Dia del Mes</h3>
+          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Ventas por periodo</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={datosVentasPorDia}>
