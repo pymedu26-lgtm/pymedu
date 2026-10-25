@@ -378,7 +378,7 @@ export default function ERPGastos() {
             <span className="text-xs text-on-surface-variant font-bold">· {rangoDelGrafico}</span>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
               <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Top proveedores</h4>
               <div className="h-64">
@@ -386,7 +386,7 @@ export default function ERPGastos() {
                   <BarChart data={gastosPorProveedor} layout="vertical" margin={{ left: 10, right: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.outlineVariant} />
                     <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
-                    <YAxis type="category" dataKey="name" width={120} axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 9 }} />
+                    <YAxis type="category" dataKey="name" width={90} axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 9 }} />
                     <RechartsTooltip
                       contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }}
                       formatter={(value: number) => [`$${value.toLocaleString()}`, 'Gasto']}
@@ -397,47 +397,45 @@ export default function ERPGastos() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-                <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Por estado de pago</h4>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[
-                      { name: 'Pagado', value: gastosDelPeriodo.filter(g => g.estado === 'Pagado').reduce((a,g)=>a+g.monto,0) },
-                      { name: 'Por Pagar', value: gastosDelPeriodo.filter(g => g.estado === 'Por Pagar').reduce((a,g)=>a+g.monto,0) },
-                    ]}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
-                      <RechartsTooltip
-                        contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }}
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']}
-                      />
-                      <Bar dataKey="value" fill={c.tertiary} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+            <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
+              <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Por estado de pago</h4>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={[
+                    { name: 'Pagado', value: gastosDelPeriodo.filter(g => g.estado === 'Pagado').reduce((a,g)=>a+g.monto,0) },
+                    { name: 'Por Pagar', value: gastosDelPeriodo.filter(g => g.estado === 'Por Pagar').reduce((a,g)=>a+g.monto,0) },
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
+                    <RechartsTooltip
+                      contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }}
+                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']}
+                    />
+                    <Bar dataKey="value" fill={c.tertiary} radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
+            </div>
 
-              <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-                <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Factura vs Sin factura</h4>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[
-                      { name: 'Factura', value: gastosDelPeriodo.filter(g => g.esFactura).reduce((a,g)=>a+g.monto,0) },
-                      { name: 'Sin factura', value: gastosDelPeriodo.filter(g => !g.esFactura).reduce((a,g)=>a+g.monto,0) },
-                    ]}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
-                      <RechartsTooltip
-                        contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }}
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']}
-                      />
-                      <Bar dataKey="value" fill={c.secondary} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+            <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
+              <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Factura vs Sin factura</h4>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={[
+                    { name: 'Factura', value: gastosDelPeriodo.filter(g => g.esFactura).reduce((a,g)=>a+g.monto,0) },
+                    { name: 'Sin factura', value: gastosDelPeriodo.filter(g => !g.esFactura).reduce((a,g)=>a+g.monto,0) },
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
+                    <RechartsTooltip
+                      contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }}
+                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']}
+                    />
+                    <Bar dataKey="value" fill={c.secondary} radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
