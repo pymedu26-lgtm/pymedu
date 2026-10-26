@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+﻿import { useState, useMemo, useEffect, lazy, Suspense, useDeferredValue } from 'react';
 import { useERP, Gasto, MetodoPago } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
@@ -110,14 +110,15 @@ export default function ERPGastos() {
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
+  const busquedaDeferred = useDeferredValue(busqueda);
   const gastosFiltrados = useMemo(() =>
     gastos.filter(g => {
-      const matchBusqueda = g.proveedor.toLowerCase().includes(busqueda.toLowerCase()) || g.categoria.toLowerCase().includes(busqueda.toLowerCase());
+      const matchBusqueda = g.proveedor.toLowerCase().includes(busquedaDeferred.toLowerCase()) || g.categoria.toLowerCase().includes(busquedaDeferred.toLowerCase());
       const matchCat = categoria === 'Todas' || g.categoria === categoria;
       const matchFechaInicio = !filtrosPeriodo.fechaInicio || g.fecha >= filtrosPeriodo.fechaInicio;
       const matchFechaFin = !filtrosPeriodo.fechaFin || g.fecha <= filtrosPeriodo.fechaFin;
       return matchBusqueda && matchCat && matchFechaInicio && matchFechaFin;
-    }), [gastos, busqueda, categoria, filtrosPeriodo]);
+    }), [gastos, busquedaDeferred, categoria, filtrosPeriodo]);
 
   const totalGastos = gastosFiltrados.reduce((a, g) => a + g.monto, 0);
   const totalFacturas = gastosFiltrados.filter(g => g.esFactura).reduce((a, g) => a + g.iva, 0);

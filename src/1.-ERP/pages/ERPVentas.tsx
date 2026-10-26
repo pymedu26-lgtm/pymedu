@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+﻿import { useState, useMemo, useEffect, lazy, Suspense, useDeferredValue } from 'react';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
@@ -471,18 +471,19 @@ const stockInsuficiente = productoSeleccionado
     return Array.from(autores).sort((a, b) => a.localeCompare(b));
   }, [ventas]);
 
+  const filtrosDeferred = useDeferredValue(filtros);
   const ventasFiltradas = useMemo(() => {
     return ventas.filter(v => {
-      const matchFechaInicio = !filtros.fechaInicio || v.fecha >= filtros.fechaInicio;
-      const matchFechaFin = !filtros.fechaFin || v.fecha <= filtros.fechaFin;
-      const matchEstado = filtros.estado === 'Todos' || v.estado === filtros.estado;
-      const matchCliente = !filtros.cliente || v.cliente.toLowerCase().includes(filtros.cliente.toLowerCase());
+      const matchFechaInicio = !filtrosDeferred.fechaInicio || v.fecha >= filtrosDeferred.fechaInicio;
+      const matchFechaFin = !filtrosDeferred.fechaFin || v.fecha <= filtrosDeferred.fechaFin;
+      const matchEstado = filtrosDeferred.estado === 'Todos' || v.estado === filtrosDeferred.estado;
+      const matchCliente = !filtrosDeferred.cliente || v.cliente.toLowerCase().includes(filtrosDeferred.cliente.toLowerCase());
       // La venta entra si al menos uno de sus items es de la categoria elegida.
-      const matchCategoria = !filtros.categoria || (categoriasPorVenta[v.id] ?? []).includes(filtros.categoria);
-      const matchAutor = !filtros.realizadoPor || autorDeVenta(v) === filtros.realizadoPor;
+      const matchCategoria = !filtrosDeferred.categoria || (categoriasPorVenta[v.id] ?? []).includes(filtrosDeferred.categoria);
+      const matchAutor = !filtrosDeferred.realizadoPor || autorDeVenta(v) === filtrosDeferred.realizadoPor;
       return matchFechaInicio && matchFechaFin && matchEstado && matchCliente && matchCategoria && matchAutor;
     });
-  }, [ventas, filtros, categoriasPorVenta]);
+  }, [ventas, filtrosDeferred, categoriasPorVenta]);
 
   /* ══ Acciones múltiples sobre la tabla ══ */
 
