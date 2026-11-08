@@ -87,8 +87,14 @@ export interface ConfiguracionCumplimiento {
   metodoCosteo?: 'fifo' | 'promedio';
   /** Qué frasco abierto usar para una porción: el que tiene menos (para terminarlo) o el abierto hace más tiempo. */
   politicaEnvaseAbierto?: 'menos_contenido' | 'mas_antiguo';
-  /** Permite completar una porción con dos envases abiertos (por defecto no). */
+  /** Combinar abiertas antes de abrir una nueva (por defecto no: se abre otra y el remanente queda). */
   permitirMezclarEnvases?: boolean;
+  /** Margen objetivo (%) para sugerir precios cuando no hay un producto de origen. */
+  margenObjetivo?: number;
+  /** Subcategorías frecuentes (plantillas). Borrarlas no cambia los productos que ya las copiaron. */
+  plantillasSubcategoria?: import('./subcategorias').PlantillaSubcategoria[];
+  /** Preferencias del Centro de alertas. */
+  alertas?: import('./alertas').ConfigAlertas;
 }
 
 export interface SaleDocumentInput {

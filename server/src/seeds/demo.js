@@ -36,6 +36,7 @@ export async function sembrarDemoLocal() {
   await sembrarMentorias();
   await sembrarErp();
   await sembrarFraccionados();
+  await sembrarSubcategorias();
 }
 
 // ═══════════════════════════════ Mentorías ═══════════════════════════════
@@ -190,12 +191,12 @@ async function sembrarFraccionados() {
   const asad = agregar('inventario', {
     id: randomUUID(), nombre: 'Lattafa Asad', codigo: 'LAT-ASAD', categoria: 'Perfumería', tipo: 'producto', descripcion: 'Eau de parfum 100 ml',
     costo: 300, precio: 45000, incluyeIva: true, stock: 1970, stockMinimo: 300, unidadMedida: 'ml', unidadBase: 'ml', estado: 'activo', esInventariable: true,
-    tipoOperativo: 'producto_simple', formaCompra: 'envase', nombreEnvase: 'frasco', controlEnvases: true, capacidadEnvase: 100,
+    tipoOperativo: 'producto_simple', formaCompra: 'envase', nombreEnvase: 'botella', controlEnvases: true, capacidadEnvase: 100, stockMinimoUnidad: 3, unidadMinimo: 'envase',
     presentaciones: [
-      { id: randomUUID(), nombre: 'Frasco 100 ml', factor: 100, precio: 45000, tipo: 'completa', origen: 'envase_cerrado', activa: true },
-      { id: randomUUID(), nombre: 'Decant 3 ml', factor: 3, precio: 3500, tipo: 'porcion', origen: 'envase_abierto', activa: true, costoInsumos: 150, ...(receta ? { receta } : {}) },
-      { id: randomUUID(), nombre: 'Decant 5 ml', factor: 5, precio: 5000, tipo: 'porcion', origen: 'envase_abierto', activa: true, costoInsumos: 150, ...(receta ? { receta } : {}) },
-      { id: randomUUID(), nombre: 'Decant 10 ml', factor: 10, precio: 9000, tipo: 'porcion', origen: 'envase_abierto', activa: true, costoInsumos: 200, ...(receta ? { receta } : {}) },
+      { id: randomUUID(), nombre: 'Botella completa', factor: 100, precio: 45000, tipo: 'completa', origen: 'envase_cerrado', activa: true },
+      { id: randomUUID(), nombre: 'Decant 3 ml', factor: 3, precio: 3500, tipo: 'fija', origen: 'envase_abierto', activa: true, costoInsumos: 150, ...(receta ? { receta } : {}) },
+      { id: randomUUID(), nombre: 'Decant 5 ml', factor: 5, precio: 5000, tipo: 'fija', origen: 'envase_abierto', activa: true, costoInsumos: 150, ...(receta ? { receta } : {}) },
+      { id: randomUUID(), nombre: 'Decant 10 ml', factor: 10, precio: 9000, tipo: 'fija', origen: 'envase_abierto', activa: true, costoInsumos: 200, ...(receta ? { receta } : {}) },
     ],
   });
   const loteAsad = agregar('lotes', { id: randomUUID(), productoId: asad.id, fecha: hace(15).slice(0, 10), cantidadInicial: 2000, cantidadRestante: 1970, costoUnitario: 300 });
@@ -219,8 +220,8 @@ async function sembrarFraccionados() {
     costo: 400, precio: 990, incluyeIva: true, stock: 2000, stockMinimo: 200, unidadMedida: 'kg', unidadBase: 'kg', estado: 'activo', esInventariable: true,
     tipoOperativo: 'producto_simple', formaCompra: 'granel', controlEnvases: false,
     presentaciones: [
-      { id: randomUUID(), nombre: '1 kg', factor: 1, precio: 990, tipo: 'porcion', origen: 'granel', activa: true },
-      { id: randomUUID(), nombre: '500 g', factor: 0.5, precio: 550, tipo: 'porcion', origen: 'granel', activa: true },
+      { id: randomUUID(), nombre: '1 kg', factor: 1, precio: 990, tipo: 'fija', origen: 'granel', activa: true },
+      { id: randomUUID(), nombre: '500 g', factor: 0.5, precio: 550, tipo: 'fija', origen: 'granel', activa: true },
     ],
   });
   const loteManzana = agregar('lotes', { id: randomUUID(), productoId: manzana.id, fecha: hace(4).slice(0, 10), cantidadInicial: 2000, cantidadRestante: 2000, costoUnitario: 400 });
@@ -230,6 +231,70 @@ async function sembrarFraccionados() {
     await ejecutar(`INSERT INTO erp_datos (usuario_id, coleccion, id, data) VALUES (?, ?, ?, ?::jsonb) ON CONFLICT DO NOTHING`, yo.id, col, id, JSON.stringify(obj));
   }
   console.log(`[demo] Inventario fraccionado: Lattafa Asad (19 cerrados + 1 abierto con 70 ml) y Manzana Fuji (2 t)`);
+}
+
+// Subcategorías de venta, granel por tonelada y saco de 25 kg (idempotente por nombre).
+// Papas en sacos de 25 kg (3 cerrados + 1 abierto con 12 kg, mínimo 3 sacos → «stock bajo»)
+// y Tomate a granel por tonelada (2 lotes, uno por vencer) con venta «Por kilo» de peso variable.
+async function sembrarSubcategorias() {
+  const yo = await idDe('emprendedor@pymedu.com');
+  if (!yo) return;
+  const ahora = new Date();
+  const hace = (dias) => new Date(ahora.getTime() - dias * 86400000).toISOString();
+  const en = (dias) => new Date(ahora.getTime() + dias * 86400000).toISOString().slice(0, 10);
+  const filas = [];
+  const agregar = (coleccion, obj) => { filas.push([coleccion, obj.id, obj]); return obj; };
+  const existe = async (nombre) => uno(`SELECT 1 AS si FROM erp_datos WHERE usuario_id = ? AND coleccion = 'inventario' AND data->>'nombre' = ?`, yo.id, nombre);
+
+  if (!(await existe('Papas en saco'))) {
+    const papas = agregar('inventario', {
+      id: randomUUID(), nombre: 'Papas en saco', codigo: 'VER-PAPA', categoria: 'Verdulería', tipo: 'producto', descripcion: 'Saco de 25 kg',
+      costo: 360, precio: 14990, incluyeIva: true, stock: 87, stockMinimo: 75, stockMinimoUnidad: 3, unidadMinimo: 'envase',
+      unidadMedida: 'kg', unidadBase: 'kg', estado: 'activo', esInventariable: true, tipoOperativo: 'producto_simple', perecible: true,
+      formaCompra: 'envase', nombreEnvase: 'saco', controlEnvases: true, capacidadEnvase: 25, mermaEstimada: 3,
+      presentaciones: [
+        { id: randomUUID(), nombre: 'Saco completo', factor: 25, precio: 14990, tipo: 'completa', origen: 'envase_cerrado', activa: true },
+        { id: randomUUID(), nombre: 'Malla 5 kg', factor: 5, precio: 3490, tipo: 'fija', origen: 'envase_abierto', activa: true },
+        { id: randomUUID(), nombre: '1 kg', factor: 1, precio: 890, tipo: 'fija', origen: 'envase_abierto', activa: true },
+        { id: randomUUID(), nombre: 'Por kilo', factor: 1, precio: 850, tipo: 'variable', unidadVenta: 'kg', origen: 'envase_abierto', activa: true },
+      ],
+    });
+    const lote = agregar('lotes', { id: randomUUID(), productoId: papas.id, fecha: hace(5).slice(0, 10), cantidadInicial: 100, cantidadRestante: 87, costoUnitario: 360 });
+    let abierto = null;
+    for (let i = 1; i <= 4; i++) {
+      const e = agregar('envases', {
+        id: randomUUID(), productoId: papas.id, loteId: lote.id, codigo: `F${i}`, capacidad: 25,
+        restante: i === 4 ? 12 : 25, estado: i === 4 ? 'abierto' : 'cerrado', ...(i === 4 ? { abiertoEn: hace(2) } : {}),
+      });
+      if (i === 4) abierto = e;
+    }
+    agregar('movimientosInventario', { id: randomUUID(), productoId: papas.id, tipo: 'ingreso', cantidad: 100, costoUnitario: 360, fecha: hace(5), motivo: 'Compra de 4 sacos de 25 kg', lote: lote.id });
+    agregar('movimientosInventario', { id: randomUUID(), productoId: papas.id, tipo: 'apertura', cantidad: 25, fecha: hace(2), motivo: 'Apertura de F4', envaseId: abierto.id });
+    agregar('movimientosInventario', { id: randomUUID(), productoId: papas.id, tipo: 'salida', cantidad: 13, costoUnitario: 360, fecha: hace(1), motivo: 'Venta por kilo', envaseId: abierto.id, consumos: [{ envaseId: abierto.id, cantidad: 13 }] });
+  }
+
+  if (!(await existe('Tomate'))) {
+    const tomate = agregar('inventario', {
+      id: randomUUID(), nombre: 'Tomate', codigo: 'VER-TOMA', categoria: 'Verdulería', tipo: 'producto', descripcion: 'Comprado por tonelada, se vende por kilo',
+      costo: 620, precio: 1500, incluyeIva: true, stock: 1200, stockMinimo: 500, stockMinimoUnidad: 0.5, unidadMinimo: 't',
+      unidadMedida: 'kg', unidadBase: 'kg', estado: 'activo', esInventariable: true, tipoOperativo: 'producto_simple', perecible: true,
+      formaCompra: 'granel', controlEnvases: false, mermaEstimada: 8,
+      presentaciones: [
+        { id: randomUUID(), nombre: 'Por kilo', factor: 1, precio: 1500, tipo: 'variable', unidadVenta: 'kg', origen: 'granel', activa: true },
+        { id: randomUUID(), nombre: 'Malla 5 kg', factor: 5, precio: 6990, tipo: 'fija', origen: 'granel', activa: true },
+      ],
+    });
+    const viejo = agregar('lotes', { id: randomUUID(), productoId: tomate.id, fecha: hace(6).slice(0, 10), cantidadInicial: 1000, cantidadRestante: 700, costoUnitario: 600, vencimiento: en(3) });
+    const nuevo = agregar('lotes', { id: randomUUID(), productoId: tomate.id, fecha: hace(1).slice(0, 10), cantidadInicial: 500, cantidadRestante: 500, costoUnitario: 660, vencimiento: en(9) });
+    agregar('movimientosInventario', { id: randomUUID(), productoId: tomate.id, tipo: 'ingreso', cantidad: 1000, costoUnitario: 600, fecha: hace(6), motivo: 'Compra de 1 t', lote: viejo.id });
+    agregar('movimientosInventario', { id: randomUUID(), productoId: tomate.id, tipo: 'salida', cantidad: 300, costoUnitario: 600, fecha: hace(2), motivo: 'Ventas por kilo', consumosLote: [{ loteId: viejo.id, cantidad: 300 }] });
+    agregar('movimientosInventario', { id: randomUUID(), productoId: tomate.id, tipo: 'ingreso', cantidad: 500, costoUnitario: 660, fecha: hace(1), motivo: 'Compra de 0,5 t', lote: nuevo.id });
+  }
+
+  for (const [col, id, obj] of filas) {
+    await ejecutar(`INSERT INTO erp_datos (usuario_id, coleccion, id, data) VALUES (?, ?, ?, ?::jsonb) ON CONFLICT DO NOTHING`, yo.id, col, id, JSON.stringify(obj));
+  }
+  if (filas.length) console.log('[demo] Subcategorías: Papas en saco (25 kg) y Tomate a granel (1,2 t, venta por kilo)');
 }
 
 async function sembrarErp() {

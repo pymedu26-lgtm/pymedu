@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useERP } from '../../1.-ERP/context/ERPContext';
+import { CATEGORIAS, CONFIG_ALERTAS_DEFECTO } from '../../1.-ERP/services/alertas';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { formatCLP, formatFecha } from '../../lib/fechas';
 import { PLANES, planPorId, WEBPAY_MODO_PRUEBA } from '../../lib/planes';
 
-type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion' | 'inventario';
+type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion' | 'inventario' | 'alertas';
 
 const RUBROS = [
   'Alimentación y Bebidas', 'Comercio Minorista', 'Servicios Profesionales',
@@ -39,13 +40,17 @@ const TABS: { id: Tab; icono: string; label: string }[] = [
   { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta' },
   { id: 'equipo', icono: 'group', label: 'Equipo' },
   { id: 'inventario', icono: 'inventory_2', label: 'Inventario' },
+  { id: 'alertas', icono: 'notifications', label: 'Alertas' },
   { id: 'integraciones', icono: 'cloud_sync', label: 'Integraciones' },
   { id: 'facturacion', icono: 'credit_card', label: 'Suscripción' },
 ];
 
 export default function ERPConfiguracion() {
   const { perfil, actualizarPerfil, puedeHacer } = useAuth();
-  const { configuracionCumplimiento, updatePpmTasa, metodoCosteo, setMetodoCosteo, politicaEnvaseAbierto, permitirMezclarEnvases, setPoliticaInventario } = useERP();
+  const {
+    configuracionCumplimiento, updatePpmTasa, metodoCosteo, setMetodoCosteo, politicaEnvaseAbierto, permitirMezclarEnvases, setPoliticaInventario,
+    plantillasSubcategoria, actualizarPlantilla, eliminarPlantilla, margenObjetivo, setMargenObjetivo, configAlertas, setConfigAlertas,
+  } = useERP();
   const [tab, setTab] = useState<Tab>('negocio');
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
@@ -215,7 +220,7 @@ export default function ERPConfiguracion() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-surface-container-lowest dark-card p-1 rounded-2xl w-fit max-w-full overflow-x-auto">
+      <div className="flex gap-1 bg-surface-container-lowest dark-card p-1 rounded-2xl w-fit max-w-full overflow-x-auto hide-scrollbar">
         {TABS.map(({ id, icono, label }) => (
           <button key={id} onClick={() => setTab(id)}
             className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap',
@@ -511,7 +516,7 @@ export default function ERPConfiguracion() {
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6 space-y-4">
             <div>
               <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">water_drop</span>Frascos y sacos abiertos</h3>
-              <p className="text-xs text-on-surface-variant mt-1">Al vender una porción (decant, kilo suelto) el sistema elige de qué envase abierto sacarla. Nunca abre uno nuevo sin preguntarte.</p>
+              <p className="text-xs text-on-surface-variant mt-1">Al vender una subcategoría (decant, kilo suelto) se usa una abierta que alcance sola. Si ninguna alcanza y hay cerradas, se abre la siguiente automáticamente y te avisa; si el stock total no alcanza, la venta se bloquea.</p>
             </div>
             {([
               { valor: 'menos_contenido', titulo: 'El que tiene menos (recomendado)', detalle: 'Termina primero los envases casi vacíos.' },
@@ -527,10 +532,99 @@ export default function ERPConfiguracion() {
               <input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={permitirMezclarEnvases} disabled={!puedeHacer('editar_mi_negocio')}
                 onChange={e => { setPoliticaInventario({ permitirMezclarEnvases: e.target.checked }); notificar('ok', 'Preferencia guardada.'); }} />
               <span>
-                <span className="block text-sm font-bold text-on-surface">Permitir completar una porción con dos envases</span>
-                <span className="block text-xs text-on-surface-variant">Por ejemplo, un decant de 5 ml con 3 ml de F3 y 2 ml de F4. Si está apagado, se te pedirá abrir otro envase.</span>
+                <span className="block text-sm font-bold text-on-surface">Combinar abiertas antes de abrir una nueva</span>
+                <span className="block text-xs text-on-surface-variant">Por ejemplo, un decant de 5 ml con 3 ml de F3 y 2 ml de F4. Si está apagado, se abre otra y el remanente queda para más tarde (cuando ya no quedan cerradas siempre se combinan).</span>
               </span>
             </label>
+          </div>
+
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">percent</span>Margen objetivo</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Se usa para sugerir el precio de una subcategoría cuando no hay otro producto del que copiar el margen.</p>
+            </div>
+            <label className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
+              <input type="number" min={0} max={90} inputMode="decimal" className="min-h-11 w-24 rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base sm:text-sm"
+                value={margenObjetivo} disabled={!puedeHacer('editar_mi_negocio')}
+                onChange={e => setMargenObjetivo(Math.min(90, Math.max(0, Number(e.target.value) || 0)))} />
+              % sobre el precio neto
+            </label>
+          </div>
+
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">bookmarks</span>Subcategorías frecuentes</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Plantillas que aparecen como sugerencias al registrar un producto («Decant 5 ml», «Malla 5 kg»). Cada producto guarda su propia copia: eliminar una plantilla no cambia los productos que ya la usan.</p>
+            </div>
+            {plantillasSubcategoria.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-outline-variant/40 px-4 py-4 text-center text-xs text-on-surface-variant">
+                Aún no tienes plantillas. En el registro de un producto, usa el menú ⋯ de una subcategoría y elige «Guardar como plantilla».
+              </p>
+            ) : (
+              <ul className="divide-y divide-outline-variant/20 rounded-2xl border border-outline-variant/30">
+                {plantillasSubcategoria.map(t => (
+                  <li key={t.id} className={cn('flex flex-wrap items-center gap-2 px-3 py-2', t.oculta && 'opacity-60')}>
+                    <input aria-label={`Nombre de la plantilla ${t.nombre}`} className="min-h-11 min-w-0 flex-1 rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 text-base font-bold sm:text-sm"
+                      value={t.nombre} disabled={!puedeHacer('editar_mi_negocio')} onChange={e => actualizarPlantilla(t.id, { nombre: e.target.value })} />
+                    <span className="text-xs text-on-surface-variant">{t.tipo === 'variable' ? `Precio por ${t.unidad}` : `${t.cantidad.toLocaleString('es-CL')} ${t.unidad === 'l' ? 'L' : t.unidad}`}{t.rubro ? ` · ${t.rubro}` : ''}</span>
+                    <button type="button" disabled={!puedeHacer('editar_mi_negocio')} onClick={() => actualizarPlantilla(t.id, { oculta: !t.oculta })}
+                      className="min-h-11 rounded-full px-3 text-xs font-bold text-on-surface-variant hover:text-primary">{t.oculta ? 'Mostrar' : 'Ocultar'}</button>
+                    <button type="button" disabled={!puedeHacer('editar_mi_negocio')}
+                      onClick={() => { if (window.confirm(`¿Eliminar la plantilla «${t.nombre}»? Los productos que ya la usan no cambian.`)) { eliminarPlantilla(t.id); notificar('ok', 'Plantilla eliminada.'); } }}
+                      className="min-h-11 rounded-full px-3 text-xs font-bold text-error hover:bg-error/10">Eliminar</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ Alertas: categorías, anticipación y umbrales (services/alertas.ts) ══ */}
+      {tab === 'alertas' && (
+        <div className="space-y-6 max-w-xl">
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-6 space-y-3">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">notifications</span>Qué alertas quieres ver</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Apagar una categoría la oculta del Centro de alertas, la campana y el panel general.</p>
+            </div>
+            {CATEGORIAS.map(c => {
+              const activa = configAlertas.categorias?.[c.valor] !== false;
+              return (
+                <label key={c.valor} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl border border-outline-variant/30 px-3">
+                  <span className="material-symbols-outlined text-primary">{c.icono}</span>
+                  <span className="flex-1 text-sm font-bold text-on-surface">{c.etiqueta}</span>
+                  <input type="checkbox" className="h-5 w-5 accent-primary" checked={activa} disabled={!puedeHacer('editar_mi_negocio')}
+                    onChange={e => setConfigAlertas({ categorias: { ...(configAlertas.categorias ?? {}), [c.valor]: e.target.checked } })} />
+                </label>
+              );
+            })}
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl border border-outline-variant/30 px-3">
+              <span className="material-symbols-outlined text-success">trending_up</span>
+              <span className="flex-1 text-sm font-bold text-on-surface">Mostrar alertas positivas (flujo del mes)</span>
+              <input type="checkbox" className="h-5 w-5 accent-primary" checked={configAlertas.mostrarPositivas !== false} disabled={!puedeHacer('editar_mi_negocio')}
+                onChange={e => setConfigAlertas({ mostrarPositivas: e.target.checked })} />
+            </label>
+          </div>
+
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-6 space-y-3">
+            <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">schedule</span>Anticipación y umbrales</h3>
+            {([
+              { clave: 'diasF29', etiqueta: 'Avisar el F29 con', sufijo: 'días de anticipación' },
+              { clave: 'diasCobros', etiqueta: 'Avisar cobros por vencer con', sufijo: 'días' },
+              { clave: 'diasPagos', etiqueta: 'Avisar pagos por vencer con', sufijo: 'días' },
+              { clave: 'diasQuiebre', etiqueta: 'Avisar quiebre de stock si alcanza para menos de', sufijo: 'días de venta' },
+              { clave: 'diasLoteVence', etiqueta: 'Avisar lotes por vencer con', sufijo: 'días' },
+              { clave: 'diasSinRotar', etiqueta: 'Perecibles sin vender en', sufijo: 'días = «sin rotar»' },
+            ] as const).map(c => (
+              <label key={c.clave} className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
+                <span className="min-w-0 flex-1">{c.etiqueta}</span>
+                <input type="number" min={0} max={365} inputMode="numeric" className="min-h-11 w-20 rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base sm:text-sm"
+                  value={configAlertas[c.clave] ?? CONFIG_ALERTAS_DEFECTO[c.clave]} disabled={!puedeHacer('editar_mi_negocio')}
+                  onChange={e => setConfigAlertas({ [c.clave]: Math.max(0, Math.min(365, Number(e.target.value) || 0)) })} />
+                <span className="text-xs text-on-surface-variant">{c.sufijo}</span>
+              </label>
+            ))}
           </div>
         </div>
       )}
