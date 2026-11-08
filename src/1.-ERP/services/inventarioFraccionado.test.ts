@@ -3,7 +3,8 @@ import type { Producto, Envase, Lote, VentaProducto, MovimientoInventario } from
 import {
   aBase, abrirEnvase, ajustarEnvase, convertirUnidades, crearEnvases, formatCantidad, normalizarProducto,
   procesarVenta, reponerEnvases, resumenStock, revertirConsumos, revertirVenta, stockDisponible,
-  textoDisponibilidad, venderCompleto, venderPorcion, type EstadoInventario,
+  textoDisponibilidad, venderCompleto, venderPorcion, remanentesSinUso, describirConsumos, estadoStockProducto,
+  textoMinimo, normalizarMinimo, type EstadoInventario,
 } from './inventarioFraccionado';
 import { calcularResumen, formularioVacio, productoDesdeFormulario, validarFormulario } from './registroProducto';
 
@@ -51,22 +52,22 @@ describe('registro de producto', () => {
     const f = {
       ...formularioVacio(), forma: 'frasco' as const, envases: 20, contenido: 100, unidadContenido: 'ml' as const, costoEnvase: 30000,
       abiertos: [{ id: 'a', restante: 70 }], venderCompleto: true, precioCompleto: 45000,
-      venderPorciones: true, porciones: [{ id: 'd5', cantidad: 5, unidad: 'ml' as const, precio: 5000, costoInsumos: 0, insumoId: '', insumoCantidad: 1, nombre: '' }],
+      subcategorias: [{ id: 'd5', nombre: '', tipo: 'fija' as const, cantidad: 5, unidad: 'ml' as const, precio: 5000, costoInsumos: 0, insumoId: '', insumoCantidad: 1, activa: true }],
     };
     expect(validarFormulario(f)).toEqual({});
     const r = calcularResumen(f);
     expect(r.totalBase).toBe(1970);
-    expect(r.texto).toBe('19 cerrados · 1 abierto (70 ml) · 1.970 ml disponibles');
+    expect(r.texto).toBe('19 botellas cerradas · 1 abierta (70 ml) · equivale a 19,7 botellas');
     expect(r.costoBase).toBe(300);
     const { producto, inicial } = productoDesdeFormulario(f);
     expect(producto).toMatchObject({ controlEnvases: true, capacidadEnvase: 100, unidadBase: 'ml', formaCompra: 'envase' });
     expect(producto.presentaciones?.map(x => [x.nombre, x.factor, x.origen])).toEqual([
-      ['Frasco 100 ml', 100, 'envase_cerrado'], ['Decant 5 ml', 5, 'envase_abierto'],
+      ['Botella completa', 100, 'envase_cerrado'], ['Decant 5 ml', 5, 'envase_abierto'],
     ]);
     expect(inicial).toMatchObject({ cerrados: 19, abiertos: [70] });
     const { envases, p } = inventarioPerfume();
     expect(stockDisponible(p, envases)).toBe(1970);
-    expect(resumenStock(p, envases).texto).toBe('19 cerrados + 1 abierto (70 ml)');
+    expect(resumenStock(p, envases).texto).toBe('19 frascos + 1 abierto (70 ml)');
   });
 
   it('valida en línea: contenido obligatorio, abiertos ≤ total y remanente ≤ contenido', () => {
@@ -127,34 +128,54 @@ describe('envases', () => {
     expect(antiguo.envases.find(e => e.codigo === 'F4')!.restante).toBe(12);
   });
 
-  it('agota un frasco (queda «agotado» y se conserva) y luego se abre el siguiente', () => {
+  it('agota un frasco (queda «agotado» y se conserva) y la siguiente venta abre otro sola', () => {
     const { p, envases } = inventarioPerfume([5], 1);
     const r = venderPorcion(p, envases, p.presentaciones![1], 1, op);
     const agotado = r.envases.find(e => e.codigo === 'F2')!;
     expect(agotado).toMatchObject({ estado: 'agotado', restante: 0 });
     expect(r.envases).toHaveLength(2);
+    expect(r.aperturas).toHaveLength(0);
 
-    const sinAbierto = venderPorcion(p, r.envases, p.presentaciones![1], 1, op);
-    expect(sinAbierto.error).toMatchObject({ codigo: 'requiere_abrir', sugerido: { codigo: 'F1' } });
-
-    const abierto = abrirEnvase(p, r.envases, sinAbierto.error!.sugerido!.id, op);
-    const ok = venderPorcion(p, abierto.envases, p.presentaciones![1], 1, op);
-    expect(ok.error).toBeUndefined();
-    expect(ok.envases.find(e => e.codigo === 'F1')!.restante).toBe(95);
+    const siguiente = venderPorcion(p, r.envases, p.presentaciones![1], 1, op);
+    expect(siguiente.error).toBeUndefined();
+    expect(siguiente.envases.find(e => e.codigo === 'F1')).toMatchObject({ estado: 'abierto', restante: 95 });
+    expect(siguiente.aperturas!.map(e => e.codigo)).toEqual(['F1']);
+    expect(siguiente.movimientos.map(m => m.tipo)).toEqual(['apertura', 'salida']);
   });
 
-  it('decant que no cabe en ningún abierto → requiere_abrir, sin cambios', () => {
+  it('abierta con 3 ml y cerradas disponibles: un decant de 5 ml abre otra y los 3 ml quedan como remanente', () => {
     const { p, envases } = inventarioPerfume([3], 5);
     const r = venderPorcion(p, envases, p.presentaciones![1], 1, op);
-    expect(r.error?.codigo).toBe('requiere_abrir');
-    expect(r.error?.sugerido?.codigo).toBe('F1');
+    expect(r.error).toBeUndefined();
+    expect(r.aperturas!.map(e => e.codigo)).toEqual(['F1']);
+    expect(r.envases.find(e => e.codigo === 'F1')).toMatchObject({ estado: 'abierto', restante: 95 });
+    expect(r.envases.find(e => e.codigo === 'F6')).toMatchObject({ estado: 'abierto', restante: 3 });
+    expect(r.envases.filter(e => e.estado === 'cerrado')).toHaveLength(4);
+    expect(remanentesSinUso(p, r.envases).map(e => e.codigo)).toEqual(['F6']);
+    // Con «combinar abiertas antes de abrir otra» usa los remanentes y no abre nada.
+    const dos = inventarioPerfume([3, 3], 5);
+    const mezcla = venderPorcion(dos.p, dos.envases, dos.p.presentaciones![1], 1, { ...op, permitirMezclar: true });
+    expect(mezcla.aperturas).toHaveLength(0);
+    expect(stockDisponible(dos.p, mezcla.envases)).toBe(501);
+  });
+
+  it('sin cerradas, varias abiertas que juntas alcanzan se combinan («3 ml de F2 + 2 ml de F1»)', () => {
+    const { p, envases } = inventarioPerfume([4, 3], 0);
+    const r = venderPorcion(p, envases, p.presentaciones![1], 1, op);
+    expect(r.error).toBeUndefined();
+    expect(r.aperturas).toHaveLength(0);
+    expect(r.consumos).toHaveLength(2);
+    expect(describirConsumos(p, r.envases, r.consumos)).toBe('3 ml de F2 + 2 ml de F1');
+    expect(stockDisponible(p, r.envases)).toBe(2);
+  });
+
+  it('sin cerradas y una abierta con 3 ml: un decant de 5 ml se bloquea con el máximo vendible', () => {
+    const { p, envases } = inventarioPerfume([3], 0);
+    const r = venderPorcion(p, envases, p.presentaciones![1], 1, op);
+    expect(r.error).toMatchObject({ codigo: 'stock_insuficiente', maximo: 0 });
+    expect(r.error!.mensaje).toBe('No alcanza: de Lattafa Asad quedan 3 ml (0 frascos cerrados) y pides 5 ml.');
     expect(r.envases).toBe(envases);
     expect(r.movimientos).toHaveLength(0);
-    // Con mezcla permitida se completa con otro abierto, nunca abriendo en silencio.
-    const dos = inventarioPerfume([3, 3], 0);
-    const mezcla = venderPorcion(dos.p, dos.envases, dos.p.presentaciones![1], 1, { ...op, permitirMezclar: true });
-    expect(mezcla.error).toBeUndefined();
-    expect(stockDisponible(dos.p, mezcla.envases)).toBe(1);
   });
 
   it('merma con motivo obligatorio y reposición que continúa la numeración', () => {
@@ -169,12 +190,14 @@ describe('envases', () => {
     expect(stockDisponible(p, repo.envases)).toBe(2170);
   });
 
-  it('chips de venta: disponibles, desde qué frasco y cuándo hay que abrir', () => {
+  it('disponibilidad en Ventas: stock aprovechable ÷ cantidad y de dónde sale la próxima', () => {
     const { p, envases } = inventarioPerfume();
     expect(textoDisponibilidad(p, envases, p.presentaciones![0]).texto).toBe('19 disponibles');
-    expect(textoDisponibilidad(p, envases, p.presentaciones![1]).texto).toBe('desde F20 (70 ml)');
+    expect(textoDisponibilidad(p, envases, p.presentaciones![1])).toMatchObject({ unidades: 394, texto: '394 disponibles', detalle: 'desde F20 (70 ml)' });
     const poco = inventarioPerfume([3], 2);
-    expect(textoDisponibilidad(poco.p, poco.envases, poco.p.presentaciones![1])).toMatchObject({ texto: 'abre F1', requiereAbrir: { codigo: 'F1' } });
+    expect(textoDisponibilidad(poco.p, poco.envases, poco.p.presentaciones![1])).toMatchObject({ unidades: 40, detalle: 'abrirá F1' });
+    const soloAbiertos = inventarioPerfume([70], 0);
+    expect(textoDisponibilidad(soloAbiertos.p, soloAbiertos.envases, soloAbiertos.p.presentaciones![0]).texto).toBe('Sin frascos cerrados');
   });
 });
 
@@ -256,6 +279,91 @@ describe('ventas', () => {
   });
 });
 
+describe('regla de venta (vende o bloquea)', () => {
+  const estadoDe = (abiertos: number[], cerrados: number): EstadoInventario => {
+    const { p, envases, lotes } = inventarioPerfume(abiertos, cerrados);
+    return { productos: [p], envases, lotes, movimientos: [] };
+  };
+
+  it('20 botellas sin abiertas: un decant de 5 ml abre una (19 cerradas + 1 abierta con 95 ml) y la apertura queda ligada a la venta', () => {
+    const r = procesarVenta(estadoDe([], 20), 'v-abre', [linea('perfume', 1, 'd5')], op);
+    expect(r.error).toBeUndefined();
+    expect(r.estado.envases.filter(e => e.estado === 'cerrado')).toHaveLength(19);
+    expect(r.estado.envases.filter(e => e.estado === 'abierto').map(e => e.restante)).toEqual([95]);
+    const apertura = r.movimientos.find(m => m.tipo === 'apertura')!;
+    expect(apertura).toMatchObject({ origenTipo: 'venta', origenId: 'v-abre', envaseId: r.aperturas[0].envaseId });
+    expect(r.eventos).toEqual([expect.objectContaining({ tipo: 'apertura_automatica', titulo: 'Se abrió el frasco F1 de Lattafa Asad', detalle: 'Quedan 19 frascos cerrados.' })]);
+  });
+
+  it('abierta con 70 ml: un decant de 5 ml la deja en 65 ml sin abrir nada', () => {
+    const r = procesarVenta(estadoDe([70], 19), 'v1', [linea('perfume', 1, 'd5')], op);
+    expect(r.aperturas).toHaveLength(0);
+    expect(r.estado.envases.find(e => e.codigo === 'F20')!.restante).toBe(65);
+    expect(r.movimientos.map(m => m.tipo)).toEqual(['salida']);
+  });
+
+  it('bloqueada por falta de stock: error con el máximo y un evento «venta no realizada»', () => {
+    const estado = estadoDe([3], 0);
+    const r = procesarVenta(estado, 'v1', [linea('perfume', 1, 'd5')], op);
+    expect(r.error).toMatchObject({ codigo: 'stock_insuficiente', linea: 0, maximo: 0 });
+    expect(r.estado).toBe(estado);
+    expect(r.eventos).toHaveLength(1);
+    expect(r.eventos[0]).toMatchObject({ tipo: 'venta_bloqueada', titulo: 'Venta no realizada por falta de stock' });
+  });
+
+  it('dos líneas que juntas superan el stock: se rechaza la venta completa sin cambios', () => {
+    const estado = estadoDe([70], 0);
+    const r = procesarVenta(estado, 'v1', [linea('perfume', 10, 'd5'), linea('perfume', 3, 'd10')], op);
+    // 50 ml de la primera; quedan 20 ml → la segunda pide 30 ml y solo caben 2 decants de 10.
+    expect(r.error).toMatchObject({ codigo: 'stock_insuficiente', linea: 1, maximo: 2 });
+    expect(r.estado).toBe(estado);
+    expect(r.movimientos).toHaveLength(0);
+  });
+
+  it('botella completa con solo abiertas → bloqueada aunque el total alcance', () => {
+    const estado = estadoDe([100, 90], 0);
+    const r = procesarVenta(estado, 'v1', [linea('perfume', 1, 'frasco')], op);
+    expect(r.error).toMatchObject({ codigo: 'sin_cerrados', maximo: 0 });
+    expect(r.error!.mensaje).toContain('quedan 0 frascos cerrados');
+  });
+
+  it('anular la venta que abrió una botella la deja cerrada y revierte la apertura', () => {
+    const inicial = estadoDe([], 20);
+    const vendido = procesarVenta(inicial, 'v1', [linea('perfume', 2, 'd5')], op);
+    expect(vendido.aperturas).toHaveLength(1);
+    const anulado = revertirVenta(vendido.estado, 'v1', op);
+    expect(anulado.error).toBeUndefined();
+    expect(anulado.estado.envases.filter(e => e.estado === 'cerrado')).toHaveLength(20);
+    expect(anulado.estado.envases.every(e => e.restante === 100 && !e.abiertoEn)).toBe(true);
+    expect(anulado.estado.movimientos.find(m => m.tipo === 'apertura')!.revertido).toBe(true);
+    // Si otra venta siguió usando esa botella, al anular la primera queda abierta (no está llena).
+    const otra = procesarVenta(vendido.estado, 'v2', [linea('perfume', 1, 'd5')], op);
+    const parcial = revertirVenta(otra.estado, 'v1', op);
+    expect(parcial.estado.envases.find(e => e.codigo === 'F1')).toMatchObject({ estado: 'abierto', restante: 95 });
+  });
+
+  it('mínimo de 3 botellas: 3 cerradas + 1 abierta → «bajo»; 4 cerradas → «ok»', () => {
+    const conMinimo = (abiertos: number[], cerrados: number) => {
+      const { p, envases } = inventarioPerfume(abiertos, cerrados);
+      return estadoStockProducto({ ...p, stockMinimoUnidad: 3, unidadMinimo: 'envase' }, envases);
+    };
+    expect(conMinimo([40], 3)).toBe('bajo');
+    expect(conMinimo([], 4)).toBe('ok');
+    expect(conMinimo([], 0)).toBe('sin_stock');
+    // Solo abiertas con menos que el decant más chico (5 ml) = sin stock para vender.
+    expect(conMinimo([2], 0)).toBe('sin_stock');
+    const { p, envases } = inventarioPerfume([40], 2);
+    expect(textoMinimo({ ...p, stockMinimoUnidad: 3, unidadMinimo: 'envase' })).toBe('3 frascos');
+    expect(resumenStock(p, envases).texto).toBe('2 frascos + 1 abierto (40 ml)');
+  });
+
+  it('migra el mínimo antiguo en ml a botellas redondeando hacia arriba', () => {
+    const { p } = inventarioPerfume();
+    expect(normalizarMinimo({ ...p, stockMinimo: 250 })).toMatchObject({ stockMinimoUnidad: 3, unidadMinimo: 'envase' });
+    expect(normalizarMinimo({ ...p, stockMinimo: 250, requiereRevisionUnidades: true }).stockMinimoUnidad).toBeUndefined();
+  });
+});
+
 describe('granel', () => {
   const fruta = (): Producto => ({
     id: 'manzana', nombre: 'Manzana', codigo: 'M', categoria: 'Fruta', tipo: 'producto', costo: 400, precio: 990, stock: 2000,
@@ -267,7 +375,7 @@ describe('granel', () => {
     expect(aBase(2, 't')).toBe(2000);
     expect(formatCantidad(aBase(2, 't'), 'kg')).toBe('2.000 kg');
     const f = { ...formularioVacio(), forma: 'granel' as const, cantidadGranel: 2, unidadGranel: 't' as const, modoCosto: 'total' as const, costoGranel: 800000,
-      porciones: [{ id: 'kilo', cantidad: 1, unidad: 'kg' as const, precio: 990, costoInsumos: 0, insumoId: '', insumoCantidad: 1, nombre: '' }] };
+      subcategorias: [{ id: 'kilo', nombre: '', tipo: 'fija' as const, cantidad: 1, unidad: 'kg' as const, precio: 990, costoInsumos: 0, insumoId: '', insumoCantidad: 1, activa: true }] };
     const { producto } = productoDesdeFormulario(f);
     expect(producto).toMatchObject({ stock: 2000, unidadBase: 'kg', costo: 400, formaCompra: 'granel' });
 
@@ -307,7 +415,7 @@ describe('migración de datos antiguos', () => {
     const legado = { ...p, formaCompra: undefined, presentaciones: p.presentaciones!.map(({ tipo: _t, ...x }) => x) };
     const n = normalizarProducto(legado, envases);
     expect(n.formaCompra).toBe('envase');
-    expect(n.presentaciones!.map(x => x.tipo)).toEqual(['completa', 'porcion', 'porcion']);
+    expect(n.presentaciones!.map(x => x.tipo)).toEqual(['completa', 'fija', 'fija']);
     // Stock que no cuadra con los envases → revisión.
     expect(normalizarProducto({ ...legado, stock: 20 }, envases).requiereRevisionUnidades).toBe(true);
   });

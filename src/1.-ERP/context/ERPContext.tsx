@@ -25,11 +25,18 @@ import { calcularSaldos, type Saldos } from '../services/saldos';
 import { redondearCLP, hoyISO } from '../../lib/fechas';
 import { consumirLotes, costoPromedio } from '../services/costeo';
 import {
-  procesarVenta, revertirVenta, ventaYaAplicada, normalizarProducto, crearEnvases, usaEnvases, stockDisponible,
-  abrirEnvase as abrirEnvasePuro, ajustarEnvase, reponerEnvases, convertirUnidades, r3, formatCantidad, nombreEnvase,
+  procesarVenta, revertirVenta, ventaYaAplicada, normalizarInventario, crearEnvases, usaEnvases, stockDisponible,
+  abrirEnvase as abrirEnvasePuro, ajustarEnvase, reponerEnvases, convertirUnidades, mermaGranel, r3, formatCantidad, nombreEnvase,
   type EstadoInventario, type ErrorInventario, type DecisionUnidades, type OpcionesVenta, type Politica, type MovimientoBorrador,
+  type EventoInventario,
 } from '../services/inventarioFraccionado';
 import type { InventarioInicial } from '../services/registroProducto';
+import type { PlantillaSubcategoria } from '../services/subcategorias';
+import {
+  calcularCondiciones, construirAlertas, sincronizarCondiciones, registrarEventos as registrarEventosPuro, marcarAlertas as marcarAlertasPuro,
+  alertasResueltas, type Alerta, type Notificacion, type EstadoAlerta, type ConfigAlertas,
+} from '../services/alertas';
+import { mostrarToast } from '../../lib/toasts';
 
 /** Resultado de las operaciones de inventario: nada se guarda si `ok` es false. */
 export type ResultadoInventario =
@@ -73,6 +80,8 @@ export interface VentaProducto {
   consumosEnvase?: ConsumoEnvase[];
   /** Lotes consumidos (costo): se devuelven a los mismos lotes al anular. */
   consumosLote?: ConsumoLote[];
+  /** Venta por peso o volumen variable: «1,37 kg × $1.500/kg» (carrito y nota de venta). */
+  detalleMedida?: string;
   subtotal: number;
   iva: number;
   total: number;
@@ -235,6 +244,17 @@ export interface Producto {
   nombreEnvase?: NombreEnvase
   /** Dato antiguo con unidades dudosas: no se convierte solo, se revisa en Inventario. */
   requiereRevisionUnidades?: boolean
+  /**
+   * Stock mínimo en la unidad de COMPRA (nunca en ml ni gramos): envases cerrados (botellas,
+   * sacos), unidades o, a granel, en `unidadMinimo` (kg o t). `stockMinimo` (unidad base) queda
+   * como caché derivada para el código antiguo.
+   */
+  stockMinimoUnidad?: number
+  unidadMinimo?: 'envase' | 'unidad' | 'kg' | 't' | 'l'
+  /** Merma estimada en % (fruta que se pierde): solo afecta la sugerencia de precio y el margen. */
+  mermaEstimada?: number
+  /** Perecible: avisa lotes por vencer o sin rotar. */
+  perecible?: boolean
 }
 
 /**
@@ -243,7 +263,7 @@ export interface Producto {
  */
 export type UnidadBase = 'unidad' | 'ml' | 'l' | 'g' | 'kg';
 export type FormaCompra = 'unidad' | 'envase' | 'granel';
-export type NombreEnvase = 'frasco' | 'botella' | 'saco' | 'caja';
+export type NombreEnvase = 'frasco' | 'botella' | 'saco' | 'caja' | 'bidon';
 export interface ConsumoEnvase { envaseId: string; cantidad: number; envaseVendidoCompleto?: boolean }
 export interface ConsumoLote { loteId: string; cantidad: number }
 export type MetodoCosteo = 'fifo' | 'promedio';
@@ -258,8 +278,15 @@ export interface Presentacion {
   sku?: string;
   /** Se calcula (nunca lo elige el usuario): completa → envase_cerrado; porción con envases → envase_abierto; sin envases → granel. */
   origen?: 'granel' | 'envase_cerrado' | 'envase_abierto';
-  /** Frasco/saco completo o una porción (decant, kilo). */
-  tipo?: 'completa' | 'porcion';
+  /**
+   * Subcategoría de venta (en la UI «Subcategorías de venta», no confundir con Categoría):
+   * completa = la unidad de compra entera (solo cerradas); fija = descuenta `factor` (decant 5 ml,
+   * malla 5 kg); variable = precio por unidad de medida y se ingresa el peso al vender (1,37 kg).
+   * 'porcion' es el nombre antiguo de 'fija' (datos guardados antes de este cambio).
+   */
+  tipo?: 'completa' | 'fija' | 'variable' | 'porcion';
+  /** Solo variable: unidad a la que se refiere el precio ($1.500 por kg). factor = esa unidad en unidad base. */
+  unidadVenta?: 'kg' | 'g' | 'l' | 'ml';
   /** Costo neto de insumos no inventariados por cada venta (frasco vacío, etiqueta). */
   costoInsumos?: number;
   activa: boolean;
@@ -408,7 +435,8 @@ interface ERPContextType {
   addProducto: (producto: Omit<Producto, 'id'>, inicial?: InventarioInicial) => ResultadoInventario;
   editProducto: (id: string, producto: Partial<Producto>) => void;
   deleteProducto: (id: string) => void;
-  addMovimientoInventario: (movimiento: Omit<MovimientoInventario, 'id'>) => ResultadoInventario;
+  /** `vencimiento` (opcional) queda en el lote que crea un ingreso (perecibles). */
+  addMovimientoInventario: (movimiento: Omit<MovimientoInventario, 'id'>, extra?: { vencimiento?: string }) => ResultadoInventario;
   // -- Inventario fraccionado (services/inventarioFraccionado.ts) --
   politicaEnvaseAbierto: Politica;
   permitirMezclarEnvases: boolean;
@@ -417,10 +445,31 @@ interface ERPContextType {
   stockDe: (producto: Producto) => number;
   abrirEnvase: (productoId: string, envaseId?: string) => ResultadoInventario;
   operarEnvase: (productoId: string, d: { tipo: 'merma' | 'ajuste'; envaseId: string; cantidad: number; motivo: string }) => ResultadoInventario;
-  reponerEnvasesProducto: (productoId: string, d: { cantidadEnvases: number; costoEnvase: number; motivo: string }) => ResultadoInventario;
+  reponerEnvasesProducto: (productoId: string, d: { cantidadEnvases: number; costoEnvase: number; motivo: string; vencimiento?: string }) => ResultadoInventario;
   convertirUnidadesProducto: (productoId: string, decision: DecisionUnidades) => ResultadoInventario;
   /** Prueba una venta sin guardar nada (para avisos en línea antes de confirmar). */
-  simularVenta: (lineas: VentaProducto[], ventaEditadaId?: string) => { lineas: VentaProducto[]; error?: ErrorInventario; envases: Envase[] };
+  simularVenta: (lineas: VentaProducto[], ventaEditadaId?: string) => {
+    lineas: VentaProducto[]; error?: ErrorInventario; envases: Envase[];
+    aperturas: { productoId: string; envaseId: string; codigo: string }[]; eventos: EventoInventario[];
+  };
+  /** Merma: con envases sale del envase indicado; a granel o por unidad, del lote más antiguo (cantidad o %). */
+  registrarMerma: (productoId: string, d: { cantidad?: number; porcentaje?: number; motivo: string; envaseId?: string }) => ResultadoInventario;
+  // -- Subcategorías frecuentes (plantillas en la colección config) --
+  plantillasSubcategoria: PlantillaSubcategoria[];
+  margenObjetivo: number;
+  guardarPlantilla: (p: PlantillaSubcategoria) => void;
+  actualizarPlantilla: (id: string, cambios: Partial<PlantillaSubcategoria>) => void;
+  eliminarPlantilla: (id: string) => void;
+  setMargenObjetivo: (margen: number) => void;
+  // -- Centro de alertas (estado persistido en la colección notificaciones) --
+  alertas: Alerta[];
+  alertasResueltas: Alerta[];
+  notificaciones: Notificacion[];
+  /** Guarda eventos (aperturas, ventas bloqueadas…) y los muestra como aviso en vivo. */
+  registrarEventos: (eventos: EventoInventario[], conToast?: boolean) => void;
+  marcarAlertas: (claves: string[], estado: EstadoAlerta, hasta?: string) => void;
+  configAlertas: ConfigAlertas;
+  setConfigAlertas: (cambios: ConfigAlertas) => void;
   addPromocion: (promocion: Omit<Promocion, 'id'>) => void;
   editPromocion: (id: string, promocion: Partial<Promocion>) => void;
   deletePromocion: (id: string) => void;
@@ -455,6 +504,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   const [pagosPOS, setPagosPOS] = useState<PagoPOS[]>([]);
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [envases, setEnvases] = useState<Envase[]>([]);
+  /** Centro de alertas: eventos y estado (vista, pospuesta…) de cada alerta. */
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [configuracionCumplimiento, setConfiguracionCumplimiento] = useState<ConfiguracionCumplimiento>(DEMO_CONFIG);
 
   const [hydrated, setHydrated] = useState(false);
@@ -525,9 +576,18 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         setProveedores((grouped.proveedores ?? []) as Proveedor[]);
         setMovimientos((grouped.movimientos ?? []) as Movimiento[]);
         setAbonos((grouped.abonos ?? []) as Abono[]);
-        // Migración NO destructiva: completa formaCompra / tipo y marca los casos dudosos.
+        // Migración NO destructiva: completa formaCompra / tipo, pasa el mínimo a la unidad de
+        // compra (botellas, sacos, kg/t) y marca los casos dudosos para revisión.
         const envasesCargados = (grouped.envases ?? []) as Envase[];
-        setInventario(((grouped.inventario ?? []) as Producto[]).map(p => normalizarProducto(p, envasesCargados)));
+        const productosCargados = ((grouped.inventario ?? []) as Producto[]).map(p => normalizarInventario(p, envasesCargados));
+        setInventario(productosCargados);
+        // Evento «revisión de unidades pendiente» (uno por producto; registrarEventos no duplica la clave).
+        const ahoraCarga = new Date().toISOString();
+        const porRevisar: EventoInventario[] = productosCargados.filter(p => p.requiereRevisionUnidades).map(p => ({
+          tipo: 'revision_unidades', clave: `revision:${p.id}`, productoId: p.id,
+          titulo: `Revisa las unidades de ${p.nombre}`, detalle: 'Es un dato antiguo con unidades dudosas: confirma cómo lo compras para que el stock sea exacto.',
+        }));
+        setNotificaciones(registrarEventosPuro((grouped.notificaciones ?? []) as Notificacion[], porRevisar, ahoraCarga, () => safeId('NT')));
         setMovimientosInventario((grouped.movimientosInventario ?? []) as MovimientoInventario[]);
         setPromociones((grouped.promociones ?? []) as Promocion[]);
         setDocumentosTributarios((grouped.documentosTributarios ?? []) as DocumentoTributario[]);
@@ -559,7 +619,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     const snapshot: Record<string, { id: string }[]> = {
       ventas, gastos, clientes, proveedores, movimientos, inventario,
       movimientosInventario, promociones, abonos, documentosTributarios,
-      integracionEventos, pagosPOS, lotes, envases, config: [configFila],
+      integracionEventos, pagosPOS, lotes, envases, notificaciones, config: [configFila],
     };
 
     // Primera pasada tras cargar: se toma como línea base y NO se guarda nada.
@@ -607,7 +667,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   }, [hydrated, user,
     ventas, gastos, clientes, proveedores, movimientos, inventario,
     movimientosInventario, promociones, abonos, documentosTributarios,
-    integracionEventos, pagosPOS, lotes, envases, configFila]);
+    integracionEventos, pagosPOS, lotes, envases, notificaciones, configFila]);
 
   // Si se cierra u oculta la pestaña con un guardado en espera, se envía de inmediato
   // (keepalive): una venta recién hecha no se pierde por cerrar el navegador.
@@ -680,10 +740,55 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   });
   const stockDe = (p: Producto) => stockDisponible(p, envases);
 
+  // == Centro de alertas ==============================
+  const registrarEventos = (eventos: EventoInventario[], conToast = true) => {
+    if (eventos.length === 0) return;
+    setNotificaciones(prev => registrarEventosPuro(prev, eventos, new Date().toISOString(), () => safeId('NT')));
+    if (!conToast) return;
+    eventos.forEach(e => mostrarToast({
+      titulo: e.titulo, detalle: e.tipo === 'remanente_sin_uso' ? undefined : e.detalle,
+      tipo: e.tipo === 'venta_bloqueada' ? 'aviso' : e.tipo === 'conversion_realizada' ? 'exito' : 'info',
+      ...(e.productoId && e.tipo !== 'venta_bloqueada' ? { accion: { etiqueta: 'Ver ficha', url: `/erp/inventario?producto=${e.productoId}` } } : {}),
+    }));
+  };
+  const configAlertas: ConfigAlertas = configuracionCumplimiento.alertas ?? {};
+  const setConfigAlertas = (cambios: ConfigAlertas) =>
+    setConfiguracionCumplimiento(prev => ({ ...prev, alertas: { ...(prev.alertas ?? {}), ...cambios } }));
+  const condiciones = useMemo(() => calcularCondiciones({
+    inventario, envases, lotes, movimientosInventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos, config: configAlertas,
+  }), [inventario, envases, lotes, movimientosInventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos, configuracionCumplimiento.alertas]);
+  // Las condiciones que aparecen o desaparecen actualizan sus filas (resueltas solas / reaparecen como nuevas).
+  useEffect(() => {
+    if (!hydrated) return;
+    setNotificaciones(prev => sincronizarCondiciones(condiciones, prev, new Date().toISOString()));
+  }, [hydrated, condiciones]);
+  const alertas = useMemo(
+    () => construirAlertas(condiciones, notificaciones, new Date().toISOString(), configAlertas),
+    [condiciones, notificaciones, configuracionCumplimiento.alertas],
+  );
+  const resueltas = useMemo(() => alertasResueltas(notificaciones), [notificaciones]);
+  const marcarAlertas = (claves: string[], estado: EstadoAlerta, hasta?: string) =>
+    setNotificaciones(prev => marcarAlertasPuro(prev, claves, estado, new Date().toISOString(), hasta));
+
+  // == Subcategorías frecuentes (plantillas) ===========
+  const plantillasSubcategoria = configuracionCumplimiento.plantillasSubcategoria ?? [];
+  const margenObjetivo = configuracionCumplimiento.margenObjetivo ?? 40;
+  const guardarPlantilla = (p: PlantillaSubcategoria) =>
+    setConfiguracionCumplimiento(prev => ({ ...prev, plantillasSubcategoria: [...(prev.plantillasSubcategoria ?? []), p] }));
+  const actualizarPlantilla = (id: string, cambios: Partial<PlantillaSubcategoria>) =>
+    setConfiguracionCumplimiento(prev => ({ ...prev, plantillasSubcategoria: (prev.plantillasSubcategoria ?? []).map(x => (x.id === id ? { ...x, ...cambios } : x)) }));
+  // Eliminar una plantilla NO toca los productos: cada uno guardó su propia copia.
+  const eliminarPlantilla = (id: string) =>
+    setConfiguracionCumplimiento(prev => ({ ...prev, plantillasSubcategoria: (prev.plantillasSubcategoria ?? []).filter(x => x.id !== id) }));
+  const setMargenObjetivo = (margen: number) => setConfiguracionCumplimiento(prev => ({ ...prev, margenObjetivo: margen }));
+
   /** Ingreso a inventario: crea SOLO el lote (los envases los crean addProducto y reponer). */
-  const registrarLote = (producto: Producto, cantidadBase: number, costoUnitario: number, fecha = hoyISO(), compraId?: string) => {
+  const registrarLote = (producto: Producto, cantidadBase: number, costoUnitario: number, fecha = hoyISO(), compraId?: string, vencimiento?: string) => {
     if (!(cantidadBase > 0)) return undefined;
-    const lote: Lote = { id: safeId('LOT'), productoId: producto.id, fecha, cantidadInicial: cantidadBase, cantidadRestante: cantidadBase, costoUnitario, compraId };
+    const lote: Lote = {
+      id: safeId('LOT'), productoId: producto.id, fecha, cantidadInicial: cantidadBase, cantidadRestante: cantidadBase, costoUnitario, compraId,
+      ...(vencimiento ? { vencimiento } : {}),
+    };
     setLotesSync([...lotesRef.current, lote]);
     return lote;
   };
@@ -815,8 +920,13 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     // Inventario primero: valida TODAS las líneas (stock, envase disponible). Si una falla no
     // se guarda nada y el error vuelve a la pantalla (antes solo había un console.warn).
     const inv = procesarVenta(estadoInventario(), newId, ventaSinId.productos ?? [], opcionesInventario());
-    if (inv.error) return { ok: false, error: inv.error };
+    if (inv.error) {
+      registrarEventos(inv.eventos, false); // «Venta no realizada por falta de stock» (la pantalla ya muestra el error)
+      return { ok: false, error: inv.error };
+    }
     ventasProcesadasRef.current.add(newId);
+    // Aperturas automáticas y remanentes: aviso en vivo + Actividad reciente.
+    registrarEventos(inv.eventos);
     let venta: Omit<Venta, 'id'> = ventaSinId;
     venta = { ...venta, monto: redondearCLP(venta.monto), subtotal: redondearCLP(venta.subtotal), iva: redondearCLP(venta.iva) };
     const saldoPendiente = venta.estado === 'Pendiente' ? redondearCLP(venta.saldo_pendiente ?? venta.monto) : 0;
@@ -969,6 +1079,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     if (revertido.error) return { ok: false, error: revertido.error };
     const inv = procesarVenta(revertido.estado, id, productosNuevos, opcionesInventario(motivoEdicion));
     if (inv.error) return { ok: false, error: inv.error };
+    registrarEventos(inv.eventos);
     const salidasNuevas = new Set(inv.movimientos.map(m => m.id));
     aplicarInventario({ ...inv.estado, movimientos: inv.estado.movimientos.map(m => (salidasNuevas.has(m.id) ? { ...m, documentoId: anterior.documento_id } : m)) });
     const productosRecosteados = inv.lineas;
@@ -1260,7 +1371,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   };
 
   /** Movimiento manual (productos por unidad o a granel). Motivo obligatorio y sin vender de más. */
-  const addMovimientoInventario = (m: Omit<MovimientoInventario, 'id'>): ResultadoInventario => {
+  const addMovimientoInventario = (m: Omit<MovimientoInventario, 'id'>, extra?: { vencimiento?: string }): ResultadoInventario => {
     const newId = crypto.randomUUID();
     const producto = inventarioRef.current.find(p => p.id === m.productoId);
     if (!m.motivo?.trim()) return fallo('motivo_requerido', 'Escribe el motivo.');
@@ -1275,7 +1386,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       if (sale > stock + 0.0005) return fallo('stock_insuficiente', `Solo hay ${formatCantidad(stock, producto.unidadBase)} de «${producto.nombre}».`);
       const fecha = (m.fecha || '').slice(0, 10) || hoyISO();
       if (m.tipo === 'ingreso' || m.tipo === 'devolucion' || (m.tipo === 'ajuste' && m.cantidad > 0)) {
-        registrarLote(producto, m.cantidad, m.costoUnitario && m.costoUnitario > 0 ? m.costoUnitario : costoPromedio(lotesRef.current, producto.id, Number(producto.costo) || 0), fecha);
+        registrarLote(producto, m.cantidad, m.costoUnitario && m.costoUnitario > 0 ? m.costoUnitario : costoPromedio(lotesRef.current, producto.id, Number(producto.costo) || 0), fecha, undefined, extra?.vencimiento);
       } else if (sale > 0) {
         costoMovimiento = Math.round(consumir(producto, sale).costoTotal / sale);
       }
@@ -1328,10 +1439,32 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       return m;
     });
     aplicarEnvases(productoId, r.envases, movs);
+    if (d.tipo === 'merma') {
+      registrarEventos([{ tipo: 'merma_registrada', clave: `merma:${productoId}:${new Date().toISOString()}`, productoId, titulo: `Merma de ${formatCantidad(Math.abs(d.cantidad), p.unidadBase)} en ${p.nombre}`, detalle: d.motivo }], false);
+    }
     return { ok: true };
   };
 
-  const reponerEnvasesProducto = (productoId: string, d: { cantidadEnvases: number; costoEnvase: number; motivo: string }): ResultadoInventario => {
+  /** Merma desde la ficha: envase indicado (con envases) o lote más antiguo (granel / unidad, cantidad o %). */
+  const registrarMerma = (productoId: string, d: { cantidad?: number; porcentaje?: number; motivo: string; envaseId?: string }): ResultadoInventario => {
+    const p = productoPorId(productoId);
+    if (!p) return sinProducto();
+    if (usaEnvases(p)) {
+      if (!d.envaseId) return fallo('envase_no_encontrado', `Elige de qué ${nombreEnvase(p)} sale la merma.`);
+      const envase = envasesRef.current.find(e => e.id === d.envaseId);
+      const cantidad = d.porcentaje !== undefined && envase ? r3(envase.restante * d.porcentaje / 100) : Number(d.cantidad) || 0;
+      return operarEnvase(productoId, { tipo: 'merma', envaseId: d.envaseId, cantidad, motivo: d.motivo });
+    }
+    const r = mermaGranel(p, lotesRef.current, d, opcionesInventario());
+    if (r.error) return { ok: false, error: r.error };
+    setLotesSync(r.lotes);
+    setMovInvSync(prev => [...conId(r.movimientos), ...prev]);
+    setInventarioSync(prev => prev.map(x => (x.id === productoId ? r.producto : x)));
+    registrarEventos(r.eventos, false);
+    return { ok: true };
+  };
+
+  const reponerEnvasesProducto = (productoId: string, d: { cantidadEnvases: number; costoEnvase: number; motivo: string; vencimiento?: string }): ResultadoInventario => {
     const p = productoPorId(productoId);
     if (!p) return sinProducto();
     if (!(Number(d.costoEnvase) >= 0)) return fallo('cantidad_invalida', 'El costo no puede ser negativo.');
@@ -1341,7 +1474,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     const capacidad = Number(p.capacidadEnvase) || 1;
     const costoBase = r3(Number(d.costoEnvase) / capacidad);
     const total = r3(r.nuevos.reduce((a, e) => a + e.restante, 0));
-    setLotesSync([...lotesRef.current, { id: loteId, productoId, fecha: hoyISO(), cantidadInicial: total, cantidadRestante: total, costoUnitario: costoBase }]);
+    setLotesSync([...lotesRef.current, { id: loteId, productoId, fecha: hoyISO(), cantidadInicial: total, cantidadRestante: total, costoUnitario: costoBase, ...(d.vencimiento ? { vencimiento: d.vencimiento } : {}) }]);
     aplicarEnvases(productoId, r.envases, r.movimientos.map(m => ({ ...m, costoUnitario: costoBase })));
     setInventarioSync(prev => prev.map(x => (x.id === productoId ? { ...x, costo: r3(costoPromedio(lotesRef.current, productoId, costoBase)) } : x)));
     return { ok: true };
@@ -1356,6 +1489,9 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     setLotesSync(r.lotes);
     if (r.movimientos.length) setMovInvSync(prev => [...conId(r.movimientos), ...prev]);
     setInventarioSync(prev => prev.map(x => (x.id === productoId ? r.producto : x)));
+    // La revisión pendiente queda resuelta y se registra la conversión.
+    setNotificaciones(prev => marcarAlertasPuro(prev, [`revision:${productoId}`], 'vista', new Date().toISOString()));
+    registrarEventos([{ tipo: 'conversion_realizada', clave: `conversion:${productoId}:${new Date().toISOString()}`, productoId, titulo: `Unidades de ${p.nombre} confirmadas`, detalle: r.movimientos.length ? `Se registró un ajuste de ${formatCantidad(r.movimientos[0].cantidad, r.producto.unidadBase)} («Conversión de unidades»).` : 'El stock no cambió.' }]);
     return { ok: true };
   };
 
@@ -1366,7 +1502,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       if (!r.error) estado = r.estado;
     }
     const r = procesarVenta(estado, '__simulacion__', lineas, opcionesInventario());
-    return { lineas: r.lineas, error: r.error, envases: r.estado.envases };
+    return { lineas: r.lineas, error: r.error, envases: r.estado.envases, aperturas: r.aperturas, eventos: r.eventos };
   };
 
   // ══ CRUD — Promociones ═════════════════════════
@@ -1454,7 +1590,9 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       documentosTributarios, integracionEventos, pagosPOS, configuracionCumplimiento, saldoActual, saldos, fusionarClientesDuplicados,
       lotes, envases, metodoCosteo, setMetodoCosteo,
       politicaEnvaseAbierto, permitirMezclarEnvases, setPoliticaInventario, stockDe,
-      abrirEnvase, operarEnvase, reponerEnvasesProducto, convertirUnidadesProducto, simularVenta,
+      abrirEnvase, operarEnvase, reponerEnvasesProducto, convertirUnidadesProducto, simularVenta, registrarMerma,
+      plantillasSubcategoria, margenObjetivo, guardarPlantilla, actualizarPlantilla, eliminarPlantilla, setMargenObjetivo,
+      alertas, alertasResueltas: resueltas, notificaciones, registrarEventos, marcarAlertas, configAlertas, setConfigAlertas,
       addVenta, updateVenta, addGasto, updateGasto, addCliente, updateCliente, addProveedor, updateProveedor, addProducto, editProducto, addMovimientoInventario, addPromocion, editPromocion,
       deleteVenta, deleteGasto, deleteCliente, deleteProveedor, deleteProducto, deletePromocion,
       addAbono, createNotaCredito, reconcilePagoPOS, previewVentaImpacto, getDocumentosByPeriodo, getF29Preparador,

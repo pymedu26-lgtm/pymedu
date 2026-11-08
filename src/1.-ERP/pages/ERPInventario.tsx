@@ -1,8 +1,10 @@
 ﻿import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import { useSearchParams } from 'react-router-dom';
 const ModalCargaMasivaInventario = lazy(() => import('../components/ModalCargaMasivaInventario'));
 import { estadoStock as estadoStockCompartido } from '../services/alertas';
 import { presentacionesActivas } from '../services/costeo';
-import { resumenStock, usaEnvases, formatCantidad, stockDisponible } from '../services/inventarioFraccionado';
+import { resumenStock, usaEnvases, formatCantidad, stockDisponible, textoDisponibilidad, tipoPresentacion, textoMinimo, unidadMinimoDe } from '../services/inventarioFraccionado';
+import TablaResponsiva from '../../components/TablaResponsiva';
 import type { InventarioInicial } from '../services/registroProducto';
 import RegistroProducto from '../components/RegistroProducto';
 import FichaProducto from '../components/FichaProducto';
@@ -41,9 +43,9 @@ export type EstadoStock = 'sin_stock' | 'bajo' | 'ok' | 'no_aplica';
  *
  * `stock` permite evaluar contra el stock de otro periodo; si se omite usa el actual.
  */
-function estadoStock(producto: Producto, stock: number = producto.stock): EstadoStock {
-  // Delegado al criterio único (services/alertas.ts): compara NÚMEROS (corrección #10).
-  return estadoStockCompartido(producto, stock);
+function estadoStock(producto: Producto, stock: number = producto.stock, envases?: import('../context/ERPContext').Envase[]): EstadoStock {
+  // Delegado al criterio único (services/alertas.ts): con envases compara las CERRADAS con el mínimo.
+  return estadoStockCompartido(producto, stock, envases);
 }
 
 /** Costo y precio reales aunque vengan como texto o en campos de servicio (corrección #11). */
@@ -122,7 +124,10 @@ const UNIDADES_PRODUCTO: { valor: string; etiqueta: string }[] = [
 ]
 
 export default function ERPInventario() {
-  const { inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario, envases, metodoCosteo, setMetodoCosteo } = useERP();
+  const {
+    inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario, envases, lotes,
+    metodoCosteo, setMetodoCosteo, politicaEnvaseAbierto, plantillasSubcategoria, margenObjetivo, guardarPlantilla,
+  } = useERP();
   // La matriz de roles define quien escribe en cada modulo, pero hasta ahora solo se
   // dibujaba en la pantalla de administracion y ninguna pagina la consultaba.
   const { perfil, tienePermiso } = useAuth();
@@ -146,6 +151,24 @@ export default function ERPInventario() {
   /** Productos antiguos a revisar (lista fija al abrir, para avanzar uno por uno). */
   const [revisionIds, setRevisionIds] = useState<string[] | null>(null);
   const [errorMovimiento, setErrorMovimiento] = useState('');
+  /** Acción con que se abre la ficha desde una alerta (reponer, merma). */
+  const [accionFicha, setAccionFicha] = useState<'reponer' | 'merma' | null>(null);
+  const [filtroStock, setFiltroStock] = useState<'todos' | 'bajo'>('todos');
+  // Enlaces del Centro de alertas: ?producto=ID[&accion=reponer|merma] abre su ficha; ?filtro=bajo filtra.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = params.get('producto');
+    const filtro = params.get('filtro');
+    if (!id && filtro !== 'bajo') return;
+    if (id && inventario.some(p => p.id === id)) {
+      setFichaId(id);
+      const accion = params.get('accion');
+      setAccionFicha(accion === 'reponer' || accion === 'merma' ? accion : null);
+    }
+    if (filtro === 'bajo') setFiltroStock('bajo');
+    if (id && !inventario.some(p => p.id === id) && inventario.length === 0) return; // aún cargando
+    setParams({}, { replace: true });
+  }, [params, inventario]);
 
   /* ══ Periodo de los movimientos: mismo selector que Ventas, a la derecha ══ */
 
@@ -270,6 +293,24 @@ export default function ERPInventario() {
 
   /** El stock a mostrar: el del cierre del periodo, o el actual si no hay nada que revertir. */
   const stockMostrado = (p: Producto): number => (stockAlCierre ? stockAlCierre(p) : stockDisponible(p, envases));
+  /** Estado con el criterio único: con stock actual y envases compara las cerradas con el mínimo. */
+  const estadoActual = (p: Producto) => estadoStock(p, stockMostrado(p), stockAlCierre ? undefined : envases);
+  /** «19 botellas + 1 abierta (70 ml)», «1,2 t · 2 lotes», «40 unidades». */
+  const textoStockLista = (p: Producto): string => {
+    if (p.tipo !== 'producto') return '—';
+    const stock = stockMostrado(p);
+    if (usaEnvases(p) && !stockAlCierre) return resumenStock(p, envases).texto;
+    if (p.formaCompra === 'granel' || (p.unidadBase && p.unidadBase !== 'unidad')) {
+      const nLotes = lotes.filter(l => l.productoId === p.id && l.cantidadRestante > 0).length;
+      const cantidad = unidadMinimoDe(p) === 't' || (p.unidadBase === 'kg' && stock >= 1000)
+        ? `${(stock / 1000).toLocaleString('es-CL', { maximumFractionDigits: 2 })} t`
+        : formatCantidad(stock, p.unidadBase);
+      return nLotes > 1 && !stockAlCierre ? `${cantidad} · ${nLotes} lotes` : cantidad;
+    }
+    const medida = (p.unidadMedida ?? '').trim();
+    const generica = !medida || ['un', 'unidad', 'unidades', 'u'].includes(medida.toLowerCase());
+    return `${Number(stock).toLocaleString('es-CL')} ${generica ? (Number(stock) === 1 ? 'unidad' : 'unidades') : medida}`;
+  };
   const productosRevision = useMemo(() => inventario.filter(p => p.requiereRevisionUnidades), [inventario]);
   const esFraccionado = (p: Producto) => usaEnvases(p) || p.formaCompra === 'granel';
 
@@ -368,7 +409,7 @@ export default function ERPInventario() {
   const valorInventario = inventario.reduce((acc, p) => acc + (p.tipo === 'producto' ? stockMostrado(p) * costoDe(p) : 0), 0);
   const valorVenta = inventario.reduce((acc, p) => acc + (p.tipo === 'producto' ? stockMostrado(p) * (presentacionesActivas(p).length ? precioDe(p) / (presentacionesActivas(p)[0].factor || 1) : precioDe(p)) : 0), 0);
   const productosBajoStock = inventario.filter(p => {
-    const e = estadoStock(p, stockMostrado(p));
+    const e = estadoActual(p);
     return e === 'sin_stock' || e === 'bajo';
   }).length;
 
@@ -385,7 +426,7 @@ export default function ERPInventario() {
   const stockPorEstado = useMemo(() => {
     const conteo: Record<'sin_stock' | 'bajo' | 'ok', number> = { sin_stock: 0, bajo: 0, ok: 0 };
     inventario.forEach(p => {
-      const e = estadoStock(p, stockMostrado(p));
+      const e = estadoActual(p);
       if (e !== 'no_aplica') conteo[e] += 1;
     });
     const total = conteo.sin_stock + conteo.bajo + conteo.ok;
@@ -405,11 +446,12 @@ export default function ERPInventario() {
         p.codigo.toLowerCase().includes(busqueda.toLowerCase()) ||
         p.categoria.toLowerCase().includes(busqueda.toLowerCase());
       const matchTipo = filtroTipo === 'todos' || p.tipo === filtroTipo;
-      return matchBusqueda && matchTipo;
-    }), [inventario, busqueda, filtroTipo]
+      const matchStock = filtroStock === 'todos' || ['bajo', 'sin_stock'].includes(estadoStock(p, stockDisponible(p, envases), envases));
+      return matchBusqueda && matchTipo && matchStock;
+    }), [inventario, busqueda, filtroTipo, filtroStock, envases]
   );
   // Paginación: con 10.061 productos la tabla completa congelaba la página (corrección #5).
-  const paginacionInventario = usePaginacion(inventarioFiltrado, 25, [busqueda, filtroTipo]);
+  const paginacionInventario = usePaginacion(inventarioFiltrado, 25, [busqueda, filtroTipo, filtroStock]);
 
   const handleEditClick = (producto: Producto) => {
     setEditingId(producto.id);
@@ -701,7 +743,7 @@ export default function ERPInventario() {
             {[
               { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20' },
               { label: 'Valorización Costo', value: formatCLP(valorInventario), icon: 'payments', color: 'text-on-surface', bg: 'bg-surface-container-low', border: 'border-outline-variant/30' },
-              { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-on-success-container', bg: 'bg-success-container', border: 'border-success/30' },
+              { label: 'Valorización Venta', value: formatCLP(Math.round(valorVenta)), icon: 'sell', color: 'text-on-success-container', bg: 'bg-success-container', border: 'border-success/30' },
               { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant', bg: productosBajoStock > 0 ? 'bg-error/5' : 'bg-surface-container-low', border: productosBajoStock > 0 ? 'border-error/20' : 'border-outline-variant/30' },
             ].map(k => (
               <div key={k.label} className={cn('p-5 rounded-3xl border-2 transition-all hover:shadow-md', k.bg, k.border)}>
@@ -798,6 +840,10 @@ export default function ERPInventario() {
                 <option value="fifo">FIFO / PEPS</option>
               </select>
             </label>
+            <button type="button" onClick={() => setFiltroStock(v => (v === 'bajo' ? 'todos' : 'bajo'))} aria-pressed={filtroStock === 'bajo'}
+              className={cn('flex min-h-11 items-center justify-center gap-1 rounded-xl border px-3 text-xs font-bold', filtroStock === 'bajo' ? 'border-secondary bg-secondary/10 text-secondary' : 'border-outline-variant/40 text-on-surface-variant')}>
+              <span className="material-symbols-outlined text-base">warning</span> Stock bajo
+            </button>
             <SelectorDesplegable
               valor={filtroTipo}
               onChange={valor => setFiltroTipo(valor as any)}
@@ -812,154 +858,131 @@ export default function ERPInventario() {
           {/* Sin resultados se muestra solo el aviso: antes se pintaba la tabla con
               encabezados y sin filas y, debajo, el mismo aviso otra vez. */}
           {inventarioFiltrado.length === 0 ? (
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-dashed border-outline-variant/30 p-20 text-center">
+            <div className="bg-surface-container-lowest rounded-3xl border-2 border-dashed border-outline-variant/30 p-10 sm:p-20 text-center">
               <span className="material-symbols-outlined text-6xl text-outline/30 mb-4">inventory_2</span>
               <h3 className="text-xl font-black text-on-surface-variant">No se encontraron productos</h3>
-              <p className="text-outline text-sm mt-2">Prueba cambiando los filtros o la búsqueda.</p>
+              <p className="text-outline text-sm mt-2">{filtroStock === 'bajo' ? 'Ningún producto tiene stock bajo.' : 'Prueba cambiando los filtros o la búsqueda.'}</p>
             </div>
           ) : (
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-surface-container-low border-b border-outline-variant/20">
-                    <tr>
-                      {['Código', 'Nombre', 'Categoría', 'Stock', 'Costo', 'Precio Venta', 'Margen', 'Acciones'].map(h => (
-                        <th key={h} className="px-6 py-5 font-black text-outline uppercase tracking-widest text-[10px]">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/20">
-                    {paginacionInventario.visibles.map((producto) => {
-                      const pres = presentacionesActivas(producto);
-                      // Con presentaciones el margen se mide sobre la primera (precio por factor × costo base).
-                      const precioRef = pres[0]?.precio ?? precioDe(producto);
-                      const costoRef = costoDe(producto) * (pres[0]?.factor ?? 1);
-                      const precioNeto = producto.incluyeIva ? Math.round(precioRef / 1.19) : precioRef;
-                      const margen = precioNeto > 0 ? ((precioNeto - costoRef) / precioNeto) * 100 : 0;
-                      const stockPeriodo = stockMostrado(producto);
-                      const estado = estadoStock(producto, stockPeriodo);
-
+              <TablaResponsiva
+                filas={paginacionInventario.visibles as Producto[]}
+                clave={p => p.id}
+                resaltada={fichaId}
+                etiquetaExpandir="Subcategorías de venta"
+                expandible={p => {
+                  const lista = p.tipo === 'producto' ? (p.presentaciones ?? []) : [];
+                  if (lista.length === 0) return null;
+                  return (
+                    <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {lista.map(x => {
+                        const disp = textoDisponibilidad(p, envases, x, politicaEnvaseAbierto);
+                        const tipo = tipoPresentacion(p, x);
+                        return (
+                          <li key={x.id} className={cn('flex items-center gap-3 rounded-xl border px-3 py-2', x.activa ? 'border-outline-variant/30 bg-surface-container-lowest' : 'border-dashed border-outline-variant/30 opacity-60')}>
+                            <span className="material-symbols-outlined text-lg text-primary">{tipo === 'completa' ? 'liquor' : tipo === 'variable' ? 'scale' : 'water_drop'}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-on-surface">{x.nombre}</p>
+                              <p className="text-[11px] text-on-surface-variant">
+                                {formatCLP(x.precio)}{tipo === 'variable' ? ` por ${x.unidadVenta ?? (p.unidadBase === 'ml' ? 'L' : 'kg')}` : ''} · {x.activa ? disp.texto : 'Inactiva'}
+                              </p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                }}
+                tituloTarjeta={p => (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {p.nombre}
+                    {p.requiereRevisionUnidades && <span className="rounded-full bg-secondary/15 px-2 py-0.5 text-[10px] font-black text-secondary">Revisar unidades</span>}
+                  </span>
+                )}
+                subtituloTarjeta={p => `${p.categoria}${p.codigo ? ` · ${p.codigo}` : ''}`}
+                insigniaTarjeta={p => {
+                  const e = estadoActual(p);
+                  return e === 'sin_stock' || e === 'bajo'
+                    ? <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-black uppercase', ETIQUETA_STOCK[e].clase)}>{ETIQUETA_STOCK[e].texto}</span>
+                    : null;
+                }}
+                datosTarjeta={p => [
+                  { etiqueta: 'Stock', valor: textoStockLista(p) },
+                  { etiqueta: 'Precio', valor: `${formatCLP(precioDe(p))}${presentacionesActivas(p).length > 1 ? ` · ${presentacionesActivas(p).length} subcat.` : ''}` },
+                ]}
+                onFila={p => (p.tipo === 'producto' ? setFichaId(p.id) : undefined)}
+                acciones={p => [
+                  ...(puedeEditar && p.tipo === 'producto' ? [{
+                    etiqueta: esFraccionado(p) ? 'Abrir, merma o reponer' : 'Ajustar stock', icono: 'swap_horiz',
+                    onClick: () => (esFraccionado(p) ? setFichaId(p.id) : handleMovimientoClick(p.id)),
+                  }] : []),
+                  ...(puedeEditar ? [{ etiqueta: 'Editar', icono: 'edit', onClick: () => handleEditClick(p) }] : []),
+                  { etiqueta: 'Historial', icono: 'history', onClick: () => { setSelectedProductId(p.id); setShowHistorialModal(true); } },
+                  ...(puedeEditar ? [{ etiqueta: 'Eliminar', icono: 'delete', peligro: true, onClick: () => { setItemToDelete(p.id); setDeleteModalOpen(true); } }] : []),
+                ]}
+                columnas={[
+                  {
+                    clave: 'nombre', titulo: 'Producto', celda: p => (
+                      <div className="flex min-w-[12rem] flex-col">
+                        <span className="font-bold text-on-surface">{p.nombre}</span>
+                        {p.requiereRevisionUnidades && <span className="mt-0.5 w-fit rounded-full bg-secondary/15 px-2 py-0.5 text-[10px] font-black text-secondary">Revisar unidades</span>}
+                        <span className="text-[10px] font-medium text-outline">{p.codigo || 'S/C'}{p.descripcion ? ` · ${p.descripcion}` : ''}</span>
+                      </div>
+                    ),
+                  },
+                  {
+                    clave: 'categoria', titulo: 'Categoría', celda: p => (
+                      <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-primary">{p.categoria}</span>
+                    ),
+                  },
+                  {
+                    clave: 'stock', titulo: 'Stock', alinear: 'derecha', celda: p => {
+                      if (p.tipo !== 'producto') return <span className="text-[10px] font-bold uppercase text-outline">{p.unidadMedida || 'servicio'}</span>;
+                      const e = estadoActual(p);
+                      const color = e === 'sin_stock' ? 'text-error' : e === 'bajo' ? 'text-secondary' : 'text-on-surface';
                       return (
-                        <tr key={producto.id} className="group hover:bg-surface-container-low/50 transition-colors">
-                          <td className="px-6 py-4">
-                            <span className="px-2.5 py-1 bg-surface-container-high text-on-surface-variant rounded-lg font-black text-[10px] uppercase tracking-wider">
-                              {producto.codigo || 'S/C'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex flex-col">
-                              {esFraccionado(producto) ? (
-                                <button type="button" onClick={() => setFichaId(producto.id)} className="text-left font-bold text-on-surface hover:text-primary hover:underline">{producto.nombre}</button>
-                              ) : <span className="font-bold text-on-surface">{producto.nombre}</span>}
-                              {producto.requiereRevisionUnidades && (
-                                <span className="mt-0.5 w-fit rounded-full bg-secondary/15 px-2 py-0.5 text-[10px] font-black text-secondary">Revisar unidades</span>
-                              )}
-                              <span className="text-[10px] text-outline font-medium truncate max-w-[150px]">{producto.descripcion}</span>
-                              {pres.length > 0 && (
-                                <span className="mt-1 flex flex-wrap gap-1">
-                                  {pres.map(x => (
-                                    <span key={x.id} className="rounded-full bg-surface-container-high px-2 py-0.5 text-[10px] font-bold text-on-surface-variant">{x.nombre} · {formatCLP(x.precio)}</span>
-                                  ))}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-wider">
-                              {producto.categoria}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            {producto.tipo === 'producto' ? (
-                              <div className="flex flex-col items-end gap-0.5">
-                                {(() => {
-                                  const color = estado === 'sin_stock' ? 'text-error' : estado === 'bajo' ? 'text-secondary' : 'text-on-surface';
-                                  // Con envases: «19 cerrados + 1 abierto (70 ml)» en vez de «1970 ml».
-                                  if (usaEnvases(producto) && !stockAlCierre) {
-                                    return (
-                                      <button type="button" onClick={() => setFichaId(producto.id)} className={cn('max-w-[11rem] text-right text-sm font-black leading-tight hover:underline', color)}>
-                                        {resumenStock(producto, envases).texto}
-                                        <span className="block text-[10px] font-bold text-outline">{formatCantidad(stockPeriodo, producto.unidadBase)}</span>
-                                      </button>
-                                    );
-                                  }
-                                  if (producto.unidadBase && producto.unidadBase !== 'unidad') {
-                                    return <span className={cn('font-black text-base', color)}>{formatCantidad(stockPeriodo, producto.unidadBase)}</span>;
-                                  }
-                                  return (
-                                    <>
-                                      <span className={cn('font-black text-base', color)}>{Number(stockPeriodo).toLocaleString('es-CL')}</span>
-                                      <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida}</span>
-                                    </>
-                                  );
-                                })()}
-                                {estado !== 'ok' && estado !== 'no_aplica' && (
-                                  <span className={cn('text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full', ETIQUETA_STOCK[estado].clase)}>
-                                    {ETIQUETA_STOCK[estado].texto}
-                                  </span>
-                                )}
-                                {(producto.stockReservado || 0) > 0 && stockPeriodo === producto.stock ? (
-                                  <span className="text-[9px] font-medium text-primary">
-                                    ({producto.stockReservado} res. – disp. {Math.max(0, (producto.stock || 0) - (producto.stockReservado || 0))})
-                                  </span>
-                                ) : null}
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-end gap-0.5">
-                                <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida || 'servicio'}</span>
-                                <span className="material-symbols-outlined text-outline/30">work</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right font-bold text-on-surface-variant">
-                            {formatCLP(costoDe(producto))}
-                            {producto.unidadBase && producto.unidadBase !== 'unidad' && <span className="block text-[9px] text-outline">por {producto.unidadBase}</span>}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="font-black text-on-surface">{formatCLP(precioRef)}</span>
-                              <span className="text-[9px] text-outline font-bold uppercase">{producto.incluyeIva ? 'IVA inc.' : '+ IVA'}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <span className={cn(
-                              "px-2.5 py-1 rounded-lg text-[11px] font-black",
-                              margen > 30 ? "bg-success-container text-on-success-container" : margen > 15 ? "bg-secondary/10 text-secondary" : "bg-error/10 text-error"
-                            )}>
-                              {margen.toFixed(1)}%
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center justify-center gap-1 transition-opacity opacity-100">
-                              {puedeEditar && (
-                                <>
-                                  <button onClick={() => (usaEnvases(producto) ? setFichaId(producto.id) : handleMovimientoClick(producto.id))}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all"
-                                    title={usaEnvases(producto) ? 'Abrir, merma o reponer' : 'Ajustar stock'} aria-label={usaEnvases(producto) ? `Ficha de ${producto.nombre}` : `Ajustar stock de ${producto.nombre}`}>
-                                    <span className="material-symbols-outlined text-lg">swap_horiz</span>
-                                  </button>
-                                  <button onClick={() => handleEditClick(producto)}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Editar">
-                                    <span className="material-symbols-outlined text-lg">edit</span>
-                                  </button>
-                                  <button onClick={() => { setItemToDelete(producto.id); setDeleteModalOpen(true); }}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-error/10 hover:text-error transition-all" title="Eliminar">
-                                    <span className="material-symbols-outlined text-lg">delete</span>
-                                  </button>
-                                </>
-                              )}
-                              <button onClick={() => { setSelectedProductId(producto.id); setShowHistorialModal(true); }}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Historial">
-                                <span className="material-symbols-outlined text-lg">history</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={cn('text-sm font-black leading-tight', color)}>{textoStockLista(p)}</span>
+                          {(p.stockMinimoUnidad ?? 0) > 0 && <span className="text-[10px] font-bold text-outline">mínimo {textoMinimo(p)}</span>}
+                          {e !== 'ok' && e !== 'no_aplica' && <span className={cn('rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase', ETIQUETA_STOCK[e].clase)}>{ETIQUETA_STOCK[e].texto}</span>}
+                        </div>
                       );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                    },
+                  },
+                  {
+                    clave: 'costo', titulo: 'Costo', alinear: 'derecha', celda: p => (
+                      <span className="font-bold text-on-surface-variant">
+                        {formatCLP(costoDe(p))}
+                        {p.unidadBase && p.unidadBase !== 'unidad' && <span className="block text-[9px] text-outline">por {p.unidadBase}</span>}
+                      </span>
+                    ),
+                  },
+                  {
+                    clave: 'precio', titulo: 'Precio', alinear: 'derecha', celda: p => (
+                      <div className="flex flex-col items-end">
+                        <span className="font-black text-on-surface">{formatCLP(precioDe(p))}</span>
+                        <span className="text-[9px] font-bold uppercase text-outline">
+                          {presentacionesActivas(p).length > 1 ? `${presentacionesActivas(p).length} subcategorías` : p.incluyeIva ? 'IVA inc.' : '+ IVA'}
+                        </span>
+                      </div>
+                    ),
+                  },
+                  {
+                    clave: 'margen', titulo: 'Margen', alinear: 'derecha', celda: p => {
+                      const pres = presentacionesActivas(p);
+                      const precioRef = pres[0]?.precio ?? precioDe(p);
+                      const costoRef = costoDe(p) * (pres[0]?.factor ?? 1) + (Number(pres[0]?.costoInsumos) || 0);
+                      const precioNeto = p.incluyeIva ? Math.round(precioRef / 1.19) : precioRef;
+                      const margen = precioNeto > 0 ? ((precioNeto - costoRef) / precioNeto) * 100 : 0;
+                      return (
+                        <span className={cn('rounded-lg px-2.5 py-1 text-[11px] font-black', margen > 30 ? 'bg-success-container text-on-success-container' : margen > 15 ? 'bg-secondary/10 text-secondary' : 'bg-error/10 text-error')}>
+                          {margen.toFixed(1)}%
+                        </span>
+                      );
+                    },
+                  },
+                ]}
+              />
               <Paginacion {...paginacionInventario} />
             </div>
           )}
@@ -1052,6 +1075,10 @@ export default function ERPInventario() {
                 inventario={inventario}
                 proveedores={proveedores}
                 envases={envases}
+                plantillas={plantillasSubcategoria}
+                margenObjetivo={margenObjetivo}
+                rubroNegocio={perfil?.negocio_rubro ?? undefined}
+                onGuardarPlantilla={guardarPlantilla}
                 encabezado={selectorTipo}
                 onCancelar={cerrarModalProducto}
                 onGuardar={guardarProducto}
@@ -1351,7 +1378,8 @@ export default function ERPInventario() {
       )}
 
       {fichaId && inventario.some(p => p.id === fichaId) && (
-        <FichaProducto producto={inventario.find(p => p.id === fichaId)!} onCerrar={() => setFichaId(null)} puedeEditar={puedeEditar} />
+        <FichaProducto producto={inventario.find(p => p.id === fichaId)!} onCerrar={() => { setFichaId(null); setAccionFicha(null); }} puedeEditar={puedeEditar}
+          accionInicial={accionFicha} onEditar={puedeEditar ? () => { const p = inventario.find(x => x.id === fichaId); setFichaId(null); if (p) handleEditClick(p); } : undefined} />
       )}
       {revisionIds && (
         <ModalRevisionUnidades

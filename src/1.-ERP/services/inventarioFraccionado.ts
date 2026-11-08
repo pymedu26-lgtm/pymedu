@@ -4,13 +4,16 @@
 // Funciones PURAS: reciben el inventario y devuelven { envases, movimientos, error? } sin
 // tocar estado. ERPContext solo aplica el resultado cuando no hay error.
 //
-// Reglas:
-// - Fuente única de verdad: si el producto usa envases, lo disponible es la suma del
-//   `restante` de sus envases cerrados + abiertos. `producto.stock` es solo una caché.
-// - Una porción sale de UN envase abierto (elegido por la política). Nunca se abre un
-//   envase en silencio: si ninguno alcanza se devuelve `requiere_abrir`.
-// - Un envase completo solo sale de los cerrados. Los envases nunca se borran.
-// - Anular devuelve lo consumido al MISMO envase y a los mismos lotes.
+// Regla de venta (definitiva):
+// - Stock total = contenido de las abiertas + cerradas × contenido (a granel: los lotes).
+//   `producto.stock` es solo una caché.
+// - Si el stock total alcanza, la venta SIEMPRE se hace: usa una abierta que alcance sola
+//   (política); si ninguna alcanza abre la siguiente cerrada (apertura ligada a la venta); si
+//   ya no quedan cerradas combina las abiertas («3 ml de F3 + 2 ml de F5»).
+// - Si no alcanza, se bloquea con `stock_insuficiente` y el máximo que sí se puede vender.
+// - La subcategoría «completa» solo sale de las cerradas. Los envases nunca se borran.
+// - Anular devuelve lo consumido al MISMO envase y lotes; si la venta abrió el envase y vuelve
+//   a quedar lleno, vuelve a «cerrado» y la apertura queda revertida.
 //
 // Tablas destino (cuando el inventario pase a la API): erp.envase, erp.lote,
 // erp.movimiento_inventario, erp.linea_venta (server/sql/02_erp_inventario.sql).
@@ -27,24 +30,36 @@ export type UnidadEntrada = 'unidad' | 'ml' | 'l' | 'g' | 'kg' | 't';
 export type MovimientoBorrador = Omit<MovimientoInventario, 'id'>;
 
 export type CodigoError =
-  | 'requiere_abrir' | 'stock_insuficiente' | 'sin_cerrados' | 'motivo_requerido'
+  | 'stock_insuficiente' | 'sin_cerrados' | 'motivo_requerido'
   | 'cantidad_invalida' | 'envase_no_encontrado' | 'envase_no_disponible';
 
 export interface ErrorInventario {
   codigo: CodigoError;
   mensaje: string;
   productoId?: string;
-  /** Envase cerrado que conviene abrir (solo con `requiere_abrir`). */
-  sugerido?: { id: string; codigo: string };
   /** Línea de la venta que falló. */
   linea?: number;
+  /** Cuánto de esa línea SÍ se puede vender (en la unidad de la línea): «Vender el máximo (2 decants)». */
+  maximo?: number;
 }
 
 export interface ResultadoEnvases {
   envases: Envase[];
   movimientos: MovimientoBorrador[];
   consumos: ConsumoEnvase[];
+  /** Envases que esta operación abrió automáticamente (ya en estado «abierto»). */
+  aperturas?: Envase[];
   error?: ErrorInventario;
+}
+
+/** Evento para el Centro de alertas (se guarda en la colección `notificaciones`). */
+export interface EventoInventario {
+  tipo: 'apertura_automatica' | 'venta_bloqueada' | 'remanente_sin_uso' | 'merma_registrada' | 'revision_unidades' | 'conversion_realizada';
+  /** Clave estable para no repetir el mismo aviso (ej. apertura:{envaseId}). */
+  clave: string;
+  productoId: string;
+  titulo: string;
+  detalle: string;
 }
 
 export interface OpcionesEnvase {
@@ -86,11 +101,20 @@ export function formatCantidad(cantidad: number, unidad: UnidadBase | undefined 
   return `${numero(n)} ${unidad}`;
 }
 
-const PLURAL: Record<NombreEnvase, string> = { frasco: 'frascos', botella: 'botellas', saco: 'sacos', caja: 'cajas' };
-export const nombreEnvase = (p: Producto, plural = false) => {
+const SINGULAR: Record<NombreEnvase, string> = { frasco: 'frasco', botella: 'botella', saco: 'saco', caja: 'caja', bidon: 'bidón' };
+const PLURAL: Record<NombreEnvase, string> = { frasco: 'frascos', botella: 'botellas', saco: 'sacos', caja: 'cajas', bidon: 'bidones' };
+const FEMENINO = new Set<NombreEnvase>(['botella', 'caja']);
+export const nombreEnvase = (p: Pick<Producto, 'nombreEnvase'>, plural = false) => {
   const n = p.nombreEnvase ?? 'frasco';
-  return plural ? PLURAL[n] : n;
+  return plural ? PLURAL[n] : SINGULAR[n];
 };
+/** «botella» → «la botella»; «frasco» → «el frasco». */
+export const conArticulo = (p: Pick<Producto, 'nombreEnvase'>) => `${FEMENINO.has(p.nombreEnvase ?? 'frasco') ? 'la' : 'el'} ${nombreEnvase(p)}`;
+/** Concordancia: «cerrada(s)/cerrado(s)», «abierta/abierto». */
+export const adjetivo = (p: Pick<Producto, 'nombreEnvase'>, raiz: 'cerrad' | 'abiert', n: number) =>
+  `${raiz}${FEMENINO.has(p.nombreEnvase ?? 'frasco') ? 'a' : 'o'}${n === 1 ? '' : 's'}`;
+/** «3 botellas», «1 saco». */
+export const contarEnvases = (p: Pick<Producto, 'nombreEnvase'>, n: number) => `${numero(n)} ${nombreEnvase(p, n !== 1)}`;
 
 // ── Envases ───────────────────────────────────────────────────────────────
 
@@ -106,21 +130,26 @@ export function stockDisponible(p: Producto, envases: Envase[]): number {
   return r3(envasesDe(envases, p.id).filter(envaseVigente).reduce((a, e) => a + e.restante, 0));
 }
 
-export interface ResumenStock { cerrados: number; abiertos: Envase[]; total: number; texto: string }
+export interface ResumenStock {
+  cerrados: number; abiertos: Envase[]; total: number; texto: string;
+  /** Con envases: a cuántos envases completos equivale el total (19,7 botellas). */
+  equivalente?: number;
+}
 
-/** «19 cerrados + 1 abierto (70 ml)» o, sin envases, «2.000 kg». */
+/** «19 botellas + 1 abierta (70 ml)» o, sin envases, «2.000 kg». */
 export function resumenStock(p: Producto, envases: Envase[]): ResumenStock {
   const total = stockDisponible(p, envases);
   if (!usaEnvases(p)) return { cerrados: 0, abiertos: [], total, texto: formatCantidad(total, p.unidadBase) };
   const propios = envasesDe(envases, p.id);
   const cerrados = propios.filter(e => e.estado === 'cerrado').length;
   const abiertos = propios.filter(e => e.estado === 'abierto').sort(porCodigo);
-  const partes = [`${cerrados} cerrado${cerrados === 1 ? '' : 's'}`];
+  const partes = [contarEnvases(p, cerrados)];
   if (abiertos.length > 0) {
     const enAbiertos = r3(abiertos.reduce((a, e) => a + e.restante, 0));
-    partes.push(`${abiertos.length} abierto${abiertos.length === 1 ? '' : 's'} (${formatCantidad(enAbiertos, p.unidadBase)})`);
+    partes.push(`${abiertos.length} ${adjetivo(p, 'abiert', abiertos.length)} (${formatCantidad(enAbiertos, p.unidadBase)})`);
   }
-  return { cerrados, abiertos, total, texto: partes.join(' + ') };
+  const capacidad = Number(p.capacidadEnvase) || 1;
+  return { cerrados, abiertos, total, texto: partes.join(' + '), equivalente: Math.floor((total / capacidad) * 10 + 0.0001) / 10 };
 }
 
 /** Abiertos ordenados según la política (el primero es el que se usa). */
@@ -139,17 +168,25 @@ export function elegirAbierto(envases: Envase[], productoId: string, cantidad: n
 export const siguienteCerrado = (envases: Envase[], productoId: string) =>
   envasesDe(envases, productoId).filter(e => e.estado === 'cerrado').sort(porCodigo)[0];
 
-/** Presentación «completa» o «porción»: viene guardada o se deduce del origen antiguo. */
-export function tipoPresentacion(p: Producto, pres?: Presentacion): 'completa' | 'porcion' {
-  if (pres?.tipo) return pres.tipo;
-  if (pres?.origen === 'envase_cerrado') return 'completa';
-  if (!pres && usaEnvases(p)) return 'porcion';
-  return 'porcion';
+export type TipoSubcategoria = 'completa' | 'fija' | 'variable';
+
+/** Tipo de la subcategoría de venta: viene guardado o se deduce del dato antiguo ('porcion' = fija). */
+export function tipoPresentacion(_p: Producto, pres?: Presentacion): TipoSubcategoria {
+  if (pres?.tipo === 'completa' || pres?.tipo === 'variable' || pres?.tipo === 'fija') return pres.tipo;
+  if (pres?.origen === 'envase_cerrado' && pres.tipo !== 'porcion') return 'completa';
+  return 'fija';
 }
 
 /** Origen calculado (nunca lo elige el usuario). */
-export const origenDe = (tipo: 'completa' | 'porcion', conEnvases: boolean): NonNullable<Presentacion['origen']> =>
+export const origenDe = (tipo: TipoSubcategoria | 'porcion', conEnvases: boolean): NonNullable<Presentacion['origen']> =>
   !conEnvases ? 'granel' : tipo === 'completa' ? 'envase_cerrado' : 'envase_abierto';
+
+/** Subcategorías activas más chica primero (para «sin stock» y remanentes). */
+const factorMinimoVendible = (p: Producto): number | null => {
+  const activas = presentacionesActivas(p).filter(x => tipoPresentacion(p, x) === 'fija');
+  if (presentacionesActivas(p).some(x => tipoPresentacion(p, x) === 'variable')) return EPS;
+  return activas.length ? Math.min(...activas.map(x => r3(x.factor))) : null;
+};
 
 /** Crea envases (cerrados y, opcionalmente, abiertos con su remanente) continuando F1, F2… */
 export function crearEnvases(
@@ -198,9 +235,13 @@ export function abrirEnvase(p: Producto, envases: Envase[], envaseId?: string, o
 }
 
 /**
- * Vende `cantidad` porciones (decants, kilos sueltos) desde envases abiertos. Cada porción sale
- * de UN envase (salvo `permitirMezclar`). Si ninguno alcanza devuelve `requiere_abrir` con el
- * cerrado sugerido y NO cambia nada. El envase que llega a 0 queda «agotado» (se conserva).
+ * Vende `cantidad` de una subcategoría fija o variable (decants, kilos sueltos). Regla:
+ *   1. Cada porción sale de una abierta que alcance sola (según la política).
+ *   2. Si ninguna alcanza: con `permitirMezclar` combina abiertas; si no, ABRE la siguiente
+ *      cerrada (queda en `aperturas` y en un movimiento «apertura») y descuenta de ella.
+ *   3. Sin cerradas, combina las abiertas que queden.
+ * Si el stock total no alcanza, no cambia nada y devuelve `stock_insuficiente` con el máximo.
+ * El envase que llega a 0 queda «agotado» (se conserva).
  */
 export function venderPorcion(p: Producto, envases: Envase[], pres: Presentacion, cantidad: number, op: OpcionesEnvase = {}): ResultadoEnvases {
   const politica = op.politica ?? 'menos_contenido';
@@ -210,54 +251,84 @@ export function venderPorcion(p: Producto, envases: Envase[], pres: Presentacion
   if (!(cantidad > 0) || !(porUnidad > 0)) return sin(error('cantidad_invalida', 'La cantidad debe ser mayor que cero.', { productoId: p.id }));
   const total = r3(porUnidad * cantidad);
   const disponible = stockDisponible(p, envases);
-  if (total > disponible + EPS) {
-    return sin(error('stock_insuficiente', `No alcanza «${p.nombre}»: quedan ${formatCantidad(disponible, p.unidadBase)} y se necesitan ${formatCantidad(total, p.unidadBase)}.`, { productoId: p.id }));
-  }
+  if (total > disponible + EPS) return sin(errorNoAlcanza(p, envases, pres, total));
 
   const lista = envases.map(e => (e.productoId === p.id ? { ...e } : e));
   const consumos = new Map<string, number>();
+  const aperturas: Envase[] = [];
+  const movimientos: MovimientoBorrador[] = [];
   const tomar = (e: Envase, c: number) => {
     e.restante = r3(e.restante - c);
     consumos.set(e.id, r3((consumos.get(e.id) ?? 0) + c));
     if (e.restante <= EPS) { e.restante = 0; e.estado = 'agotado'; }
   };
-  const enteras = Math.floor(cantidad);
-  const resto = r3((cantidad - enteras) * porUnidad);
-  const porciones = [...Array.from({ length: enteras }, () => porUnidad), ...(resto > 0 ? [resto] : [])];
+  const abiertosOrdenados = () => ordenarAbiertos(lista.filter(e => e.productoId === p.id && e.estado === 'abierto'), politica);
+  /** Combina abiertas (según la política) hasta cubrir `c`; devuelve lo que faltó. */
+  const combinar = (c: number) => {
+    let pendiente = c;
+    for (const e of abiertosOrdenados()) {
+      if (pendiente <= EPS) break;
+      const t = r3(Math.min(e.restante, pendiente));
+      tomar(e, t);
+      pendiente = r3(pendiente - t);
+    }
+    return pendiente;
+  };
+  const abrirSiguiente = (): Envase | undefined => {
+    const e = siguienteCerrado(lista, p.id);
+    if (!e) return undefined;
+    e.estado = 'abierto';
+    e.abiertoEn = ahora;
+    aperturas.push(e);
+    movimientos.push({ productoId: p.id, tipo: 'apertura', cantidad: e.restante, fecha: ahora, motivo: `Apertura automática de ${e.codigo}`, envaseId: e.id });
+    return e;
+  };
 
+  const enteras = Math.floor(cantidad + EPS);
+  const resto = r3((cantidad - enteras) * porUnidad);
+  const porciones = [...Array.from({ length: enteras }, () => porUnidad), ...(resto > EPS ? [resto] : [])];
   for (const c of porciones) {
-    const elegido = elegirAbierto(lista, p.id, c, politica);
-    if (elegido) { tomar(elegido, c); continue; }
-    const abiertos = ordenarAbiertos(lista.filter(e => e.productoId === p.id && e.estado === 'abierto'), politica);
-    if (op.permitirMezclar && abiertos.reduce((a, e) => a + e.restante, 0) + EPS >= c) {
-      let pendiente = c;
-      for (const e of abiertos) {
-        if (pendiente <= EPS) break;
-        const t = Math.min(e.restante, pendiente);
-        tomar(e, t);
-        pendiente = r3(pendiente - t);
-      }
-      continue;
+    const sola = elegirAbierto(lista, p.id, c, politica);
+    if (sola) { tomar(sola, c); continue; }
+    const enAbiertas = r3(abiertosOrdenados().reduce((a, e) => a + e.restante, 0));
+    if (op.permitirMezclar && enAbiertas + EPS >= c) { combinar(c); continue; }
+    let pendiente = c;
+    // Normalmente basta una; si la porción es más grande que un envase se abren las necesarias.
+    while (pendiente > EPS) {
+      const nueva = abrirSiguiente();
+      if (!nueva) break;
+      const t = r3(Math.min(nueva.restante, pendiente));
+      tomar(nueva, t);
+      pendiente = r3(pendiente - t);
     }
-    const sugerido = siguienteCerrado(lista, p.id);
-    if (!sugerido) {
-      return sin(error('stock_insuficiente', `Ningún ${nombreEnvase(p)} abierto tiene ${formatCantidad(c, p.unidadBase)} y no quedan cerrados.`, { productoId: p.id }));
-    }
-    // El mensaje describe el inventario ANTES de la venta (no el estado a medio asignar).
-    const abiertosAntes = envasesDe(envases, p.id).filter(e => e.estado === 'abierto').sort(porCodigo);
-    const detalleAbiertos = abiertosAntes.map(e => `${e.codigo}: ${formatCantidad(e.restante, p.unidadBase)}`).join(', ');
-    return sin(error('requiere_abrir',
-      abiertosAntes.length
-        ? `Lo abierto (${detalleAbiertos}) no alcanza para ${formatCantidad(total, p.unidadBase)}. Hay que abrir ${sugerido.codigo}.`
-        : `No hay ${nombreEnvase(p, true)} abiertos. Hay que abrir ${sugerido.codigo}.`,
-      { productoId: p.id, sugerido: { id: sugerido.id, codigo: sugerido.codigo } }));
+    if (pendiente > EPS) pendiente = combinar(pendiente);
+    if (pendiente > EPS) return sin(errorNoAlcanza(p, envases, pres, total)); // no debería pasar: el total ya alcanzaba
   }
 
   const detalle = [...consumos].map(([envaseId, c]) => ({ envaseId, cantidad: c }));
-  return { envases: lista, consumos: detalle, movimientos: [salida(p, total, detalle, ahora)] };
+  return { envases: lista, consumos: detalle, aperturas, movimientos: [...movimientos, salida(p, total, detalle, ahora)] };
 }
 
-/** Vende envases completos: solo cerrados → «vendido». Nunca usa un abierto. */
+/** Cuánto se puede vender HOY de una subcategoría (en su propia unidad). */
+export function maximoVendible(p: Producto, envases: Envase[], pres?: Presentacion): number {
+  const tipo = tipoPresentacion(p, pres);
+  if (usaEnvases(p) && tipo === 'completa') return envasesDe(envases, p.id).filter(e => e.estado === 'cerrado').length;
+  const factor = r3(pres?.factor ?? 1) || 1;
+  const cociente = stockDisponible(p, envases) / factor;
+  return tipo === 'variable' ? Math.floor(cociente * 1000 + EPS) / 1000 : Math.floor(cociente + EPS);
+}
+
+/** «No alcanza: de Lattafa Asad quedan 12 ml (0 botellas cerradas) y pides 15 ml». */
+function errorNoAlcanza(p: Producto, envases: Envase[], pres: Presentacion | undefined, pedido: number): ErrorInventario {
+  const disponible = stockDisponible(p, envases);
+  const cerrados = usaEnvases(p) ? envasesDe(envases, p.id).filter(e => e.estado === 'cerrado').length : 0;
+  const entre = usaEnvases(p) ? ` (${contarEnvases(p, cerrados)} ${adjetivo(p, 'cerrad', cerrados)})` : '';
+  return error('stock_insuficiente',
+    `No alcanza: de ${p.nombre} quedan ${formatCantidad(disponible, p.unidadBase)}${entre} y pides ${formatCantidad(pedido, p.unidadBase)}.`,
+    { productoId: p.id, maximo: maximoVendible(p, envases, pres) });
+}
+
+/** Subcategoría «completa»: solo cerradas → «vendido». Nunca usa una abierta. */
 export function venderCompleto(p: Producto, envases: Envase[], cantidad: number, op: OpcionesEnvase = {}): ResultadoEnvases {
   const ahora = op.ahora ?? new Date().toISOString();
   const sin = (e: ErrorInventario): ResultadoEnvases => ({ envases, movimientos: [], consumos: [], error: e });
@@ -267,9 +338,10 @@ export function venderCompleto(p: Producto, envases: Envase[], cantidad: number,
   const cerrados = envasesDe(envases, p.id).filter(e => e.estado === 'cerrado').sort(porCodigo);
   if (cerrados.length < cantidad) {
     const hayAbiertos = envasesDe(envases, p.id).some(e => e.estado === 'abierto');
-    return sin(error('sin_cerrados', cerrados.length === 0
-      ? `No quedan ${nombreEnvase(p, true)} cerrados${hayAbiertos ? ' (los abiertos se venden por porción)' : ''}.`
-      : `Solo quedan ${cerrados.length} ${nombreEnvase(p, cerrados.length !== 1)} cerrado${cerrados.length === 1 ? '' : 's'}.`, { productoId: p.id }));
+    return sin(error('sin_cerrados',
+      `No alcanza: de ${p.nombre} quedan ${contarEnvases(p, cerrados.length)} ${adjetivo(p, 'cerrad', cerrados.length)} y pides ${cantidad}`
+      + `${hayAbiertos ? ` (${FEMENINO.has(p.nombreEnvase ?? 'frasco') ? 'las' : 'los'} ${adjetivo(p, 'abiert', 2)} se venden por subcategoría)` : ''}.`,
+      { productoId: p.id, maximo: cerrados.length }));
   }
   const elegidos = new Map(cerrados.slice(0, cantidad).map(e => [e.id, e]));
   const consumos: ConsumoEnvase[] = [...elegidos.values()].map(e => ({ envaseId: e.id, cantidad: e.restante, envaseVendidoCompleto: true }));
@@ -382,6 +454,10 @@ export interface ResultadoVenta {
   lineas: VentaProducto[];
   /** Movimientos nuevos (ya incluidos en estado.movimientos). */
   movimientos: MovimientoInventario[];
+  /** Envases abiertos automáticamente por esta venta (para el aviso «Se abrió la botella F4…»). */
+  aperturas: { productoId: string; envaseId: string; codigo: string }[];
+  /** Eventos para el Centro de alertas: aperturas, remanentes sin uso o la venta bloqueada. */
+  eventos: EventoInventario[];
   /** La venta ya se había descontado (doble clic o reintento): no se hizo nada. */
   duplicada?: boolean;
   error?: ErrorInventario;
@@ -394,13 +470,22 @@ export const ventaYaAplicada = (movimientos: MovimientoInventario[], ventaId: st
 const presentacionDe = (p: Producto, id?: string) =>
   id ? presentacionesActivas(p).find(x => x.id === id) ?? p.presentaciones?.find(x => x.id === id) : undefined;
 
+/** Envases abiertos con un remanente que no alcanza para ninguna subcategoría activa. */
+export function remanentesSinUso(p: Producto, envases: Envase[]): Envase[] {
+  if (!usaEnvases(p)) return [];
+  const minimo = factorMinimoVendible(p);
+  if (minimo === null || minimo <= EPS) return [];
+  return envasesDe(envases, p.id).filter(e => e.estado === 'abierto' && e.restante > EPS && e.restante + EPS < minimo).sort(porCodigo);
+}
+
 /**
  * Valida y descuenta TODAS las líneas de una venta. Si una falla no cambia nada y devuelve el
- * error con su número de línea. Costo de venta congelado según el método (FIFO o promedio).
+ * error con su número de línea (y un evento «venta bloqueada»). Costo congelado según el método.
+ * Las aperturas automáticas quedan ligadas a la venta (origenId) para poder revertirlas.
  * Idempotente: si `ventaId` ya tiene salidas vigentes, devuelve `duplicada` sin descontar.
  */
 export function procesarVenta(estado: EstadoInventario, ventaId: string, lineas: VentaProducto[], op: OpcionesVenta = {}): ResultadoVenta {
-  if (ventaYaAplicada(estado.movimientos, ventaId)) return { estado, lineas, movimientos: [], duplicada: true };
+  if (ventaYaAplicada(estado.movimientos, ventaId)) return { estado, lineas, movimientos: [], aperturas: [], eventos: [], duplicada: true };
   const ahora = op.ahora ?? new Date().toISOString();
   const metodo = op.metodo ?? 'promedio';
   const porId = new Map(estado.productos.map(p => [p.id, p]));
@@ -408,7 +493,15 @@ export function procesarVenta(estado: EstadoInventario, ventaId: string, lineas:
   let lotes = estado.lotes;
   const stock = new Map<string, number>();
   const acumulado = new Map<string, { cantidad: number; costo: number; consumos: ConsumoEnvase[]; consumosLote: ConsumoLote[] }>();
-  const fallo = (e: ErrorInventario, linea: number): ResultadoVenta => ({ estado, lineas, movimientos: [], error: { ...e, linea } });
+  const movAperturas: MovimientoBorrador[] = [];
+  const abiertos: Envase[] = [];
+  const fallo = (e: ErrorInventario, linea: number): ResultadoVenta => ({
+    estado, lineas, movimientos: [], aperturas: [], error: { ...e, linea },
+    eventos: [{
+      tipo: 'venta_bloqueada', clave: `venta-bloqueada:${e.productoId ?? 'x'}:${ahora.slice(0, 10)}`, productoId: e.productoId ?? '',
+      titulo: 'Venta no realizada por falta de stock', detalle: e.mensaje,
+    }],
+  });
 
   const descontar = (p: Producto, cantidadBase: number, pres: Presentacion | undefined, cantidad: number): ErrorInventario | ConsumoEnvase[] => {
     if (usaEnvases(p)) {
@@ -417,11 +510,16 @@ export function procesarVenta(estado: EstadoInventario, ventaId: string, lineas:
         : venderPorcion(p, envases, pres ?? { id: 'base', nombre: p.nombre, factor: 1, precio: p.precio, activa: true }, cantidad, op);
       if (r.error) return r.error;
       envases = r.envases;
+      movAperturas.push(...r.movimientos.filter(m => m.tipo === 'apertura'));
+      abiertos.push(...(r.aperturas ?? []));
       return r.consumos;
     }
     const disponible = stock.get(p.id) ?? r3(Number(p.stock) || 0);
     if (cantidadBase > disponible + EPS) {
-      return error('stock_insuficiente', `No alcanza «${p.nombre}»: hay ${formatCantidad(disponible, p.unidadBase)} y se necesitan ${formatCantidad(cantidadBase, p.unidadBase)}.`, { productoId: p.id });
+      const cociente = disponible / (r3(pres?.factor ?? 1) || 1);
+      return error('stock_insuficiente', `No alcanza: de ${p.nombre} quedan ${formatCantidad(disponible, p.unidadBase)} y pides ${formatCantidad(cantidadBase, p.unidadBase)}.`, {
+        productoId: p.id, maximo: tipoPresentacion(p, pres) === 'variable' ? Math.floor(cociente * 1000 + EPS) / 1000 : Math.floor(cociente + EPS),
+      });
     }
     stock.set(p.id, r3(disponible - cantidadBase));
     return [];
@@ -467,10 +565,12 @@ export function procesarVenta(estado: EstadoInventario, ventaId: string, lineas:
     });
   }
 
+  const ligar = { origenTipo: 'venta' as const, origenId: ventaId };
+  const aperturasMov: MovimientoInventario[] = movAperturas.map(m => ({ ...m, ...ligar, id: idNuevo(op), motivo: `${m.motivo} (venta #${ventaId.split('-')[0]})` }));
   const movimientos: MovimientoInventario[] = [...acumulado].map(([productoId, a]) => ({
     id: idNuevo(op), productoId, tipo: 'salida', cantidad: a.cantidad,
     costoUnitario: a.cantidad > 0 ? Math.round(a.costo / a.cantidad) : undefined,
-    fecha: ahora, motivo: op.motivo ?? `Venta #${ventaId.split('-')[0]}`, origenTipo: 'venta', origenId: ventaId,
+    fecha: ahora, motivo: op.motivo ?? `Venta #${ventaId.split('-')[0]}`, ...ligar,
     ...(a.consumos.length ? { consumos: a.consumos } : {}), ...(a.consumos.length === 1 ? { envaseId: a.consumos[0].envaseId } : {}),
     ...(a.consumosLote.length ? { consumosLote: a.consumosLote } : {}),
   }));
@@ -478,7 +578,35 @@ export function procesarVenta(estado: EstadoInventario, ventaId: string, lineas:
     if (!acumulado.has(p.id)) return p;
     return { ...p, stock: usaEnvases(p) ? stockDisponible(p, envases) : stock.get(p.id) ?? p.stock };
   });
-  return { estado: { productos, envases, lotes, movimientos: [...movimientos, ...estado.movimientos] }, lineas: nuevas, movimientos };
+
+  // Eventos: cada apertura automática y los remanentes que quedaron sin uso.
+  const eventos: EventoInventario[] = [];
+  for (const e of abiertos) {
+    const p = porId.get(e.productoId)!;
+    const cerrados = envasesDe(envases, p.id).filter(x => x.estado === 'cerrado').length;
+    eventos.push({
+      tipo: 'apertura_automatica', clave: `apertura:${e.id}`, productoId: p.id,
+      titulo: `Se abrió ${conArticulo(p)} ${e.codigo} de ${p.nombre}`,
+      detalle: `Quedan ${contarEnvases(p, cerrados)} ${adjetivo(p, 'cerrad', cerrados)}.`,
+    });
+  }
+  const tocados = new Set(movimientos.flatMap(m => (m.consumos ?? []).map(c => c.envaseId)));
+  for (const p of productos) {
+    for (const e of remanentesSinUso(p, envases).filter(x => tocados.has(x.id))) {
+      eventos.push({
+        tipo: 'remanente_sin_uso', clave: `remanente:${e.id}`, productoId: p.id,
+        titulo: `${e.codigo} de ${p.nombre}: ${formatCantidad(e.restante, p.unidadBase)} sin uso`,
+        detalle: 'No alcanza para ninguna subcategoría activa. Puedes registrarlo como merma en la ficha.',
+      });
+    }
+  }
+  const nuevosMov = [...aperturasMov, ...movimientos];
+  return {
+    estado: { productos, envases, lotes, movimientos: [...nuevosMov, ...estado.movimientos] },
+    lineas: nuevas, movimientos: nuevosMov,
+    aperturas: abiertos.map(e => ({ productoId: e.productoId, envaseId: e.id, codigo: e.codigo })),
+    eventos,
+  };
 }
 
 /** Lotes: devuelve a los mismos lotes lo consumido (sin pasar su cantidad inicial). */
@@ -549,7 +677,17 @@ export function revertirVenta(estado: EstadoInventario, ventaId: string, op: Opc
       ...(m.consumos ? { consumos: m.consumos } : {}), ...(m.envaseId ? { envaseId: m.envaseId } : {}),
     });
   }
+  // Si la venta abrió un envase y con la devolución vuelve a quedar lleno, vuelve a «cerrado»
+  // y su apertura queda revertida (como si nunca se hubiera abierto).
+  const aperturas = estado.movimientos.filter(m => m.tipo === 'apertura' && m.origenTipo === 'venta' && m.origenId === ventaId && !m.revertido);
   const revertidas = new Set(salidas.map(m => m.id));
+  for (const a of aperturas) {
+    const e = envases.find(x => x.id === a.envaseId);
+    if (!e || e.estado !== 'abierto' || e.restante + EPS < e.capacidad) continue;
+    const { abiertoEn: _a, ...cerrado } = e;
+    envases = envases.map(x => (x.id === e.id ? { ...cerrado, estado: 'cerrado' as const, restante: e.capacidad } : x));
+    revertidas.add(a.id);
+  }
   const tocados = new Set(devoluciones.map(m => m.productoId));
   return {
     estado: {
@@ -562,28 +700,32 @@ export function revertirVenta(estado: EstadoInventario, ventaId: string, op: Opc
   };
 }
 
-/** Texto de disponibilidad para el chip de Ventas: «19 disponibles», «desde F3 (70 ml)». */
-export function textoDisponibilidad(p: Producto, envases: Envase[], pres: Presentacion, politica: Politica = 'menos_contenido'): { unidades: number; texto: string; requiereAbrir?: { id: string; codigo: string } } {
-  if (!usaEnvases(p)) {
-    const unidades = Math.floor(r3(stockDisponible(p, envases) / (pres.factor || 1)) + EPS);
-    return { unidades, texto: unidades > 0 ? `${unidades.toLocaleString('es-CL')} disponibles` : 'Sin stock' };
+/**
+ * Disponibilidad de una subcategoría para Ventas: «393 disponibles» y, con envases, de dónde
+ * saldrá la próxima («desde F20 (70 ml)», «abrirá F1»). Disponibles = stock aprovechable ÷ cantidad.
+ */
+export function textoDisponibilidad(p: Producto, envases: Envase[], pres: Presentacion, politica: Politica = 'menos_contenido'): { unidades: number; texto: string; detalle?: string } {
+  const tipo = tipoPresentacion(p, pres);
+  const unidades = maximoVendible(p, envases, pres);
+  if (tipo === 'variable') {
+    const total = stockDisponible(p, envases);
+    return { unidades, texto: total > EPS ? `${formatCantidad(total, p.unidadBase)} disponibles` : 'Sin stock' };
   }
-  if (tipoPresentacion(p, pres) === 'completa') {
-    const cerrados = envasesDe(envases, p.id).filter(e => e.estado === 'cerrado').length;
-    return { unidades: cerrados, texto: cerrados > 0 ? `${cerrados.toLocaleString('es-CL')} disponible${cerrados === 1 ? '' : 's'}` : 'Solo quedan abiertos' };
+  if (unidades <= 0) {
+    return { unidades: 0, texto: usaEnvases(p) && tipo === 'completa' ? `Sin ${nombreEnvase(p, true)} ${adjetivo(p, 'cerrad', 2)}` : 'Sin stock' };
   }
-  const total = Math.floor(r3(stockDisponible(p, envases) / (pres.factor || 1)) + EPS);
+  const texto = `${unidades.toLocaleString('es-CL')} disponible${unidades === 1 ? '' : 's'}`;
+  if (!usaEnvases(p) || tipo === 'completa') return { unidades, texto };
   const desde = elegirAbierto(envases, p.id, pres.factor, politica);
-  if (desde) return { unidades: total, texto: `desde ${desde.codigo} (${formatCantidad(desde.restante, p.unidadBase)})` };
+  if (desde) return { unidades, texto, detalle: `desde ${desde.codigo} (${formatCantidad(desde.restante, p.unidadBase)})` };
   const cerrado = siguienteCerrado(envases, p.id);
-  if (cerrado) return { unidades: total, texto: `abre ${cerrado.codigo}`, requiereAbrir: { id: cerrado.id, codigo: cerrado.codigo } };
-  return { unidades: 0, texto: 'Sin stock' };
+  return { unidades, texto, detalle: cerrado ? `abrirá ${cerrado.codigo}` : `combina ${nombreEnvase(p, true)} ${adjetivo(p, 'abiert', 2)}` };
 }
 
-/** «10 ml de F3» / «F7 completo» para mostrar antes de confirmar. */
+/** «3 ml de F3 + 2 ml de F5» / «F7 completo» para mostrar antes de confirmar. */
 export function describirConsumos(p: Producto, envases: Envase[], consumos: ConsumoEnvase[] = []): string {
   const codigo = (id: string) => envases.find(e => e.id === id)?.codigo ?? '?';
-  return consumos.map(c => (c.envaseVendidoCompleto ? `${codigo(c.envaseId)} completo` : `${formatCantidad(c.cantidad, p.unidadBase)} de ${codigo(c.envaseId)}`)).join(', ');
+  return consumos.map(c => (c.envaseVendidoCompleto ? `${codigo(c.envaseId)} completo` : `${formatCantidad(c.cantidad, p.unidadBase)} de ${codigo(c.envaseId)}`)).join(' + ');
 }
 
 // ── Migración de datos antiguos (no destructiva) ─────────────────────────
@@ -595,7 +737,7 @@ export function describirConsumos(p: Producto, envases: Envase[], consumos: Cons
 export function normalizarProducto(p: Producto, envases: Envase[]): Producto {
   if (p.tipo !== 'producto' || p.formaCompra || p.requiereRevisionUnidades) return p;
   const pres = p.presentaciones ?? [];
-  const conTipo = (conEnvases: boolean) => pres.map(x => (x.tipo ? x : { ...x, tipo: conEnvases && x.origen === 'envase_cerrado' ? 'completa' as const : 'porcion' as const }));
+  const conTipo = (conEnvases: boolean) => pres.map(x => (x.tipo ? x : { ...x, tipo: conEnvases && x.origen === 'envase_cerrado' ? 'completa' as const : 'fija' as const }));
   const sinUnidad = !p.unidadBase || p.unidadBase === 'unidad';
   if (!p.controlEnvases && sinUnidad) return { ...p, formaCompra: 'unidad', ...(pres.length ? { presentaciones: conTipo(false) } : {}) };
   if (p.controlEnvases) {
@@ -642,7 +784,7 @@ export function convertirUnidades(p: Producto, envases: Envase[], lotes: Lote[],
     if (p.controlEnvases) return sin(error('cantidad_invalida', 'Este producto usa envases: elige «usar lo que suman los envases» o indica el contenido de cada uno.', { productoId: p.id }));
     const forma = !p.unidadBase || p.unidadBase === 'unidad' ? 'unidad' : 'granel';
     return {
-      producto: { ...p, formaCompra: forma, requiereRevisionUnidades: false, presentaciones: pres.map(x => ({ ...x, tipo: x.tipo ?? 'porcion', origen: 'granel' })) },
+      producto: normalizarMinimo({ ...p, formaCompra: forma, requiereRevisionUnidades: false, presentaciones: pres.map(x => ({ ...x, tipo: tipoPresentacion(p, x), origen: 'granel' })) }),
       envases, lotes, movimientos: [],
     };
   }
@@ -651,10 +793,10 @@ export function convertirUnidades(p: Producto, envases: Envase[], lotes: Lote[],
     if (!usaEnvases(p)) return sin(error('envase_no_disponible', 'Este producto no tiene envases registrados.', { productoId: p.id }));
     const suma = stockDisponible(p, envases);
     return {
-      producto: {
+      producto: normalizarMinimo({
         ...p, stock: suma, formaCompra: 'envase', requiereRevisionUnidades: false,
         presentaciones: pres.map(x => ({ ...x, tipo: tipoPresentacion(p, x) })),
-      },
+      }),
       envases, lotes, movimientos: ajuste(suma),
     };
   }
@@ -673,10 +815,12 @@ export function convertirUnidades(p: Producto, envases: Envase[], lotes: Lote[],
   const base: Producto = {
     ...p, unidadBase, controlEnvases: true, capacidadEnvase: capacidad, formaCompra: 'envase', nombreEnvase: d.nombreEnvase,
     requiereRevisionUnidades: false, costo: r3(d.costoEnvase / capacidad), stockMinimo: r3((Number(p.stockMinimo) || 0) * capacidad),
+    // El mínimo antiguo estaba en «unidades» = envases: queda en envases cerrados.
+    stockMinimoUnidad: Number(p.stockMinimo) || 0, unidadMinimo: 'envase',
   };
   base.presentaciones = pres.map(x => {
     const factor = r3(x.factor * escala);
-    const tipo = factor >= capacidad - EPS ? 'completa' : 'porcion';
+    const tipo = factor >= capacidad - EPS ? 'completa' as const : 'fija' as const;
     return { ...x, factor, tipo, origen: origenDe(tipo, true) };
   });
   // Lotes y envases anteriores quedan como historial (en 0); se crean los correctos.
@@ -693,5 +837,161 @@ export function convertirUnidades(p: Producto, envases: Envase[], lotes: Lote[],
     envases: [...anteriores, ...nuevos],
     lotes: lotesNuevos,
     movimientos: ajuste(total),
+  };
+}
+
+// ── Stock mínimo en la unidad de compra, merma a granel y quiebre ─────────
+
+export type EstadoStock = 'ok' | 'bajo' | 'sin_stock' | 'no_aplica';
+type UnidadMinimo = NonNullable<Producto['unidadMinimo']>;
+
+/** Unidad del mínimo: envases cerrados (con envases), unidades o kg / t / L a granel. Nunca ml ni g. */
+export function unidadMinimoDe(p: Producto): UnidadMinimo {
+  if (usaEnvases(p)) return 'envase';
+  if (!p.unidadBase || p.unidadBase === 'unidad') return 'unidad';
+  if (p.unidadMinimo === 't' || p.unidadMinimo === 'kg' || p.unidadMinimo === 'l') return p.unidadMinimo;
+  return p.unidadBase === 'ml' || p.unidadBase === 'l' ? 'l' : 'kg';
+}
+
+/** Mínimo convertido a la unidad base (para comparar con el stock o estimar quiebres). */
+export function minimoBase(p: Producto): number {
+  if (p.stockMinimoUnidad === undefined) return r3(Number(p.stockMinimo) || 0);
+  const m = Number(p.stockMinimoUnidad) || 0;
+  const u = unidadMinimoDe(p);
+  if (u === 'envase') return r3(m * (Number(p.capacidadEnvase) || 0));
+  if (u === 'unidad') return m;
+  if (p.unidadBase === 'l') return m; // dato antiguo guardado en litros
+  if (p.unidadBase === 'g') return u === 'kg' ? r3(m * 1000) : u === 't' ? r3(m * 1e6) : m;
+  return aBase(m, u);
+}
+
+/** «3 botellas», «0,5 t», «5 unidades». */
+export function textoMinimo(p: Producto): string {
+  if (p.stockMinimoUnidad === undefined) return formatCantidad(Number(p.stockMinimo) || 0, p.unidadBase);
+  const m = Number(p.stockMinimoUnidad) || 0;
+  const u = unidadMinimoDe(p);
+  if (u === 'envase') return contarEnvases(p, m);
+  if (u === 'unidad') return formatCantidad(m, 'unidad');
+  return `${numero(m)} ${u === 't' ? 't' : u === 'l' ? 'L' : 'kg'}`;
+}
+
+export const cerradosDe = (p: Producto, envases: Envase[]) => envasesDe(envases, p.id).filter(e => e.estado === 'cerrado').length;
+
+/**
+ * Estado del stock:
+ * - sin_stock: no alcanza ni para la subcategoría activa más chica (la «completa» exige una cerrada).
+ * - bajo: con envases compara las CERRADAS contra el mínimo (las abiertas no cuentan); a granel o
+ *   por unidad compara el stock con el mínimo convertido.
+ * Sin `envases` (datos históricos) compara en unidad base.
+ */
+export function estadoStockProducto(p: Producto, envases?: Envase[], stock?: number): EstadoStock {
+  if (p.tipo !== 'producto' || p.estado !== 'activo') return 'no_aplica';
+  const conEnvases = usaEnvases(p) && !!envases;
+  const actual = r3(stock ?? (envases ? stockDisponible(p, envases) : Number(p.stock) || 0));
+  if (actual <= EPS) return 'sin_stock';
+  const cerrados = conEnvases ? cerradosDe(p, envases!) : 0;
+  const activas = presentacionesActivas(p);
+  if (activas.length) {
+    const alcanza = activas.some(x => {
+      const t = tipoPresentacion(p, x);
+      if (t === 'variable') return true;
+      if (t === 'completa' && usaEnvases(p)) return conEnvases ? cerrados > 0 : actual + EPS >= (Number(p.capacidadEnvase) || 0);
+      return actual + EPS >= r3(x.factor);
+    });
+    if (!alcanza) return 'sin_stock';
+  } else if ((!p.unidadBase || p.unidadBase === 'unidad') && actual + EPS < 1) {
+    return 'sin_stock';
+  }
+  if (conEnvases && p.stockMinimoUnidad !== undefined) {
+    const minimo = Number(p.stockMinimoUnidad) || 0;
+    return minimo > 0 && cerrados <= minimo ? 'bajo' : 'ok';
+  }
+  const minimo = minimoBase(p);
+  return minimo > 0 && actual <= minimo + EPS ? 'bajo' : 'ok';
+}
+
+/**
+ * Migración del mínimo antiguo (unidad base) a la unidad de compra: ml → botellas redondeando
+ * hacia arriba, kg → kg, ml a granel → L. Los productos dudosos (por revisar) no se tocan.
+ */
+export function normalizarMinimo(p: Producto): Producto {
+  if (p.tipo !== 'producto' || p.stockMinimoUnidad !== undefined || p.requiereRevisionUnidades) return p;
+  const base = Number(p.stockMinimo) || 0;
+  if (!(base > 0)) return p;
+  if (usaEnvases(p)) {
+    const capacidad = Number(p.capacidadEnvase) || 0;
+    return capacidad > 0 ? { ...p, stockMinimoUnidad: Math.ceil(base / capacidad - EPS), unidadMinimo: 'envase' } : p;
+  }
+  if (!p.unidadBase || p.unidadBase === 'unidad') return { ...p, stockMinimoUnidad: base, unidadMinimo: 'unidad' };
+  if (p.unidadBase === 'kg') return { ...p, stockMinimoUnidad: base, unidadMinimo: 'kg' };
+  if (p.unidadBase === 'ml') return { ...p, stockMinimoUnidad: r3(base / 1000), unidadMinimo: 'l' };
+  return p; // 'l' / 'g' antiguos: se resuelven al revisar unidades
+}
+
+/** Normalización completa al cargar: forma de compra, tipos ('porcion' → 'fija') y mínimo. */
+export function normalizarInventario(p: Producto, envases: Envase[]): Producto {
+  let n = normalizarProducto(p, envases);
+  if (n.presentaciones?.some(x => x.tipo === 'porcion')) {
+    n = { ...n, presentaciones: n.presentaciones.map(x => (x.tipo === 'porcion' ? { ...x, tipo: 'fija' as const } : x)) };
+  }
+  return normalizarMinimo(n);
+}
+
+/**
+ * Merma de un producto sin envases (granel o por unidad): por cantidad o por %, sale del lote
+ * más antiguo con su costo. Motivo obligatorio. No toca nada si hay error.
+ */
+export function mermaGranel(
+  p: Producto, lotes: Lote[],
+  d: { cantidad?: number; porcentaje?: number; motivo: string },
+  op: OpcionesVenta = {},
+): { producto: Producto; lotes: Lote[]; movimientos: MovimientoBorrador[]; eventos: EventoInventario[]; error?: ErrorInventario } {
+  const ahora = op.ahora ?? new Date().toISOString();
+  const sin = (e: ErrorInventario) => ({ producto: p, lotes, movimientos: [], eventos: [], error: e });
+  if (!d.motivo?.trim()) return sin(error('motivo_requerido', 'Elige o escribe el motivo.', { productoId: p.id }));
+  if (usaEnvases(p)) return sin(error('envase_no_disponible', `Indica de qué ${nombreEnvase(p)} sale la merma.`, { productoId: p.id }));
+  const stock = r3(Number(p.stock) || 0);
+  const cantidad = d.porcentaje !== undefined ? r3(stock * (Number(d.porcentaje) || 0) / 100) : r3(Number(d.cantidad) || 0);
+  if (!(cantidad > 0)) return sin(error('cantidad_invalida', 'La merma debe ser mayor que cero.', { productoId: p.id }));
+  if (cantidad > stock + EPS) return sin(error('stock_insuficiente', `Solo hay ${formatCantidad(stock, p.unidadBase)} de ${p.nombre}.`, { productoId: p.id }));
+  const c = consumirLotes(lotes, p.id, cantidad, op.metodo ?? 'promedio', Number(p.costo) || 0);
+  const texto = `${formatCantidad(cantidad, p.unidadBase)}${d.porcentaje !== undefined ? ` (${numero(Number(d.porcentaje), 2)} %)` : ''}`;
+  return {
+    producto: { ...p, stock: r3(stock - cantidad) },
+    lotes: c.lotes,
+    movimientos: [{
+      productoId: p.id, tipo: 'merma', cantidad, costoUnitario: Math.round(c.costoTotal / cantidad), fecha: ahora,
+      motivo: d.motivo.trim(), consumosLote: c.detalle.map(x => ({ loteId: x.loteId, cantidad: x.cantidad })),
+    }],
+    eventos: [{ tipo: 'merma_registrada', clave: `merma:${p.id}:${ahora}`, productoId: p.id, titulo: `Merma de ${texto} en ${p.nombre}`, detalle: d.motivo.trim() }],
+  };
+}
+
+export interface Quiebre {
+  /** Días que alcanza el stock al ritmo de venta de los últimos `ventana` días (null = sin ventas). */
+  dias: number | null;
+  /** Stock y venta diaria en la unidad de compra (botellas, sacos, t, kg, unidades). */
+  stock: number;
+  consumoDiario: number;
+  unidad: string;
+}
+
+/** Días restantes = stock ÷ promedio diario vendido (últimos 30 días), en la unidad de compra. */
+export function diasRestantes(p: Producto, envases: Envase[], movimientos: MovimientoInventario[], hoy: string, ventana = 30): Quiebre {
+  const fin = hoy.slice(0, 10);
+  const desde = new Date(new Date(`${fin}T00:00:00Z`).getTime() - ventana * 86400000).toISOString().slice(0, 10);
+  const vendido = movimientos
+    .filter(m => m.productoId === p.id && m.tipo === 'salida' && !m.revertido && (m.fecha ?? '').slice(0, 10) > desde && (m.fecha ?? '').slice(0, 10) <= fin)
+    .reduce((a, m) => a + Math.abs(m.cantidad), 0);
+  const diarioBase = vendido / ventana;
+  const stockBase = stockDisponible(p, envases);
+  const u = unidadMinimoDe(p);
+  const divisor = u === 'envase' ? Number(p.capacidadEnvase) || 1 : (u === 't' || u === 'l') && p.unidadBase !== 'l' ? 1000 : 1;
+  const unidad = u === 'envase' ? nombreEnvase(p, true) : u === 'unidad' ? 'unidades' : u === 't' ? 't' : u === 'l' ? 'L' : 'kg';
+  return {
+    dias: diarioBase > 0 ? Math.floor((stockBase / diarioBase) * 10) / 10 : null,
+    stock: r3(stockBase / divisor),
+    consumoDiario: r3(diarioBase / divisor),
+    unidad,
   };
 }

@@ -1,7 +1,10 @@
 ﻿import { useState, useMemo, useEffect, useRef, lazy, Suspense, useDeferredValue } from 'react';
 import { presentacionesActivas } from '../services/costeo';
-import { textoDisponibilidad, describirConsumos, resumenStock, formatCantidad, usaEnvases, type ErrorInventario } from '../services/inventarioFraccionado';
-import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
+import {
+  textoDisponibilidad, describirConsumos, resumenStock, formatCantidad, usaEnvases, stockDisponible, tipoPresentacion, aBase, desdeBase, r3, contarEnvases,
+  type ErrorInventario, type UnidadEntrada,
+} from '../services/inventarioFraccionado';
+import { useERP, Venta, VentaProducto, Producto, normalizarNombre, type Presentacion } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
 import BuscadorCliente from '../components/BuscadorCliente';
@@ -67,8 +70,15 @@ export default function ERPVentas() {
   const { user: userAuth, perfil } = useAuth();
   const {
     ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto, envases,
-    simularVenta, abrirEnvase, politicaEnvaseAbierto,
+    simularVenta, politicaEnvaseAbierto, registrarEventos,
   } = useERP();
+  /** Buscador del catálogo (productos y sus subcategorías como opciones directas). */
+  const [busquedaCatalogo, setBusquedaCatalogo] = useState('');
+  /** Venta por peso/volumen variable: lo que marca la balanza y su unidad. */
+  const [pesoTexto, setPesoTexto] = useState('1');
+  const [pesoUnidad, setPesoUnidad] = useState<UnidadEntrada>('kg');
+  /** Celular: catálogo → cobro (en tablet y escritorio se ven las dos columnas). */
+  const [pasoMovil, setPasoMovil] = useState<'catalogo' | 'cobro'>('catalogo');
   const [showModal, setShowModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -149,6 +159,21 @@ export default function ERPVentas() {
   const presentacionActual = presentacionesProducto.find(x => x.id === productoActual.presentacionId);
   /** Unidades base que descuenta cada unidad vendida (decant 5 ml → 5). */
   const factorActual = presentacionActual?.factor ?? 1;
+  const esVariable = !!productoSeleccionado && !!presentacionActual && tipoPresentacion(productoSeleccionado, presentacionActual) === 'variable';
+  const unidadesPeso: UnidadEntrada[] = productoSeleccionado?.unidadBase === 'ml' ? ['l', 'ml'] : ['kg', 'g'];
+  const pesosRapidos: { valor: number; unidad: UnidadEntrada }[] = unidadesPeso[0] === 'l'
+    ? [{ valor: 0.5, unidad: 'l' }, { valor: 1, unidad: 'l' }, { valor: 2, unidad: 'l' }]
+    : [{ valor: 500, unidad: 'g' }, { valor: 1, unidad: 'kg' }, { valor: 2, unidad: 'kg' }, { valor: 5, unidad: 'kg' }];
+  /** Cantidad de la ficha en la unidad de la subcategoría (variable: peso ÷ unidad de precio). */
+  const cantidadFicha = esVariable
+    ? r3(aBase(Number(pesoTexto.replace(',', '.')) || 0, pesoUnidad) / (factorActual || 1))
+    : Number(productoActual.cantidad) || 0;
+  /** «1,37 kg × $1.500/kg». */
+  const detalleMedidaDe = (pres: Presentacion, cantidad: number) => {
+    const unidad = pres.unidadVenta ?? (productoSeleccionado?.unidadBase === 'ml' ? 'l' : 'kg');
+    const etiqueta = unidad === 'l' ? 'L' : unidad;
+    return `${cantidad.toLocaleString('es-CL', { maximumFractionDigits: 3 })} ${etiqueta} × ${formatCLP(pres.precio)}/${etiqueta}`;
+  };
   const tipoDocumentoNormalizado = normalizeDocumentType(nuevaVenta.tipo_documento);
   const documentosDelMes = documentosTributarios.filter(d => d.periodoTributario === (nuevaVenta.fecha ?? '').slice(0, 7));
   const documentosPendientes = documentosTributarios.filter(d => ['borrador', 'pendiente_emision', 'observado', 'rechazado_sii'].includes(d.estado)).length;
@@ -252,8 +277,8 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
   const construirItemVenta = (): VentaProducto | null => {
     const nombre = productoActual.nombre.trim();
     const precio = Number(productoActual.precio) || 0;
-    const cantidad = Number(productoActual.cantidad) || 1;
-    if (!nombre || precio <= 0) return null;
+    const cantidad = cantidadFicha || (esVariable ? 0 : 1);
+    if (!nombre || precio <= 0 || !(cantidad > 0)) return null;
 
     const esInventario = productoActual.esInventario && !!productoSeleccionado;
     const incluyeIva = esInventario ? !!productoSeleccionado?.incluyeIva : true;
@@ -269,13 +294,14 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
     const pres = esInventario ? presentacionActual : undefined;
     return {
       productoId: esInventario ? productoSeleccionado!.id : `TEXTO-LIBRE-${crypto.randomUUID().slice(0, 8)}`,
-      productoNombre: pres ? `${nombre} · ${pres.nombre}` : nombre,
+      productoNombre: pres ? `${nombre} › ${pres.nombre}` : nombre,
       esInventariable: esInventario,
       cantidad,
       precioBase: precio,
       // Estimado para la vista previa; al guardar el contexto congela el costo real según el método de costeo.
       costoUnitario: esInventario ? Math.round((productoSeleccionado?.costo ?? 0) * (pres?.factor ?? 1)) : 0,
-      ...(pres ? { presentacionId: pres.id, presentacionNombre: pres.nombre, cantidadBase: cantidad * pres.factor } : {}),
+      ...(pres ? { presentacionId: pres.id, presentacionNombre: pres.nombre, cantidadBase: r3(cantidad * pres.factor) } : {}),
+      ...(pres && esVariable ? { detalleMedida: detalleMedidaDe(pres, cantidad) } : {}),
       descuentoTipo: aplicaDescuento ? productoActual.descuentoTipo : 'ninguno',
       descuentoValor: aplicaDescuento ? productoActual.descuentoValor : 0,
       /** Sin categoria informada queda 'Sin categoria', no cadena vacia. */
@@ -298,23 +324,105 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
   const stockInsuficiente = !!errorItem;
   const mensajeVenta = (e: ErrorInventario) => (e.linea !== undefined ? `Línea ${e.linea + 1}: ${e.mensaje}` : e.mensaje);
 
-  /** «Abrir F4 y vender»: abre el frasco sugerido y agrega la línea solo si ahora alcanza. */
-  const abrirYAgregar = () => {
-    if (!productoSeleccionado || !itemCandidato || errorItem?.codigo !== 'requiere_abrir' || !errorItem.sugerido) return;
-    const r = abrirEnvase(productoSeleccionado.id, errorItem.sugerido.id);
-    if ('error' in r) { setAvisoStock(r.error.mensaje); return; }
-    if (simularVenta([...carrito, itemCandidato], editingId ?? undefined).error) return; // muestra la siguiente sugerencia
-    handleAgregarProducto();
+  /** La venta abriría un envase cerrado: «Abrirá F4». */
+  const aperturaItem = simConItem && !simConItem.error
+    ? simConItem.aperturas.filter(a => a.productoId === productoSeleccionado?.id && !(simCarrito?.aperturas ?? []).some(x => x.envaseId === a.envaseId)).map(a => a.codigo).join(', ')
+    : '';
+  const usaEnvasesEnCarrito = carrito.some(l => usaEnvases(inventario.find(p => p.id === l.productoId)));
+  /** «2 decants», «1,2 kg», «3 unidades». */
+  const textoMaximo = (maximo: number, linea?: VentaProducto) => {
+    const prod = linea ? inventario.find(p => p.id === linea.productoId) : productoSeleccionado;
+    const pres = linea ? prod?.presentaciones?.find(x => x.id === linea.presentacionId) : presentacionActual;
+    if (prod && pres && tipoPresentacion(prod, pres) === 'variable') return formatCantidad(maximo * pres.factor, prod.unidadBase);
+    if (prod && pres && tipoPresentacion(prod, pres) === 'completa' && usaEnvases(prod)) return contarEnvases(prod, maximo);
+    const nombre = pres?.nombre ?? '';
+    return /^decant/i.test(nombre) ? `${maximo} decant${maximo === 1 ? '' : 's'}` : `${maximo} ${maximo === 1 ? 'unidad' : 'unidades'}`;
   };
+  const limpiarFicha = () => {
+    setProductoActual(prev => ({ ...prev, esInventario: true, productoId: '', presentacionId: '', nombre: '', categoria: '', cantidad: 1, precio: 0, descuentoTipo: 'ninguno', descuentoValor: 0, descuentoMotivo: '' }));
+    setPesoTexto('1');
+    setBusquedaCatalogo('');
+  };
+  /** Elige producto + subcategoría desde el buscador o los chips. */
+  const seleccionarOpcion = (prod: Producto, pres?: Presentacion) => {
+    const variable = !!pres && tipoPresentacion(prod, pres) === 'variable';
+    setProductoActual(prev => ({
+      ...prev, esInventario: true, productoId: prod.id, presentacionId: pres?.id ?? '', nombre: prod.nombre, categoria: prod.categoria ?? '',
+      precio: pres?.precio ?? prod.precio ?? 0, cantidad: prev.productoId === prod.id ? prev.cantidad : 1,
+      ...(prev.productoId === prod.id ? {} : { descuentoTipo: 'ninguno' as const, descuentoValor: 0, descuentoMotivo: '' }),
+    }));
+    if (variable) { setPesoUnidad(pres!.unidadVenta === 'l' || prod.unidadBase === 'ml' ? 'l' : 'kg'); setPesoTexto('1'); }
+    setBusquedaCatalogo('');
+  };
+  /** «Vender el máximo disponible (2 decants)». */
+  const venderMaximo = () => {
+    const maximo = errorItem?.maximo ?? 0;
+    if (!(maximo > 0)) return;
+    if (esVariable && presentacionActual) setPesoTexto(String(desdeBase(maximo * presentacionActual.factor, pesoUnidad)).replace('.', ','));
+    else setProductoActual(prev => ({ ...prev, cantidad: maximo }));
+  };
+  /** Ajusta una línea del carrito al máximo que alcanza (recalcula totales). */
+  const ajustarLineaAlMaximo = (idx: number, maximo: number) => {
+    setNuevaVenta(prev => {
+      const prods = [...(prev.productos || [])];
+      const l = prods[idx];
+      if (!l) return prev;
+      const prod = inventario.find(x => x.id === l.productoId);
+      const pres = prod?.presentaciones?.find(x => x.id === l.presentacionId);
+      const incluyeIva = prod ? !!prod.incluyeIva : true;
+      const tipoDesc = l.descuentoTipo && l.descuentoTipo !== 'ninguno' ? l.descuentoTipo : 'ninguno';
+      const t = calcularTotalesItem(l.precioBase, maximo, tipoDesc, tipoDesc === 'ninguno' ? 0 : (l.descuentoValor || 0), incluyeIva);
+      prods[idx] = {
+        ...l, cantidad: maximo, ...(pres ? { cantidadBase: r3(maximo * pres.factor) } : {}),
+        ...(l.detalleMedida && pres ? { detalleMedida: detalleMedidaDe(pres, maximo) } : {}),
+        subtotal: t.subtotal, iva: t.iva, total: t.total,
+      };
+      return { ...prev, productos: prods };
+    });
+  };
+  /** Catálogo: cada subcategoría es una opción directa («Lattafa Asad · Decant 5 ml · $6.500 · 393 disponibles»). */
+  const busquedaDiferida = useDeferredValue(busquedaCatalogo);
+  const opcionesCatalogo = useMemo(() => {
+    const q = normalizarNombre(busquedaDiferida);
+    const lista: { clave: string; producto: Producto; pres?: Presentacion; tipo?: string; precio: number; disp: string; agotado: boolean }[] = [];
+    for (const prod of inventario) {
+      if (prod.estado !== 'activo') continue;
+      const texto = normalizarNombre(`${prod.nombre} ${prod.categoria ?? ''} ${prod.codigo ?? ''}`);
+      const pres = prod.tipo === 'producto' ? presentacionesActivas(prod) : [];
+      if (pres.length) {
+        for (const x of pres) {
+          if (q && !texto.includes(q) && !normalizarNombre(x.nombre).includes(q)) continue;
+          const d = textoDisponibilidad(prod, envases, x, politicaEnvaseAbierto);
+          lista.push({ clave: `${prod.id}:${x.id}`, producto: prod, pres: x, tipo: tipoPresentacion(prod, x), precio: x.precio, disp: d.texto, agotado: d.unidades <= 0 });
+        }
+      } else {
+        if (q && !texto.includes(q)) continue;
+        const stock = prod.tipo === 'producto' ? stockDisponible(prod, envases) : 0;
+        lista.push({
+          clave: prod.id, producto: prod, precio: Number(prod.precio) || Number(prod.precioFijo) || Number(prod.tarifaHora) || 0,
+          disp: prod.tipo === 'producto' ? (stock > 0 ? `${formatCantidad(stock, prod.unidadBase)} disponibles` : 'Sin stock') : 'Servicio',
+          agotado: prod.tipo === 'producto' && stock <= 0,
+        });
+      }
+      if (lista.length >= (q ? 40 : 10)) break;
+    }
+    return lista;
+  }, [busquedaDiferida, inventario, envases, politicaEnvaseAbierto]);
 
   const handleAgregarProducto = () => {
+    // Bloqueo: no alcanza el stock total → no entra al carrito y queda registrado el intento.
+    if (errorItem) {
+      registrarEventos(simConItem?.eventos ?? [], false);
+      return;
+    }
     const item = construirItemVenta();
     if (!item) return;
 
     setNuevaVenta(prev => {
       const prods = prev.productos || [];
-      const idx = prods.findIndex(p =>
-        (p.esInventariable ?? false) === (item.esInventariable ?? false) &&
+      // Las ventas por peso no se juntan: cada pesada es su propia línea.
+      const idx = item.detalleMedida ? -1 : prods.findIndex(p =>
+        (p.esInventariable ?? false) === (item.esInventariable ?? false) && !p.detalleMedida &&
         p.productoId === item.productoId && (p.presentacionId ?? '') === (item.presentacionId ?? '')
       );
       if (idx >= 0) {
@@ -342,6 +450,7 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
       descuentoValor: 0,
       descuentoMotivo: ''
     });
+    setPesoTexto('1');
   };
 
   const handleRemoveProducto = (index: number) => {
@@ -358,15 +467,15 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
     : true;
   const fichaTotales = calcularTotalesItem(
     Number(productoActual.precio) || 0,
-    Number(productoActual.cantidad) || 0,
+    cantidadFicha,
     productoActual.esInventario && productoActual.descuentoTipo !== 'ninguno' ? productoActual.descuentoTipo : 'ninguno',
     productoActual.esInventario && productoActual.descuentoTipo !== 'ninguno' ? productoActual.descuentoValor : 0,
     fichaIncluyeIva
   );
+  // Con stock insuficiente el botón sigue activo: al tocarlo se informa y se registra el intento.
   const fichaValida = productoActual.nombre.trim().length > 0
     && Number(productoActual.precio) > 0
-    && Number(productoActual.cantidad) >= 1
-    && !stockInsuficiente;
+    && (esVariable ? cantidadFicha > 0 : cantidadFicha >= 1);
 
   const totalesVenta = useMemo(() => {
     const prods = nuevaVenta.productos || [];
@@ -671,6 +780,8 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
   const cerrarModal = () => {
     setShowModal(false);
     setEditingId(null);
+    setPasoMovil('catalogo');
+    setBusquedaCatalogo('');
   };
 
   const limpiarFiltros = () => {
@@ -707,7 +818,7 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
             Exportar
           </button>
           <button 
-            onClick={() => { setEditingId(null); idVentaRef.current = crypto.randomUUID(); setAvisoStock(''); setShowModal(true); }}
+            onClick={() => { setEditingId(null); idVentaRef.current = crypto.randomUUID(); setAvisoStock(''); setPasoMovil('catalogo'); setBusquedaCatalogo(''); setShowModal(true); }}
             className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-lg">add</span>
@@ -998,459 +1109,376 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
         </div>
       </div>
 
-      {/* Modal Nueva Venta */}
+      {/* Modal Nueva Venta — mobile-first: en el celular una columna (buscador → subcategorías →
+          cantidad o peso) y el carrito como barra inferior fija con «Cobrar»; desde md, dos
+          columnas (catálogo | carrito). */}
       {showModal && (
-        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
-              <div>
-                <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar venta' : 'Nueva venta'}</h3>
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-scrim/50 backdrop-blur-sm sm:items-center sm:p-4">
+          <div role="dialog" aria-modal="true" aria-label={editingId ? 'Editar venta' : 'Nueva venta'}
+            className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden bg-surface-container-lowest shadow-2xl sm:h-auto sm:max-h-[94vh] sm:rounded-3xl">
+            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-outline-variant/20 bg-surface-container-low/50 px-4 py-2 sm:px-6 sm:py-3"
+              style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))' }}>
+              <div className="flex min-w-0 items-center gap-1">
+                {pasoMovil === 'cobro' && (
+                  <button type="button" onClick={() => setPasoMovil('catalogo')} aria-label="Seguir agregando productos"
+                    className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container md:hidden">
+                    <span className="material-symbols-outlined">arrow_back</span>
+                  </button>
+                )}
+                <h3 className="truncate text-lg font-bold text-primary sm:text-xl">
+                  {editingId ? 'Editar venta' : 'Nueva venta'}
+                  <span className="ml-2 text-xs font-bold text-on-surface-variant md:hidden">{pasoMovil === 'cobro' ? '· Cobro' : ''}</span>
+                </h3>
               </div>
-              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-error transition-colors">
+              <button onClick={cerrarModal} aria-label="Cerrar" className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-error">
                 <span className="material-symbols-outlined">close</span>
               </button>
-            </div>
-            
-<div className="p-6 overflow-y-auto flex-grow space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cliente</label>
-                  <BuscadorCliente
-                    clientes={clientes}
-                    clienteId={nuevaVenta.cliente_id}
-                    clienteNombre={nuevaVenta.cliente}
-                    onChange={(cliente, nombre) => setNuevaVenta(prev => ({
-                      ...prev,
-                      cliente_id: cliente?.id,
-                      cliente: nombre
-                    }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha de la venta</label>
-                  <SelectorFecha
-                    value={nuevaVenta.fecha || ''}
-                    onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha: fecha })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Método de pago</label>
-                  <SelectorDesplegable
-                    className="w-full"
-                    valor={nuevaVenta.metodo_pago}
-                    onChange={valor => setNuevaVenta({ ...nuevaVenta, metodo_pago: valor as Venta['metodo_pago'] })}
-                    opciones={[
-                      { valor: 'efectivo', etiqueta: 'Efectivo' },
-                      { valor: 'transferencia', etiqueta: 'Transferencia' },
-                      { valor: 'debito', etiqueta: 'Débito' },
-                      { valor: 'credito', etiqueta: 'Crédito' },
-                      { valor: 'mixto', etiqueta: 'Mixto' },
-                      { valor: 'cheque', etiqueta: 'Cheque' }
-                    ]}
-                  />
-                </div>
-              </div>
+            </header>
 
-              {/* Tipo de documento: boleta o factura (siempre visible) */}
-              <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold text-primary uppercase tracking-widest">Tipo de documento</p>
-                    <p className="text-[10px] text-on-surface-variant/70 mt-0.5">Elige si emitir una boleta o una factura</p>
+            <div className="min-h-0 flex-1 overflow-y-auto md:grid md:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] md:overflow-hidden">
+              {/* ── Catálogo ── */}
+              <section className={cn('space-y-4 p-4 sm:p-6 md:overflow-y-auto', pasoMovil === 'cobro' && 'hidden md:block')} aria-label="Catálogo">
+                {productoActual.esInventario ? (
+                  <>
+                    <div className="relative">
+                      <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+                      <input type="search" value={busquedaCatalogo} onChange={e => setBusquedaCatalogo(e.target.value)} aria-label="Buscar producto o subcategoría"
+                        placeholder="Buscar producto o subcategoría…" autoComplete="off"
+                        className="min-h-12 w-full rounded-2xl border border-outline-variant/50 bg-surface-container-lowest py-3 pl-11 pr-4 text-base text-on-surface outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm" />
+                    </div>
+
+                    {(busquedaCatalogo.trim() || !productoSeleccionado) && (
+                      <ul className="divide-y divide-outline-variant/20 overflow-hidden rounded-2xl border border-outline-variant/30" aria-label="Resultados">
+                        {opcionesCatalogo.length === 0 && <li className="px-4 py-6 text-center text-sm text-on-surface-variant">Sin resultados. Prueba otro nombre o agrega un ítem libre.</li>}
+                        {opcionesCatalogo.map(o => (
+                          <li key={o.clave}>
+                            <button type="button" onClick={() => seleccionarOpcion(o.producto, o.pres)}
+                              className={cn('flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left hover:bg-surface-container-low', o.agotado && 'opacity-60')}>
+                              <span className="material-symbols-outlined text-primary">{o.pres ? (o.tipo === 'variable' ? 'scale' : o.tipo === 'completa' ? 'liquor' : 'water_drop') : o.producto.tipo === 'servicio' ? 'work' : 'inventory_2'}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-bold text-on-surface">{o.producto.nombre}{o.pres && <span className="font-medium text-on-surface-variant"> · {o.pres.nombre}</span>}</span>
+                                <span className="block text-xs text-on-surface-variant">{formatCLP(o.precio)}{o.tipo === 'variable' ? `/${o.pres?.unidadVenta ?? 'kg'}` : ''} · {o.disp}</span>
+                              </span>
+                              <span className="material-symbols-outlined text-outline">add_circle</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {productoSeleccionado && !busquedaCatalogo.trim() && (
+                      <div className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-base font-black text-on-surface">{productoSeleccionado.nombre}</p>
+                            {productoSeleccionado.tipo === 'producto' && (
+                              <p className="text-xs text-on-surface-variant">Hay {usaEnvases(productoSeleccionado) ? resumenStock(productoSeleccionado, envases).texto : formatCantidad(stockDisponible(productoSeleccionado, envases), productoSeleccionado.unidadBase)}</p>
+                            )}
+                          </div>
+                          <button type="button" onClick={limpiarFicha} className="min-h-11 shrink-0 rounded-full px-3 text-xs font-bold text-primary hover:bg-primary/10">Cambiar</button>
+                        </div>
+
+                        {presentacionesProducto.length > 0 && (
+                          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 hide-scrollbar sm:flex-wrap" role="radiogroup" aria-label="Subcategoría de venta">
+                            {presentacionesProducto.map(pr => {
+                              const disp = textoDisponibilidad(productoSeleccionado, envases, pr, politicaEnvaseAbierto);
+                              const activa = pr.id === productoActual.presentacionId;
+                              return (
+                                <button key={pr.id} type="button" role="radio" aria-checked={activa}
+                                  onClick={() => seleccionarOpcion(productoSeleccionado, pr)}
+                                  className={cn('min-h-14 shrink-0 rounded-2xl border-2 px-4 py-2 text-left transition-colors',
+                                    activa ? 'border-primary bg-surface-container-lowest text-primary shadow-sm' : 'border-outline-variant/40 bg-surface-container-lowest text-on-surface',
+                                    disp.unidades <= 0 && 'opacity-50')}>
+                                  <span className="block text-sm font-black">{pr.nombre}</span>
+                                  <span className="block text-[11px] font-bold opacity-80">{formatCLP(pr.precio)}{tipoPresentacion(productoSeleccionado, pr) === 'variable' ? `/${pr.unidadVenta ?? 'kg'}` : ''} · {disp.texto}</span>
+                                  {disp.detalle && <span className="block text-[10px] font-medium opacity-70">{disp.detalle}</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {esVariable ? (
+                          <div className="space-y-2">
+                            <label className="block text-xs font-bold text-on-surface-variant" htmlFor="venta-peso">{unidadesPeso[0] === 'l' ? 'Volumen' : 'Peso'}</label>
+                            <div className="flex gap-2">
+                              <input id="venta-peso" type="text" inputMode="decimal" autoComplete="off" value={pesoTexto}
+                                onChange={e => setPesoTexto(e.target.value.replace(/[^\d.,]/g, ''))}
+                                className="min-h-14 min-w-0 flex-1 rounded-2xl border border-outline-variant/50 bg-surface-container-lowest px-4 text-2xl font-black text-on-surface outline-none focus:ring-2 focus:ring-primary/20" />
+                              <div className="flex rounded-2xl border border-outline-variant/40 p-1" role="radiogroup" aria-label="Unidad">
+                                {unidadesPeso.map(uu => (
+                                  <button key={uu} type="button" role="radio" aria-checked={pesoUnidad === uu} onClick={() => setPesoUnidad(uu)}
+                                    className={cn('min-h-11 min-w-12 rounded-xl px-3 text-sm font-black', pesoUnidad === uu ? 'bg-primary text-inverse-on-surface' : 'text-on-surface-variant')}>
+                                    {uu === 'l' ? 'L' : uu}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {pesosRapidos.map(r => (
+                                <button key={`${r.valor}${r.unidad}`} type="button" onClick={() => { setPesoUnidad(r.unidad); setPesoTexto(String(r.valor).replace('.', ',')); }}
+                                  className="min-h-11 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-4 text-xs font-bold text-on-surface">
+                                  {r.valor.toLocaleString('es-CL')} {r.unidad === 'l' ? 'L' : r.unidad}
+                                </button>
+                              ))}
+                            </div>
+                            {cantidadFicha > 0 && presentacionActual && (
+                              <p className="text-sm font-bold text-on-surface">{detalleMedidaDe(presentacionActual, cantidadFicha)} = {formatCLP(fichaTotales.total)}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs font-bold text-on-surface-variant">Cantidad</span>
+                            <div className="flex items-center gap-1 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest p-1">
+                              <button type="button" aria-label="Quitar uno" onClick={() => setProductoActual(prev => ({ ...prev, cantidad: Math.max(1, (Number(prev.cantidad) || 1) - 1) }))}
+                                className="flex h-12 w-12 items-center justify-center rounded-xl text-primary hover:bg-primary/10"><span className="material-symbols-outlined">remove</span></button>
+                              <input type="number" min={1} inputMode="numeric" aria-label="Cantidad" value={productoActual.cantidad || ''}
+                                onChange={e => setProductoActual({ ...productoActual, cantidad: Math.max(0, Math.floor(Number(e.target.value))) })}
+                                className="h-12 w-16 bg-transparent text-center text-xl font-black text-on-surface outline-none" />
+                              <button type="button" aria-label="Agregar uno" onClick={() => setProductoActual(prev => ({ ...prev, cantidad: (Number(prev.cantidad) || 0) + 1 }))}
+                                className="flex h-12 w-12 items-center justify-center rounded-xl text-primary hover:bg-primary/10"><span className="material-symbols-outlined">add</span></button>
+                            </div>
+                          </div>
+                        )}
+
+                        {promocionActiva && (
+                          <p className="flex items-center gap-2 rounded-xl border border-tertiary/30 bg-tertiary/10 px-3 py-2 text-xs font-bold text-tertiary">
+                            <span className="material-symbols-outlined text-base">local_offer</span>
+                            Promoción «{promocionActiva.nombre}» ({promocionActiva.tipo === 'porcentaje' ? `-${promocionActiva.valor}%` : `-${formatCLP(promocionActiva.valor)}`})
+                          </p>
+                        )}
+
+                        {productoSeleccionado.tipo === 'producto' && errorItem ? (
+                          <div className="space-y-2 rounded-xl border border-error/40 bg-error/10 px-3 py-3" role="alert">
+                            <p className="flex items-start gap-1 text-sm font-bold text-error"><span className="material-symbols-outlined text-base">block</span>{errorItem.mensaje}</p>
+                            <div className="flex flex-wrap gap-2">
+                              {(errorItem.maximo ?? 0) > 0 && (
+                                <button type="button" onClick={venderMaximo} className="min-h-11 rounded-full bg-primary px-4 text-xs font-bold text-inverse-on-surface">
+                                  Vender el máximo disponible ({textoMaximo(errorItem.maximo!)})
+                                </button>
+                              )}
+                              <button type="button" onClick={limpiarFicha} className="min-h-11 rounded-full border border-error/40 px-4 text-xs font-bold text-error">Quitar</button>
+                            </div>
+                          </div>
+                        ) : productoSeleccionado.tipo === 'producto' && lineaItemSimulada?.consumosEnvase?.length ? (
+                          <p className="rounded-xl bg-surface-container-lowest px-3 py-2 text-xs font-bold text-primary" role="status">
+                            {aperturaItem ? `Abrirá ${aperturaItem} · ` : ''}Descuenta {describirConsumos(productoSeleccionado, simConItem!.envases, lineaItemSimulada.consumosEnvase)}
+                          </p>
+                        ) : null}
+
+                        <div className="flex items-center gap-3">
+                          <div className="min-w-0 flex-1 text-xs text-on-surface-variant">
+                            <p>Neto {formatCLP(fichaTotales.subtotal)} · IVA {formatCLP(fichaTotales.iva)}</p>
+                            <p className="text-base font-black text-on-surface">{formatCLP(fichaTotales.total)}</p>
+                          </div>
+                          <button type="button" onClick={handleAgregarProducto} disabled={!fichaValida}
+                            className="flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-bold text-inverse-on-surface shadow-lg shadow-primary/20 disabled:opacity-50">
+                            <span className="material-symbols-outlined text-lg">add_shopping_cart</span> Agregar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <button type="button" onClick={() => { limpiarFicha(); setProductoActual(prev => ({ ...prev, esInventario: false })); }}
+                      className="inline-flex min-h-11 items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary">
+                      <span className="material-symbols-outlined text-base">edit_note</span> Agregar un ítem libre (servicio o artículo sin inventario)
+                    </button>
+                  </>
+                ) : (
+                  <div className="space-y-3 rounded-2xl border border-outline-variant/30 bg-surface-container-low p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-black text-on-surface">Ítem libre (no toca el inventario)</p>
+                      <button type="button" onClick={() => setProductoActual(prev => ({ ...prev, esInventario: true, nombre: '', precio: 0 }))} className="min-h-11 rounded-full px-3 text-xs font-bold text-primary">Volver al catálogo</button>
+                    </div>
+                    <input type="text" value={productoActual.nombre} onChange={e => setProductoActual({ ...productoActual, nombre: e.target.value })} aria-label="Nombre del ítem"
+                      placeholder="Ej: flete, hora de taller, reparación…" className="min-h-11 w-full rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base text-on-surface outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="number" min={1} inputMode="numeric" value={productoActual.cantidad || ''} aria-label="Cantidad" onChange={e => setProductoActual({ ...productoActual, cantidad: Number(e.target.value) })}
+                        className="min-h-11 w-full rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base text-on-surface outline-none sm:text-sm" />
+                      <CampoMoneda valor={productoActual.precio || ''} onChange={valor => setProductoActual({ ...productoActual, precio: valor })}
+                        className="min-h-11 rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base text-on-surface outline-none sm:text-sm" placeholder="Precio" />
+                    </div>
+                    <input type="text" value={productoActual.categoria} onChange={e => setProductoActual({ ...productoActual, categoria: e.target.value })} aria-label="Categoría"
+                      placeholder="Categoría (opcional)" className="min-h-11 w-full rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base text-on-surface outline-none sm:text-sm" />
+                    <button type="button" onClick={handleAgregarProducto} disabled={!fichaValida}
+                      className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-bold text-inverse-on-surface disabled:opacity-50">
+                      <span className="material-symbols-outlined text-lg">add_shopping_cart</span> Agregar · {formatCLP(fichaTotales.total)}
+                    </button>
                   </div>
-                  <div className="flex gap-2">
+                )}
+              </section>
+
+              {/* ── Carrito y cobro ── */}
+              <section className={cn('space-y-4 border-outline-variant/20 bg-surface-container-low/40 p-4 sm:p-6 md:overflow-y-auto md:border-l', pasoMovil === 'catalogo' && 'hidden md:block')} aria-label="Carrito">
+                <div>
+                  <h4 className="mb-2 flex items-center gap-2 text-sm font-black text-on-surface">
+                    <span className="material-symbols-outlined text-primary">shopping_cart</span> Carrito
+                    {carrito.length > 0 && <span className="rounded-full bg-primary/10 px-2 text-xs text-primary">{carrito.length}</span>}
+                  </h4>
+                  {carrito.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-outline-variant/40 px-4 py-6 text-center text-sm text-on-surface-variant">Agrega productos desde el catálogo.</p>
+                  ) : (
+                    <ul className="divide-y divide-outline-variant/20 overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface-container-lowest">
+                      {carrito.map((prod, idx) => {
+                        const l = simCarrito?.lineas[idx];
+                        const pr = inventario.find(x => x.id === prod.productoId);
+                        const errorLinea = simCarrito?.error?.linea === idx ? simCarrito.error : undefined;
+                        return (
+                          <li key={idx} className="px-3 py-2">
+                            <div className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-bold text-on-surface">{prod.productoNombre}</p>
+                                <p className="text-xs text-on-surface-variant">{prod.detalleMedida ?? `${prod.cantidad.toLocaleString('es-CL')} × ${formatCLP(prod.precioBase)}`}</p>
+                                {prod.esInventariable === false && <p className="text-[10px] text-on-surface-variant/70">Ítem libre</p>}
+                                {prod.descuentoTipo && prod.descuentoTipo !== 'ninguno' && (
+                                  <p className="text-[10px] font-bold text-tertiary">Promoción {prod.descuentoTipo === 'porcentaje' ? `-${prod.descuentoValor}%` : `-${formatCLP(prod.descuentoValor ?? 0)}`}</p>
+                                )}
+                                {!errorLinea && l?.consumosEnvase?.length && pr ? <p className="text-[11px] font-bold text-primary">Descuenta {describirConsumos(pr, simCarrito!.envases, l.consumosEnvase)}</p> : null}
+                              </div>
+                              <span className="shrink-0 text-sm font-black text-on-surface">{formatCLP(prod.total)}</span>
+                              <button type="button" onClick={() => handleRemoveProducto(idx)} aria-label={`Quitar ${prod.productoNombre}`}
+                                className="-mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-on-surface-variant hover:text-error"><span className="material-symbols-outlined text-lg">close</span></button>
+                            </div>
+                            {errorLinea && (
+                              <div className="mt-1 space-y-1 rounded-lg bg-error/10 px-2 py-2" role="alert">
+                                <p className="text-[11px] font-bold text-error">{errorLinea.mensaje}</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {(errorLinea.maximo ?? 0) > 0 && (
+                                    <button type="button" onClick={() => ajustarLineaAlMaximo(idx, errorLinea.maximo!)} className="min-h-9 rounded-full bg-primary px-3 text-[11px] font-bold text-inverse-on-surface">
+                                      Vender el máximo ({textoMaximo(errorLinea.maximo!, prod)})
+                                    </button>
+                                  )}
+                                  <button type="button" onClick={() => handleRemoveProducto(idx)} className="min-h-9 rounded-full border border-error/40 px-3 text-[11px] font-bold text-error">Quitar línea</button>
+                                </div>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-2">
+                  <div className="sm:col-span-2 md:col-span-1 xl:col-span-2">
+                    <label className="mb-1 block text-xs font-bold text-on-surface-variant">Cliente</label>
+                    <BuscadorCliente clientes={clientes} clienteId={nuevaVenta.cliente_id} clienteNombre={nuevaVenta.cliente}
+                      onChange={(cliente, nombre) => setNuevaVenta(prev => ({ ...prev, cliente_id: cliente?.id, cliente: nombre }))} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-on-surface-variant">Fecha</label>
+                    <SelectorFecha value={nuevaVenta.fecha || ''} onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha })} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-on-surface-variant">Método de pago</label>
+                    <SelectorDesplegable className="w-full" valor={nuevaVenta.metodo_pago}
+                      onChange={valor => setNuevaVenta({ ...nuevaVenta, metodo_pago: valor as Venta['metodo_pago'] })}
+                      opciones={[
+                        { valor: 'efectivo', etiqueta: 'Efectivo' }, { valor: 'transferencia', etiqueta: 'Transferencia' }, { valor: 'debito', etiqueta: 'Débito' },
+                        { valor: 'credito', etiqueta: 'Crédito' }, { valor: 'mixto', etiqueta: 'Mixto' }, { valor: 'cheque', etiqueta: 'Cheque' },
+                      ]} />
+                  </div>
+                </div>
+
+                <div className="space-y-2 rounded-2xl border border-primary/15 bg-primary/5 p-3">
+                  <div className="flex gap-2" role="radiogroup" aria-label="Tipo de documento">
                     {(['Boleta', 'Factura'] as const).map(op => {
                       const activo = tipoBoletaOFactura(nuevaVenta.tipo_documento) === op;
                       return (
-                        <button
-                          key={op}
-                          type="button"
+                        <button key={op} type="button" role="radio" aria-checked={activo}
                           onClick={() => setNuevaVenta({ ...nuevaVenta, tipo_documento: op === 'Boleta' ? 'boleta_electronica' : 'factura_electronica' })}
-                          className={cn(
-                            'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all border',
-                            activo
-                              ? 'bg-primary text-inverse-on-surface border-primary shadow-lg shadow-primary/20'
-                              : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/40 hover:border-primary/40'
-                          )}
-                        >
-                          <span className="material-symbols-outlined text-lg">{op === 'Boleta' ? 'receipt' : 'request_quote'}</span>
-                          {op}
+                          className={cn('flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border text-sm font-black transition-all',
+                            activo ? 'border-primary bg-primary text-inverse-on-surface' : 'border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant')}>
+                          <span className="material-symbols-outlined text-lg">{op === 'Boleta' ? 'receipt' : 'request_quote'}</span>{op}
                         </button>
                       );
                     })}
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Variante del documento</label>
-                  <SelectorDesplegable
-                    className="w-full"
-                    valor={tipoDocumentoNormalizado}
-                    onChange={valor => setNuevaVenta({ ...nuevaVenta, tipo_documento: valor as Venta['tipo_documento'] })}
-                    opciones={Object.entries(DOCUMENT_LABELS)
-                      .filter(([value]) => value !== 'nota_credito')
-                      .map(([value, label]) => ({ valor: value, etiqueta: label }))}
-                  />
-                </div>
-              </div>
-
-              <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/30 space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-sm font-bold text-on-surface flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">add_shopping_cart</span>
-                    Producto o servicio
-                  </h4>
-                  <label className="flex items-center gap-2 text-xs font-black text-on-surface-variant cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={productoActual.esInventario}
-                      onChange={(e) => {
-                        const on = e.target.checked;
-                        setProductoActual((prev) => ({
-                          ...prev,
-                          esInventario: on,
-                          productoId: on ? prev.productoId : '',
-                        }));
-                      }}
-                      className="accent-primary w-4 h-4"
-                    />
-                    Es producto del inventario
-                  </label>
+                  <details>
+                    <summary className="flex min-h-9 cursor-pointer items-center text-[11px] font-bold text-on-surface-variant">Variante del documento</summary>
+                    <SelectorDesplegable className="mt-1 w-full" valor={tipoDocumentoNormalizado}
+                      onChange={valor => setNuevaVenta({ ...nuevaVenta, tipo_documento: valor as Venta['tipo_documento'] })}
+                      opciones={Object.entries(DOCUMENT_LABELS).filter(([value]) => value !== 'nota_credito').map(([value, label]) => ({ valor: value, etiqueta: label }))} />
+                  </details>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre del producto o servicio</label>
-                  {productoActual.esInventario ? (
-                    <SelectorDesplegable
-                      className="w-full"
-                      valor={productoActual.productoId}
-                      onChange={valor => {
-                        const sel = inventario.find(x => x.id === valor);
-                        const presInicial = presentacionesActivas(sel)[0];
-                        setProductoActual(prev => ({
-                          ...prev,
-                          productoId: valor,
-                          presentacionId: presInicial?.id ?? '',
-                          nombre: sel?.nombre ?? '',
-                          categoria: sel?.categoria ?? '',
-                          precio: presInicial?.precio ?? sel?.precio ?? 0,
-                          cantidad: 1
-                        }));
-                      }}
-                      opciones={[
-                        { valor: '', etiqueta: 'Seleccionar de inventario...' },
-                        ...inventario.filter(p => p.estado === 'activo').map(p => ({
-                          valor: p.id,
-                          etiqueta: `${p.nombre} - $${p.precio.toLocaleString('es-CL')}${p.categoria ? ` (${p.categoria})` : ''}`
-                        }))
-                      ]}
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={productoActual.nombre}
-                      onChange={(e) => setProductoActual({ ...productoActual, nombre: e.target.value })}
-                      placeholder="Ej: Servicio de reparacion, flete, hora de taller, articulo sin inventario..."
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                    />
-                  )}
-                </div>
-
-                {productoActual.esInventario && presentacionesProducto.length > 0 && productoSeleccionado && (
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Presentación</label>
-                    <div className="flex flex-wrap gap-2">
-                      {presentacionesProducto.map(pr => {
-                        const disp = textoDisponibilidad(productoSeleccionado, envases, pr, politicaEnvaseAbierto);
-                        const activa = pr.id === productoActual.presentacionId;
-                        return (
-                          <button key={pr.id} type="button" disabled={disp.unidades <= 0}
-                            onClick={() => setProductoActual(prev => ({ ...prev, presentacionId: pr.id, precio: pr.precio }))}
-                            className={`rounded-xl border px-3 py-2 text-left text-xs transition-colors disabled:opacity-40 ${activa ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/50 text-on-surface hover:bg-surface-container-low'}`}>
-                            <span className="block font-bold">{pr.nombre} · {disp.texto}</span>
-                            <span className="block text-[11px] opacity-80">${pr.precio.toLocaleString('es-CL')}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad</label>
-                    <input 
-                      type="number" 
-                      min="1"
-                      value={productoActual.cantidad || ''}
-                      onChange={(e) => setProductoActual({...productoActual, cantidad: Number(e.target.value)})}
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
-                    />
-                    {productoSeleccionado?.tipo === 'producto' && (
-                      <p className="mt-1 text-xs text-on-surface-variant">
-                        Hay {usaEnvases(productoSeleccionado) ? resumenStock(productoSeleccionado, envases).texto : formatCantidad(productoSeleccionado.stock, productoSeleccionado.unidadBase)}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
-                    <input 
-                      type="text"
-                      value={productoActual.categoria}
-                      onChange={(e) => setProductoActual({...productoActual, categoria: e.target.value})}
-                      placeholder="Sin categoria"
-                      className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/50" 
-                    />
-                    {!productoActual.categoria.trim() && (
-                      <p className="mt-1 text-[10px] text-on-surface-variant/70">
-                        Si lo dejas vacío se guardará como <span className="font-bold">Sin categoria</span>.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio unitario ($)</label>
-                    <CampoMoneda
-                      valor={productoActual.precio || ''}
-                      onChange={(valor) => setProductoActual({...productoActual, precio: valor})}
-                      disabled={productoActual.esInventario && !!productoSeleccionado}
-                      className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                    />
-                    {productoActual.esInventario && productoSeleccionado && (
-                      <p className="flex items-center gap-1 text-xs mt-1 text-on-surface-variant">
-                        <span className="material-symbols-outlined text-sm">lock</span>
-                        Precio fijo del inventario
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {productoSeleccionado?.tipo === 'producto' && productoActual.esInventario && (errorItem || lineaItemSimulada?.consumosEnvase?.length) ? (
-                  errorItem?.codigo === 'requiere_abrir' && errorItem.sugerido ? (
-                    <div className="flex flex-col gap-2 rounded-xl border border-secondary/40 bg-secondary/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between" role="status">
-                      <p className="font-bold text-on-surface"><span className="material-symbols-outlined mr-1 align-middle text-base text-secondary">water_drop</span>{errorItem.mensaje}</p>
-                      <button type="button" onClick={abrirYAgregar} className="shrink-0 rounded-full bg-primary px-4 py-2 text-xs font-bold text-inverse-on-surface">
-                        Abrir {errorItem.sugerido.codigo} y vender
+                {carrito.length > 0 && (
+                  <>
+                    <div className="space-y-3 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-3">
+                      <div className="flex gap-2" role="radiogroup" aria-label="Estado de la venta">
+                        {(['Pagado', 'Pendiente'] as const).map(op => {
+                          const activo = (nuevaVenta.estado || 'Pagado') === op;
+                          return (
+                            <button key={op} type="button" role="radio" aria-checked={activo}
+                              onClick={() => { setMontoPagado(op === 'Pagado' ? String(Math.round(totalesVenta.total)) : ''); setNuevaVenta(prev => ({ ...prev, estado: op })); }}
+                              className={cn('flex min-h-11 flex-1 items-center justify-center gap-1 rounded-xl border text-sm font-black',
+                                activo ? (op === 'Pagado' ? 'border-success bg-success text-on-success' : 'border-secondary bg-secondary text-on-surface') : 'border-outline-variant/40 text-on-surface-variant')}>
+                              <span className="material-symbols-outlined text-lg">{op === 'Pagado' ? 'check_circle' : 'schedule'}</span>{op}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-bold text-on-surface-variant">Pago recibido</label>
+                        <CampoMoneda valor={montoPagado} onChange={valor => {
+                          setMontoPagado(String(valor));
+                          const saldo = Math.max(0, totalesVenta.total - valor);
+                          setNuevaVenta(prev => ({ ...prev, estado: saldo > 0 ? 'Pendiente' : 'Pagado' }));
+                        }} className="min-h-11 rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base text-on-surface outline-none sm:text-sm" />
+                      </div>
+                      {impactoVenta.saldoPendiente > 0 && (
+                        <div>
+                          <label className="mb-1 block text-xs font-bold text-on-surface-variant">Fecha compromiso de pago</label>
+                          <SelectorFecha value={nuevaVenta.fecha_vencimiento || ''} onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha_vencimiento: fecha })} />
+                        </div>
+                      )}
+                      <button type="button" onClick={() => setAplicarPropina(!aplicarPropina)} aria-pressed={aplicarPropina}
+                        className={cn('flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3 text-xs font-bold', aplicarPropina ? 'border-tertiary/40 bg-tertiary/10 text-tertiary' : 'border-outline-variant/40 text-on-surface-variant')}>
+                        <span className="flex items-center gap-1"><span className="material-symbols-outlined">{aplicarPropina ? 'toggle_on' : 'toggle_off'}</span> Propina 10 % (opcional)</span>
+                        <span>{formatCLP(propinaCalculada)}</span>
                       </button>
                     </div>
-                  ) : errorItem ? (
-                    <p className="rounded-xl bg-error/10 px-4 py-2.5 text-sm font-bold text-error" role="alert">{errorItem.mensaje}</p>
-                  ) : (
-                    <p className="rounded-xl bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary" role="status">
-                      Esta venta descuenta {describirConsumos(productoSeleccionado, envases, lineaItemSimulada!.consumosEnvase)}.
+
+                    <div className="space-y-1 rounded-2xl bg-inverse-surface p-4 text-sm text-inverse-on-surface">
+                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">Neto documento</span><span className="font-bold">{formatCLP(impactoVenta.neto)}</span></div>
+                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">IVA débito</span><span className="font-bold">{formatCLP(impactoVenta.ivaDebito)}</span></div>
+                      {impactoVenta.exento > 0 && <div className="flex justify-between"><span className="text-inverse-on-surface/60">Exento</span><span className="font-bold">{formatCLP(impactoVenta.exento)}</span></div>}
+                      {impactoVenta.saldoPendiente > 0 && <div className="flex justify-between"><span className="text-inverse-on-surface/60">Saldo pendiente</span><span className="font-bold">{formatCLP(impactoVenta.saldoPendiente)}</span></div>}
+                      <div className="flex justify-between border-t border-inverse-on-surface/20 pt-2 text-lg"><span className="font-bold">Total</span><span className="font-extrabold">{formatCLP(totalesVenta.total)}</span></div>
+                    </div>
+                    <p className="text-[11px] leading-5 text-on-surface-variant">
+                      Al confirmar se crea la venta, el documento, el IVA del periodo, el movimiento de caja, la cuenta por cobrar si queda saldo y la salida de stock (si hace falta abre {usaEnvasesEnCarrito ? 'la siguiente botella o saco' : 'lo necesario'} y te avisa).
                     </p>
-                  )
-                ) : null}
-
-                {promocionActiva && productoActual.esInventario && (
-                  <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-tertiary/10 border border-tertiary/30 text-tertiary text-sm font-bold">
-                    <span className="material-symbols-outlined text-base">local_offer</span>
-                    Promoción "{promocionActiva.nombre}" aplicada automáticamente
-                    <span className="font-black">
-                      ({promocionActiva.tipo === 'porcentaje' ? `-${promocionActiva.valor}%` : `-$${promocionActiva.valor.toLocaleString('es-CL')}`})
-                    </span>
-                  </div>
+                  </>
                 )}
+              </section>
+            </div>
 
-                <div className="rounded-xl bg-primary/5 border border-primary/15 px-4 py-3 grid grid-cols-2 lg:grid-cols-4 items-center gap-4">
-                  <div className="text-center">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/70">Neto</p>
-                    <p className="text-base font-bold text-on-surface">${fichaTotales.subtotal.toLocaleString('es-CL')}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/70">IVA 19% (Chile)</p>
-                    <p className="text-base font-bold text-primary">${fichaTotales.iva.toLocaleString('es-CL')}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/70">Total ficha</p>
-                    <p className="text-base font-extrabold text-on-surface">${fichaTotales.total.toLocaleString('es-CL')}</p>
-                  </div>
-                  <button 
-                    onClick={handleAgregarProducto}
-                    disabled={!fichaValida}
-                    className="px-4 py-2 bg-primary text-inverse-on-surface rounded-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    <span className="material-symbols-outlined text-sm">add</span>
-                    Agregar a la venta
+            {/* Pie fijo: en el celular es la barra del carrito con «Cobrar» / «Confirmar venta». */}
+            <footer className="shrink-0 border-t border-outline-variant/20 bg-surface-container-lowest px-4 pt-3 sm:px-6"
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}>
+              {(avisoStock || simCarrito?.error) && (
+                <p className="mb-2 rounded-xl bg-error/10 px-3 py-2 text-xs font-bold text-error" role="alert">{avisoStock || mensajeVenta(simCarrito!.error!)}</p>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-bold text-on-surface-variant">{carrito.length} ítem{carrito.length === 1 ? '' : 's'}</p>
+                  <p className="text-xl font-black text-on-surface">{formatCLP(totalesVenta.total)}</p>
+                </div>
+                <button onClick={cerrarModal} className="hidden min-h-11 rounded-full px-5 text-sm font-bold text-on-surface-variant hover:bg-surface-container-high md:block">Cancelar</button>
+                {pasoMovil === 'catalogo' && (
+                  <button type="button" onClick={() => setPasoMovil('cobro')} disabled={carrito.length === 0}
+                    className="flex min-h-12 items-center gap-2 rounded-2xl bg-primary px-6 text-sm font-bold text-inverse-on-surface shadow-lg shadow-primary/20 disabled:opacity-50 md:hidden">
+                    <span className="material-symbols-outlined text-lg">payments</span> Cobrar
                   </button>
-                </div>
+                )}
+                <button onClick={handleGuardar} disabled={guardando || carrito.length === 0 || !!simCarrito?.error}
+                  className={cn('min-h-12 items-center gap-2 rounded-2xl bg-primary px-6 text-sm font-bold text-inverse-on-surface shadow-lg shadow-primary/20 disabled:opacity-50',
+                    pasoMovil === 'cobro' ? 'flex' : 'hidden md:flex')}>
+                  <span className="material-symbols-outlined text-lg">check</span> {editingId ? 'Guardar cambios' : 'Confirmar venta'}
+                </button>
               </div>
-
-              {nuevaVenta.productos && nuevaVenta.productos.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-on-surface uppercase tracking-widest">Productos en esta venta</h4>
-                  <div className="border border-outline-variant/30 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-surface-container-low text-on-surface-variant">
-                        <tr>
-                          <th className="px-4 py-2">Producto</th>
-                          <th className="px-4 py-2 text-right">Cant.</th>
-                          <th className="px-4 py-2 text-right">Total</th>
-                          <th className="px-4 py-2 text-center"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-outline-variant/20">
-                        {nuevaVenta.productos.map((prod, idx) => (
-                          <tr key={idx} className="bg-surface-container-lowest">
-                            <td className="px-4 py-2">
-                              <span className="font-medium text-on-surface">{prod.productoNombre}</span>
-                              {prod.esInventariable === false && <span className="block text-[10px] text-on-surface-variant/60">Item libre / no inventariable</span>}
-                              {(() => {
-                                const l = simCarrito?.lineas[idx];
-                                const pr = inventario.find(x => x.id === prod.productoId);
-                                if (simCarrito?.error?.linea === idx) return <span className="block text-[11px] font-bold text-error">{simCarrito.error.mensaje}</span>;
-                                return l?.consumosEnvase?.length && pr
-                                  ? <span className="block text-[11px] font-bold text-primary">Descuenta {describirConsumos(pr, envases, l.consumosEnvase)}</span>
-                                  : null;
-                              })()}
-                              {prod.descuentoTipo && prod.descuentoTipo !== 'ninguno' && (
-                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold">
-                                  <span className="material-symbols-outlined text-[12px]">local_offer</span>
-                                  Promoción {prod.descuentoTipo === 'porcentaje' ? `-${prod.descuentoValor}%` : `-$${prod.descuentoValor.toLocaleString('es-CL')}`}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-2 text-right">{prod.cantidad}</td>
-                            <td className="px-4 py-2 text-right">
-                              {prod.descuentoTipo && prod.descuentoTipo !== 'ninguno' && (
-                                <span className="block text-xs text-on-surface-variant line-through">${(prod.precioBase * prod.cantidad).toLocaleString('es-CL')}</span>
-                              )}
-                              <span className="font-bold text-on-surface">${prod.total.toLocaleString('es-CL')}</span>
-                            </td>
-                            <td className="px-4 py-2 text-center">
-                              <button onClick={() => handleRemoveProducto(idx)} className="text-on-surface-variant hover:text-error">
-                                <span className="material-symbols-outlined text-sm">close</span>
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {nuevaVenta.productos && nuevaVenta.productos.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                  <div className="md:col-span-3">
-                    <p className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Estado de la venta</p>
-                    <div className="flex gap-2">
-                      {(['Pagado', 'Pendiente'] as const).map(op => {
-                        const activo = (nuevaVenta.estado || 'Pagado') === op;
-                        return (
-                          <button
-                            key={op}
-                            type="button"
-                            onClick={() => {
-                              if (op === 'Pagado') setMontoPagado(String(Math.round(totalesVenta.total)));
-                              else setMontoPagado('');
-                              setNuevaVenta(prev => ({ ...prev, estado: op }));
-                            }}
-                            className={cn(
-                              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wide transition-all border',
-                              activo
-                                ? op === 'Pagado'
-                                  ? 'bg-success text-on-success border-success shadow-lg shadow-success/20'
-                                  : 'bg-secondary text-on-surface border-secondary shadow-lg shadow-secondary/20'
-                                : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/40 hover:border-primary/40'
-                            )}
-                          >
-                            <span className="material-symbols-outlined text-lg">{op === 'Pagado' ? 'check_circle' : 'schedule'}</span>
-                            {op}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Pago recibido</label>
-                    <CampoMoneda
-                      valor={montoPagado}
-                      onChange={(valor) => {
-                        setMontoPagado(String(valor));
-                        const saldo = Math.max(0, totalesVenta.total - valor);
-                        setNuevaVenta(prev => ({ ...prev, estado: saldo > 0 ? 'Pendiente' : 'Pagado' }));
-                      }}
-                      className="px-4 py-3 rounded-xl border border-primary/20 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
-                    />
-                  </div>
-                  {impactoVenta.saldoPendiente > 0 && (
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1">Fecha compromiso de pago</label>
-                      <SelectorFecha
-                        value={nuevaVenta.fecha_vencimiento || ''}
-                        onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha_vencimiento: fecha })}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {nuevaVenta.productos && nuevaVenta.productos.length > 0 && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between gap-4 rounded-2xl border border-tertiary/25 bg-tertiary/5 p-4">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary text-xl">restaurant</span>
-                      <div>
-                        <button 
-                          type="button" 
-                          onClick={() => setAplicarPropina(!aplicarPropina)}
-                          className={cn(
-                            "flex items-center gap-2 text-sm font-black uppercase tracking-wide transition-all",
-                            aplicarPropina ? "text-tertiary" : "text-on-surface-variant"
-                          )}
-                        >
-                          <span className={`material-symbols-outlined ${aplicarPropina ? 'text-tertiary' : ''}`}>{aplicarPropina ? 'toggle_on' : 'toggle_off'}</span>
-                          Propina 10% (opcional)
-                        </button>
-                        <p className="text-[10px] text-on-surface-variant/70 mt-0.5">Campo separado: no infla IVA ni documento; se registra en Caja como propina.</p>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/70 font-bold">Propina</p>
-                      <p className="text-lg font-black text-tertiary">${propinaCalculada.toLocaleString('es-CL')}</p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl bg-inverse-surface p-4 text-inverse-on-surface space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-inverse-on-surface/60">Neto documento</span><span className="font-bold">${impactoVenta.neto.toLocaleString('es-CL')}</span></div>
-                    <div className="flex justify-between"><span className="text-inverse-on-surface/60">IVA débito (Chile)</span><span className="font-bold">${impactoVenta.ivaDebito.toLocaleString('es-CL')}</span></div>
-                    {impactoVenta.exento > 0 && (
-                      <div className="flex justify-between"><span className="text-inverse-on-surface/60">Exento / no afecto</span><span className="font-bold">${impactoVenta.exento.toLocaleString('es-CL')}</span></div>
-                    )}
-                    <div className="flex justify-between"><span className="text-inverse-on-surface/60">Saldo pendiente</span><span className="font-bold">${impactoVenta.saldoPendiente.toLocaleString('es-CL')}</span></div>
-                    <div className="flex justify-between text-lg pt-2 border-t border-inverse-on-surface/20">
-                      <span className="font-bold">Total Final:</span>
-                      <span className="font-extrabold">${totalesVenta.total.toLocaleString('es-CL')}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-low p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant">Confirmacion simple</p>
-                <p className="mt-1 text-sm leading-6 text-on-surface-variant/80">
-                  Al guardar se crea la venta, el documento interno, el registro de IVA del periodo,
-                  el movimiento de caja por lo pagado, la cuenta por cobrar si queda saldo y la salida de stock.
-                </p>
-              </div>
-            </div>
-
-            {avisoStock && (
-              <div className="px-6 py-3 bg-error/10 text-error text-sm font-semibold flex items-center gap-2">
-                <span>⚠</span>{avisoStock}
-              </div>
-            )}
-            <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50 shrink-0">
-              <button onClick={cerrarModal} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high/50 transition-colors">
-                Cancelar
-              </button>
-              <button 
-                onClick={handleGuardar} 
-                disabled={guardando || !nuevaVenta.productos || nuevaVenta.productos.length === 0 || !!simCarrito?.error}
-                className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
-              >
-                Guardar Venta
-              </button>
-            </div>
+            </footer>
           </div>
         </div>
       )}
@@ -1535,7 +1563,7 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
                               </p>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-right text-on-surface-variant">{vp.cantidad}</td>
+                          <td className="px-3 py-2 text-right text-on-surface-variant">{vp.detalleMedida ? vp.detalleMedida.split(' × ')[0] : vp.cantidad}</td>
                           <td className="px-3 py-2 text-right text-on-surface-variant">${vp.precioBase.toLocaleString('es-CL')}</td>
                           <td className="px-3 py-2 text-right font-bold text-on-surface">${vp.total.toLocaleString('es-CL')}</td>
                         </tr>

@@ -165,8 +165,8 @@ async function dibujarNotaVenta(
   /* ── Detalle ── */
   const filas = venta.productos.map((p, i) => [
     String(i + 1),
-    p.productoNombre || 'Ítem',
-    String(p.cantidad ?? 0),
+    `${p.productoNombre || 'Ítem'}${p.detalleMedida ? `\n${p.detalleMedida}` : ''}`,
+    (p.cantidad ?? 0).toLocaleString('es-CL', { maximumFractionDigits: 3 }),
     MONEDA(p.precioBase),
     MONEDA(p.subtotal),
   ]);

@@ -54,8 +54,8 @@ export default function ModalRevisionUnidades({ productos, onCerrar }: { product
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-scrim/50 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Revisar unidades">
-      <div className="flex max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-surface-container-lowest shadow-2xl sm:max-h-[90vh] sm:rounded-3xl">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-scrim/50 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Revisar unidades">
+      <div className="flex h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-surface-container-lowest shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-3xl">
         <div className="flex items-start justify-between border-b border-outline-variant/20 px-5 py-4">
           <div>
             <h3 className="text-lg font-bold text-primary">Revisar unidades</h3>
