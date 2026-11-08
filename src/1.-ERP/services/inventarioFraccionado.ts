@@ -437,9 +437,11 @@ export function procesarVenta(estado: EstadoInventario, ventaId: string, lineas:
   };
 
   const nuevas: VentaProducto[] = [];
-  for (const [i, vp] of lineas.entries()) {
+  for (const [i, original] of lineas.entries()) {
+    // Una línea editada puede traer el detalle de la venta anterior: se recalcula siempre.
+    const { consumosEnvase: _ce, consumosLote: _cl, ...vp } = original;
     const p = porId.get(vp.productoId);
-    if (vp.esInventariable === false || !p || p.tipo !== 'producto' || !(vp.cantidad > 0)) { nuevas.push(vp); continue; }
+    if (vp.esInventariable === false || !p || p.tipo !== 'producto' || !(vp.cantidad > 0)) { nuevas.push(original); continue; }
     const pres = presentacionDe(p, vp.presentacionId);
     const cantidadBase = r3(vp.cantidad * (pres?.factor ?? 1));
     const consumos = descontar(p, cantidadBase, pres, vp.cantidad);

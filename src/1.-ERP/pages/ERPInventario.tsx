@@ -1,11 +1,15 @@
 ﻿import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 const ModalCargaMasivaInventario = lazy(() => import('../components/ModalCargaMasivaInventario'));
 import { estadoStock as estadoStockCompartido } from '../services/alertas';
-import { resumenEnvases, presentacionesActivas } from '../services/costeo';
-import EditorFraccionamiento from '../components/EditorFraccionamiento';
+import { presentacionesActivas } from '../services/costeo';
+import { resumenStock, usaEnvases, formatCantidad, stockDisponible } from '../services/inventarioFraccionado';
+import type { InventarioInicial } from '../services/registroProducto';
+import RegistroProducto from '../components/RegistroProducto';
+import FichaProducto from '../components/FichaProducto';
+import ModalRevisionUnidades from '../components/ModalRevisionUnidades';
 import Paginacion, { usePaginacion } from '../../components/Paginacion';
 import { formatCLP } from '../../lib/fechas';
-import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
+import { useERP, Producto, MovimientoInventario, type ResultadoInventario } from '../context/ERPContext';
 import { useAuth } from '../../context/AuthContext';
 import { puedeEditarModulo } from '@/lib/roles';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
@@ -137,6 +141,11 @@ export default function ERPInventario() {
   const [mostrarInputCategoria, setMostrarInputCategoria] = useState(false)
   const [nuevaCategoria, setNuevaCategoria] = useState('')
   const [barcodeManualEntry, setBarcodeManualEntry] = useState(false)
+  /** Ficha del producto fraccionado (envases o granel). */
+  const [fichaId, setFichaId] = useState<string | null>(null);
+  /** Productos antiguos a revisar (lista fija al abrir, para avanzar uno por uno). */
+  const [revisionIds, setRevisionIds] = useState<string[] | null>(null);
+  const [errorMovimiento, setErrorMovimiento] = useState('');
 
   /* ══ Periodo de los movimientos: mismo selector que Ventas, a la derecha ══ */
 
@@ -260,7 +269,9 @@ export default function ERPInventario() {
   }, [movimientosInventario, rangoMovimientos.fechaFin]);
 
   /** El stock a mostrar: el del cierre del periodo, o el actual si no hay nada que revertir. */
-  const stockMostrado = (p: Producto): number => (stockAlCierre ? stockAlCierre(p) : p.stock);
+  const stockMostrado = (p: Producto): number => (stockAlCierre ? stockAlCierre(p) : stockDisponible(p, envases));
+  const productosRevision = useMemo(() => inventario.filter(p => p.requiereRevisionUnidades), [inventario]);
+  const esFraccionado = (p: Producto) => usaEnvases(p) || p.formaCompra === 'granel';
 
   /**
    * Productos y servicios mas solicitados en el periodo. Se cuenta por cantidad, que
@@ -416,6 +427,7 @@ export default function ERPInventario() {
       fecha: new Date().toISOString().split('T')[0],
       motivo: ''
     });
+    setErrorMovimiento('');
     setShowMovimientoModal(true);
   };
 
@@ -517,9 +529,26 @@ export default function ERPInventario() {
     }
   };
 
+  const cerrarModalProducto = () => {
+    setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto'));
+  };
+  /** Guardado del formulario «Registrar producto» (RegistroProducto). */
+  const guardarProducto = (datos: Partial<Producto>, inicial: InventarioInicial): ResultadoInventario => {
+    if (editingId) {
+      editProducto(editingId, datos);
+      cerrarModalProducto();
+      return { ok: true, id: editingId };
+    }
+    const r = addProducto({ ...CAMPOS_INICIALES('producto'), ...datos } as Omit<Producto, 'id'>, inicial);
+    if (r.ok) cerrarModalProducto();
+    return r;
+  };
+
   const handleGuardarMovimiento = () => {
+    setErrorMovimiento('');
+    if (!nuevoMovimiento.motivo?.trim()) { setErrorMovimiento('Escribe el motivo.'); return; }
     if (nuevoMovimiento.productoId && nuevoMovimiento.cantidad && nuevoMovimiento.motivo) {
-      addMovimientoInventario({
+      const r = addMovimientoInventario({
         productoId: nuevoMovimiento.productoId,
         tipo: nuevoMovimiento.tipo as 'ingreso' | 'salida' | 'ajuste' | 'merma' | 'devolucion',
         cantidad: Number(nuevoMovimiento.cantidad),
@@ -527,9 +556,51 @@ export default function ERPInventario() {
         fecha: new Date(nuevoMovimiento.fecha!).toISOString(),
         motivo: nuevoMovimiento.motivo
       });
+      if (!r.ok) { setErrorMovimiento(r.error.mensaje); return; }
       setShowMovimientoModal(false);
     }
   };
+
+  // Selector Producto / Servicio: va arriba en ambos formularios.
+  const selectorTipo = (
+    <>
+              {/* La pregunta va primero porque de ella depende que campos tengan sentido:
+                  un servicio no lleva codigo de barras ni stock minimo. */}
+              <div>
+                <p className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
+                  {editingId ? 'Tipo' : '¿Producto o Servicio?'}
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {([
+                    { valor: 'producto', titulo: 'Producto', desc: 'Físico, con control de stock', icon: 'inventory_2' },
+                    { valor: 'servicio_pedido', titulo: 'Servicios', desc: 'Precio fijo por trabajo/paquete', icon: 'work' },
+                    { valor: 'servicio_hora', titulo: 'Servicio por hora', desc: 'Se cobra por hora trabajada', icon: 'schedule' }
+                  ] as const).map(op => {
+                    const activo = tipoEnFormulario === op.valor;
+                    return (
+                      <button
+                        key={op.valor}
+                        type="button"
+                        onClick={() => elegirTipo(op.valor)}
+                        disabled={!!editingId}
+                        className={cn(
+                          "flex flex-col items-start gap-1 p-4 rounded-2xl border-2 text-left transition-all",
+                          activo
+                            ? "border-primary bg-primary/5 shadow-sm"
+                            : "border-outline-variant/30 hover:border-primary/40",
+                          editingId && !activo && "opacity-50"
+                        )}
+                      >
+                        <span className={cn("material-symbols-outlined text-xl", activo ? "text-primary" : "text-outline")}>{op.icon}</span>
+                        <span className={cn("text-sm font-black", activo ? "text-primary" : "text-on-surface")}>{op.titulo}</span>
+                        <span className="text-[11px] text-outline leading-tight">{op.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+    </>
+  );
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
@@ -695,6 +766,19 @@ export default function ERPInventario() {
             </TarjetaGrafico>
           </div>
 
+          {productosRevision.length > 0 && (
+            <div className="flex flex-col gap-3 rounded-2xl border-2 border-secondary/40 bg-secondary/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="flex items-center gap-2 text-sm font-bold text-on-surface">
+                <span className="material-symbols-outlined text-secondary">rule</span>
+                Hay {productosRevision.length} producto{productosRevision.length === 1 ? '' : 's'} que necesita{productosRevision.length === 1 ? '' : 'n'} revisar sus unidades.
+              </p>
+              {puedeEditar && (
+                <button type="button" onClick={() => setRevisionIds(productosRevision.map(p => p.id))}
+                  className="rounded-full bg-primary px-4 py-2 text-xs font-bold text-inverse-on-surface">Revisar ahora</button>
+              )}
+            </div>
+          )}
+
           {/* Filtros */}
           <div className="flex flex-col sm:flex-row gap-4 bg-surface-container-lowest p-4 rounded-3xl border-2 border-outline-variant/20">
             <div className="relative flex-1">
@@ -752,7 +836,6 @@ export default function ERPInventario() {
                       const costoRef = costoDe(producto) * (pres[0]?.factor ?? 1);
                       const precioNeto = producto.incluyeIva ? Math.round(precioRef / 1.19) : precioRef;
                       const margen = precioNeto > 0 ? ((precioNeto - costoRef) / precioNeto) * 100 : 0;
-                      const envasesTexto = resumenEnvases(producto, envases);
                       const stockPeriodo = stockMostrado(producto);
                       const estado = estadoStock(producto, stockPeriodo);
 
@@ -765,7 +848,12 @@ export default function ERPInventario() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex flex-col">
-                              <span className="font-bold text-on-surface">{producto.nombre}</span>
+                              {esFraccionado(producto) ? (
+                                <button type="button" onClick={() => setFichaId(producto.id)} className="text-left font-bold text-on-surface hover:text-primary hover:underline">{producto.nombre}</button>
+                              ) : <span className="font-bold text-on-surface">{producto.nombre}</span>}
+                              {producto.requiereRevisionUnidades && (
+                                <span className="mt-0.5 w-fit rounded-full bg-secondary/15 px-2 py-0.5 text-[10px] font-black text-secondary">Revisar unidades</span>
+                              )}
                               <span className="text-[10px] text-outline font-medium truncate max-w-[150px]">{producto.descripcion}</span>
                               {pres.length > 0 && (
                                 <span className="mt-1 flex flex-wrap gap-1">
@@ -784,14 +872,27 @@ export default function ERPInventario() {
                           <td className="px-6 py-4 text-right">
                             {producto.tipo === 'producto' ? (
                               <div className="flex flex-col items-end gap-0.5">
-                                <span className={cn(
-                                  "font-black text-base",
-                                  estado === 'sin_stock' ? 'text-error' : estado === 'bajo' ? 'text-secondary' : 'text-on-surface'
-                                )}>
-                                  {Number(stockPeriodo).toLocaleString('es-CL')}
-                                </span>
-                                <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadBase && producto.unidadBase !== 'unidad' ? producto.unidadBase : producto.unidadMedida}</span>
-                                {envasesTexto && <span className="text-[10px] font-medium text-on-surface-variant">{envasesTexto}</span>}
+                                {(() => {
+                                  const color = estado === 'sin_stock' ? 'text-error' : estado === 'bajo' ? 'text-secondary' : 'text-on-surface';
+                                  // Con envases: «19 cerrados + 1 abierto (70 ml)» en vez de «1970 ml».
+                                  if (usaEnvases(producto) && !stockAlCierre) {
+                                    return (
+                                      <button type="button" onClick={() => setFichaId(producto.id)} className={cn('max-w-[11rem] text-right text-sm font-black leading-tight hover:underline', color)}>
+                                        {resumenStock(producto, envases).texto}
+                                        <span className="block text-[10px] font-bold text-outline">{formatCantidad(stockPeriodo, producto.unidadBase)}</span>
+                                      </button>
+                                    );
+                                  }
+                                  if (producto.unidadBase && producto.unidadBase !== 'unidad') {
+                                    return <span className={cn('font-black text-base', color)}>{formatCantidad(stockPeriodo, producto.unidadBase)}</span>;
+                                  }
+                                  return (
+                                    <>
+                                      <span className={cn('font-black text-base', color)}>{Number(stockPeriodo).toLocaleString('es-CL')}</span>
+                                      <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida}</span>
+                                    </>
+                                  );
+                                })()}
                                 {estado !== 'ok' && estado !== 'no_aplica' && (
                                   <span className={cn('text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full', ETIQUETA_STOCK[estado].clase)}>
                                     {ETIQUETA_STOCK[estado].texto}
@@ -832,8 +933,9 @@ export default function ERPInventario() {
                             <div className="flex items-center justify-center gap-1 transition-opacity opacity-100">
                               {puedeEditar && (
                                 <>
-                                  <button onClick={() => handleMovimientoClick(producto.id)}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Ajustar stock">
+                                  <button onClick={() => (usaEnvases(producto) ? setFichaId(producto.id) : handleMovimientoClick(producto.id))}
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all"
+                                    title={usaEnvases(producto) ? 'Abrir, merma o reponer' : 'Ajustar stock'} aria-label={usaEnvases(producto) ? `Ficha de ${producto.nombre}` : `Ajustar stock de ${producto.nombre}`}>
                                     <span className="material-symbols-outlined text-lg">swap_horiz</span>
                                   </button>
                                   <button onClick={() => handleEditClick(producto)}
@@ -933,50 +1035,30 @@ export default function ERPInventario() {
 
       {/* Modal Nuevo Producto / Editar */}
       {showModal && (
-        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
-              <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar Producto' : 'Registrar Nuevo Producto'}</h3>
-              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} className="text-on-surface-variant hover:text-error transition-colors">
+        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-surface-container-lowest w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:rounded-3xl">
+            <div className="px-4 sm:px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
+              <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar producto' : 'Registrar producto'}</h3>
+              <button onClick={cerrarModalProducto} aria-label="Cerrar" className="text-on-surface-variant hover:text-error transition-colors">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
+            {tipoEnFormulario === 'producto' ? (
+              <RegistroProducto
+                key={editingId ?? 'nuevo'}
+                editando={editingId ? inventario.find(p => p.id === editingId) ?? null : null}
+                general={nuevoProducto}
+                onGeneral={cambios => setNuevoProducto(prev => ({ ...prev, ...cambios }))}
+                inventario={inventario}
+                proveedores={proveedores}
+                envases={envases}
+                encabezado={selectorTipo}
+                onCancelar={cerrarModalProducto}
+                onGuardar={guardarProducto}
+              />
+            ) : (<>
             <div className="p-6 space-y-4 overflow-y-auto flex-grow">
-              {/* La pregunta va primero porque de ella depende que campos tengan sentido:
-                  un servicio no lleva codigo de barras ni stock minimo. */}
-              <div>
-                <p className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
-                  {editingId ? 'Tipo' : '¿Producto o Servicio?'}
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {([
-                    { valor: 'producto', titulo: 'Producto', desc: 'Físico, con control de stock', icon: 'inventory_2' },
-                    { valor: 'servicio_pedido', titulo: 'Servicios', desc: 'Precio fijo por trabajo/paquete', icon: 'work' },
-                    { valor: 'servicio_hora', titulo: 'Servicio por hora', desc: 'Se cobra por hora trabajada', icon: 'schedule' }
-                  ] as const).map(op => {
-                    const activo = tipoEnFormulario === op.valor;
-                    return (
-                      <button
-                        key={op.valor}
-                        type="button"
-                        onClick={() => elegirTipo(op.valor)}
-                        disabled={!!editingId}
-                        className={cn(
-                          "flex flex-col items-start gap-1 p-4 rounded-2xl border-2 text-left transition-all",
-                          activo
-                            ? "border-primary bg-primary/5 shadow-sm"
-                            : "border-outline-variant/30 hover:border-primary/40",
-                          editingId && !activo && "opacity-50"
-                        )}
-                      >
-                        <span className={cn("material-symbols-outlined text-xl", activo ? "text-primary" : "text-outline")}>{op.icon}</span>
-                        <span className={cn("text-sm font-black", activo ? "text-primary" : "text-on-surface")}>{op.titulo}</span>
-                        <span className="text-[11px] text-outline leading-tight">{op.desc}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {selectorTipo}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
@@ -1058,24 +1140,6 @@ export default function ERPInventario() {
                     )}
                   </div>
 
-                  {/* Uso operativo solo aplica a producto físico */}
-                  {tipoEnFormulario === 'producto' && (
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
-                      <SelectorDesplegable
-                        className="w-full"
-                        valor={nuevoProducto.tipoOperativo || 'producto_simple'}
-                        onChange={valor => setNuevoProducto({ ...nuevoProducto, tipoOperativo: valor as Producto['tipoOperativo'] })}
-                        opciones={[
-                          { valor: 'producto_simple', etiqueta: 'Producto simple' },
-                          { valor: 'pack', etiqueta: 'Pack / combo' },
-                          { valor: 'insumo', etiqueta: 'Insumo' },
-                          { valor: 'producto_compuesto', etiqueta: 'Producto compuesto' }
-                        ]}
-                      />
-                    </div>
-                  )}
-
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Descripción</label>
                     <textarea value={nuevoProducto.descripcion} onChange={(e) => setNuevoProducto({...nuevoProducto, descripcion: e.target.value})}
@@ -1111,7 +1175,7 @@ export default function ERPInventario() {
                             className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                       </>
-                    ) : tipoEnFormulario === 'servicio_pedido' ? (
+                    ) : (
                       <>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo fijo ($)</label>
@@ -1121,19 +1185,6 @@ export default function ERPInventario() {
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio fijo ($)</label>
                           <CampoMoneda valor={nuevoProducto.precioFijo || nuevoProducto.precio || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, precioFijo: valor})}
-                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div>
-                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo Unitario</label>
-                          <CampoMoneda valor={nuevoProducto.costo || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, costo: valor})}
-                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio Venta Base</label>
-                          <CampoMoneda valor={nuevoProducto.precio || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, precio: valor})}
                             className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                       </>
@@ -1147,43 +1198,6 @@ export default function ERPInventario() {
                     <label htmlFor="incluyeIva" className="text-sm text-on-surface font-medium">El precio de venta incluye IVA</label>
                   </div>
 
-                  {tipoEnFormulario === 'producto' && (
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Actual</label>
-                        <input type="number" value={nuevoProducto.stock || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: Number(e.target.value)})}
-                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" disabled={!!editingId} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Mínimo</label>
-                        <input type="number" value={nuevoProducto.stockMinimo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stockMinimo: Number(e.target.value)})}
-                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Unidad</label>
-                        <SelectorDesplegable
-                          className="w-full [&>button]:py-3"
-                          valor={nuevoProducto.unidadMedida || 'un'}
-                          onChange={valor => setNuevoProducto({ ...nuevoProducto, unidadMedida: valor })}
-                          opciones={(() => {
-                            const actual = nuevoProducto.unidadMedida
-                            const lista = UNIDADES_PRODUCTO.map(u => ({ valor: u.valor, etiqueta: u.etiqueta }))
-                            if (actual && !UNIDADES_PRODUCTO.some(u => u.valor === actual)) {
-                              lista.unshift({ valor: actual, etiqueta: actual })
-                            }
-                            return lista
-                          })()}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {(nuevoProducto.tipo ?? 'producto') === 'producto' && (
-                    <EditorFraccionamiento
-                      valor={nuevoProducto}
-                      onChange={cambios => setNuevoProducto(prev => ({ ...prev, ...cambios }))}
-                      insumos={inventario.filter(x => x.tipo === 'producto' && x.id !== editingId)}
-                    />
-                  )}
                 </div>
               </div>
             </div>
@@ -1195,6 +1209,7 @@ export default function ERPInventario() {
                 {editingId ? 'Guardar Cambios' : 'Guardar Producto'}
               </button>
             </div>
+            </>)}
           </div>
         </div>
       )}
@@ -1258,6 +1273,7 @@ export default function ERPInventario() {
                     />
               </div>
             </div>
+            {errorMovimiento && <p className="px-6 pb-2 text-sm font-bold text-error">{errorMovimiento}</p>}
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50">
               <button onClick={() => setShowMovimientoModal(false)} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 Cancelar
@@ -1332,6 +1348,16 @@ export default function ERPInventario() {
             </div>
           </div>
         </div>
+      )}
+
+      {fichaId && inventario.some(p => p.id === fichaId) && (
+        <FichaProducto producto={inventario.find(p => p.id === fichaId)!} onCerrar={() => setFichaId(null)} puedeEditar={puedeEditar} />
+      )}
+      {revisionIds && (
+        <ModalRevisionUnidades
+          productos={revisionIds.map(id => inventario.find(p => p.id === id)).filter((p): p is Producto => !!p)}
+          onCerrar={() => setRevisionIds(null)}
+        />
       )}
 
       {/* Modal Confirmar Eliminación */}

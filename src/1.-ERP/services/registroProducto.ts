@@ -278,6 +278,15 @@ export function productoDesdeFormulario(f: FormularioProducto, existente?: Produ
   };
 }
 
+/** «$300 por ml», «$400 por kg», «$2,5 por L» (si por ml quedaría en $0). */
+export function formatCostoBase(costo: number, unidad: UnidadBase | undefined): string {
+  let c = Number(costo) || 0;
+  let u: string = unidad === 'unidad' || !unidad ? 'unidad' : unidad === 'l' ? 'L' : unidad;
+  if (unidad === 'ml' && c > 0 && c < 1) { c *= 1000; u = 'L'; }
+  if (unidad === 'g' && c > 0 && c < 1) { c *= 1000; u = 'kg'; }
+  return `$${c.toLocaleString('es-CL', { maximumFractionDigits: c < 10 ? 1 : 0 })} por ${u}`;
+}
+
 /** Rellena el formulario desde un producto guardado (para editar). */
 export function formularioDesdeProducto(p: Producto, envases: Envase[] = []): FormularioProducto {
   const f = formularioVacio();

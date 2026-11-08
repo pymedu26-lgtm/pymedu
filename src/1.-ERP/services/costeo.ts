@@ -2,7 +2,7 @@
 // Funciones puras: el contexto ERP las usa al vender, comprar y registrar mermas.
 // Tablas destino cuando el ERP pase a endpoints por recurso: erp.lote, erp.envase,
 // erp.presentacion_venta (server/sql/02_erp_inventario.sql).
-import type { Producto, Presentacion, Lote, Envase, MetodoCosteo } from '../context/ERPContext';
+import type { Producto, Presentacion, Lote, MetodoCosteo } from '../context/ERPContext';
 
 export interface Consumo {
   lotes: Lote[];
@@ -69,102 +69,7 @@ export function valorInventario(productos: Producto[], lotes: Lote[]): Map<strin
   return porProducto;
 }
 
-// ── Envases (frascos, sacos) ──────────────────────────────────────────────
-
-export const envasesDe = (envases: Envase[], productoId: string) => envases.filter(e => e.productoId === productoId);
-
-/** Resumen legible: «1 frasco cerrado + 1 abierto con 80 ml». */
-export function resumenEnvases(producto: Producto, envases: Envase[]): string | null {
-  if (!producto.controlEnvases) return null;
-  const propios = envasesDe(envases, producto.id);
-  const cerrados = propios.filter(e => e.estado === 'cerrado').length;
-  const abierto = propios.find(e => e.estado === 'abierto');
-  const u = producto.unidadBase ?? '';
-  const partes = [`${cerrados} cerrado${cerrados === 1 ? '' : 's'}`];
-  if (abierto) partes.push(`1 abierto con ${abierto.restante.toLocaleString('es-CL')} ${u}`);
-  return partes.join(' + ');
-}
-
-/** Unidades que se pueden vender ahora de cada presentación. */
-export function disponibilidad(producto: Producto, envases: Envase[], pres: Presentacion): { unidades: number; texto: string } {
-  const stock = Number(producto.stock) || 0;
-  if (!producto.controlEnvases || !pres.origen || pres.origen === 'granel') {
-    const unidades = Math.floor(stock / pres.factor);
-    return { unidades, texto: `${unidades.toLocaleString('es-CL')} disponibles` };
-  }
-  const propios = envasesDe(envases, producto.id);
-  const cerrados = propios.filter(e => e.estado === 'cerrado');
-  if (pres.origen === 'envase_cerrado') {
-    const abierto = propios.find(e => e.estado === 'abierto');
-    return {
-      unidades: cerrados.length,
-      texto: cerrados.length > 0 ? `${cerrados.length} disponibles` : abierto ? `Solo queda el abierto con ${abierto.restante} ${producto.unidadBase ?? ''}` : 'Sin stock',
-    };
-  }
-  const abierto = propios.find(e => e.estado === 'abierto');
-  const desdeAbierto = Math.floor((abierto?.restante ?? 0) / pres.factor);
-  const total = Math.floor((propios.filter(e => e.estado === 'abierto' || e.estado === 'cerrado').reduce((a, e) => a + e.restante, 0)) / pres.factor);
-  return { unidades: total, texto: abierto ? `${desdeAbierto} desde el envase abierto (${total} en total)` : `${total} (se abrirá un envase)` };
-}
-
-export interface ResultadoEnvases {
-  envases: Envase[];
-  /** Códigos abiertos en esta operación (movimiento «apertura»). */
-  abiertos: string[];
-  error?: string;
-}
-
-/**
- * Descuenta una venta de los envases. Envase cerrado: sale un frasco completo (nunca del
- * abierto). Envase abierto: descuenta del abierto y, si no alcanza, abre el cerrado más
- * antiguo y completa con él (el decant puede salir de dos envases).
- */
-export function consumirEnvases(producto: Producto, envases: Envase[], pres: Presentacion, cantidad: number, ahora = new Date().toISOString()): ResultadoEnvases {
-  if (!producto.controlEnvases || !pres.origen || pres.origen === 'granel') return { envases, abiertos: [] };
-  const lista = envases.map(e => ({ ...e }));
-  const propios = lista.filter(e => e.productoId === producto.id);
-  const cerradosOrden = () => propios.filter(e => e.estado === 'cerrado').sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true }));
-  const abiertos: string[] = [];
-
-  if (pres.origen === 'envase_cerrado') {
-    const cerrados = cerradosOrden();
-    if (cerrados.length < cantidad) {
-      const abierto = propios.find(e => e.estado === 'abierto');
-      return { envases, abiertos, error: abierto ? `Solo queda el envase abierto con ${abierto.restante} ${producto.unidadBase ?? ''}` : 'No quedan envases cerrados' };
-    }
-    cerrados.slice(0, cantidad).forEach(e => { e.estado = 'vendido'; e.restante = 0; });
-    return { envases: lista, abiertos };
-  }
-
-  let pendiente = pres.factor * cantidad;
-  while (pendiente > 0) {
-    let abierto = propios.find(e => e.estado === 'abierto');
-    if (!abierto) {
-      const siguiente = cerradosOrden()[0];
-      if (!siguiente) return { envases, abiertos, error: 'No queda producto suficiente en los envases' };
-      siguiente.estado = 'abierto';
-      siguiente.abiertoEn = ahora;
-      abiertos.push(siguiente.codigo);
-      abierto = siguiente;
-    }
-    const toma = Math.min(abierto.restante, pendiente);
-    abierto.restante = r3(abierto.restante - toma);
-    pendiente = r3(pendiente - toma);
-    if (abierto.restante <= 0) abierto.estado = 'agotado';
-  }
-  return { envases: lista, abiertos };
-}
-
-/** Crea los envases de una compra (F1, F2…) continuando la numeración del producto. */
-export function crearEnvases(producto: Producto, envases: Envase[], cantidadBase: number, loteId: string): Envase[] {
-  const capacidad = Number(producto.capacidadEnvase) || 0;
-  if (!producto.controlEnvases || capacidad <= 0) return [];
-  const usados = envasesDe(envases, producto.id).map(e => Number(e.codigo.replace(/\D/g, '')) || 0);
-  let n = usados.length ? Math.max(...usados) : 0;
-  return Array.from({ length: Math.floor(cantidadBase / capacidad) }, () => ({
-    id: crypto.randomUUID(), productoId: producto.id, loteId, codigo: `F${++n}`, capacidad, restante: capacidad, estado: 'cerrado' as const,
-  }));
-}
+// Envases, porciones y ventas fraccionadas: services/inventarioFraccionado.ts
 
 /** Presentación por defecto cuando el producto no define ninguna (se vende por unidad base). */
 export const presentacionBase = (p: Producto): Presentacion => ({

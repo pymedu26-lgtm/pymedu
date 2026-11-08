@@ -23,7 +23,18 @@ import {
 } from '../services/documentCompliance';
 import { calcularSaldos, type Saldos } from '../services/saldos';
 import { redondearCLP, hoyISO } from '../../lib/fechas';
-import { consumirLotes, consumirEnvases, crearEnvases, costoPromedio, presentacionesActivas } from '../services/costeo';
+import { consumirLotes, costoPromedio } from '../services/costeo';
+import {
+  procesarVenta, revertirVenta, ventaYaAplicada, normalizarProducto, crearEnvases, usaEnvases, stockDisponible,
+  abrirEnvase as abrirEnvasePuro, ajustarEnvase, reponerEnvases, convertirUnidades, r3, formatCantidad, nombreEnvase,
+  type EstadoInventario, type ErrorInventario, type DecisionUnidades, type OpcionesVenta, type Politica, type MovimientoBorrador,
+} from '../services/inventarioFraccionado';
+import type { InventarioInicial } from '../services/registroProducto';
+
+/** Resultado de las operaciones de inventario: nada se guarda si `ok` es false. */
+export type ResultadoInventario =
+  | { ok: true; id?: string; duplicada?: boolean }
+  | { ok: false; error: ErrorInventario };
 
 export type {
   DocumentStatus,
@@ -381,9 +392,10 @@ interface ERPContextType {
   saldos: Saldos;
   /** Une clientes repetidos por RUT o nombre (corrección #12). Devuelve cuántos se fusionaron. */
   fusionarClientesDuplicados: () => number;
-  addVenta: (venta: Omit<Venta, 'id'>) => void;
-  updateVenta: (id: string, venta: Partial<Venta>) => void;
-  deleteVenta: (id: string) => void;
+  /** `id` opcional y estable: un reintento o doble clic con el mismo id no descuenta dos veces. */
+  addVenta: (venta: Omit<Venta, 'id'> & { id?: string }) => ResultadoInventario;
+  updateVenta: (id: string, venta: Partial<Venta>) => ResultadoInventario;
+  deleteVenta: (id: string) => ResultadoInventario;
   addGasto: (gasto: Omit<Gasto, 'id'>) => void;
   updateGasto: (id: string, gasto: Partial<Gasto>) => void;
   deleteGasto: (id: string) => void;
@@ -393,10 +405,22 @@ interface ERPContextType {
   addProveedor: (proveedor: Omit<Proveedor, 'id' | 'deuda'>) => void;
   updateProveedor: (id: string, proveedor: Partial<Proveedor>) => void;
   deleteProveedor: (id: string) => void;
-  addProducto: (producto: Omit<Producto, 'id'>) => void;
+  addProducto: (producto: Omit<Producto, 'id'>, inicial?: InventarioInicial) => ResultadoInventario;
   editProducto: (id: string, producto: Partial<Producto>) => void;
   deleteProducto: (id: string) => void;
-  addMovimientoInventario: (movimiento: Omit<MovimientoInventario, 'id'>) => void;
+  addMovimientoInventario: (movimiento: Omit<MovimientoInventario, 'id'>) => ResultadoInventario;
+  // -- Inventario fraccionado (services/inventarioFraccionado.ts) --
+  politicaEnvaseAbierto: Politica;
+  permitirMezclarEnvases: boolean;
+  setPoliticaInventario: (cambios: { politicaEnvaseAbierto?: Politica; permitirMezclarEnvases?: boolean }) => void;
+  /** Stock real: suma de envases cerrados + abiertos o, sin envases, el stock del producto. */
+  stockDe: (producto: Producto) => number;
+  abrirEnvase: (productoId: string, envaseId?: string) => ResultadoInventario;
+  operarEnvase: (productoId: string, d: { tipo: 'merma' | 'ajuste'; envaseId: string; cantidad: number; motivo: string }) => ResultadoInventario;
+  reponerEnvasesProducto: (productoId: string, d: { cantidadEnvases: number; costoEnvase: number; motivo: string }) => ResultadoInventario;
+  convertirUnidadesProducto: (productoId: string, decision: DecisionUnidades) => ResultadoInventario;
+  /** Prueba una venta sin guardar nada (para avisos en línea antes de confirmar). */
+  simularVenta: (lineas: VentaProducto[], ventaEditadaId?: string) => { lineas: VentaProducto[]; error?: ErrorInventario; envases: Envase[] };
   addPromocion: (promocion: Omit<Promocion, 'id'>) => void;
   editPromocion: (id: string, promocion: Partial<Promocion>) => void;
   deletePromocion: (id: string) => void;
@@ -499,7 +523,9 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         setProveedores((grouped.proveedores ?? []) as Proveedor[]);
         setMovimientos((grouped.movimientos ?? []) as Movimiento[]);
         setAbonos((grouped.abonos ?? []) as Abono[]);
-        setInventario((grouped.inventario ?? []) as Producto[]);
+        // Migración NO destructiva: completa formaCompra / tipo y marca los casos dudosos.
+        const envasesCargados = (grouped.envases ?? []) as Envase[];
+        setInventario(((grouped.inventario ?? []) as Producto[]).map(p => normalizarProducto(p, envasesCargados)));
         setMovimientosInventario((grouped.movimientosInventario ?? []) as MovimientoInventario[]);
         setPromociones((grouped.promociones ?? []) as Promocion[]);
         setDocumentosTributarios((grouped.documentosTributarios ?? []) as DocumentoTributario[]);
@@ -585,31 +611,59 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   const proveedoresRef = useRef<Proveedor[]>(proveedores);
   useEffect(() => { clientesRef.current = clientes; }, [clientes]);
   useEffect(() => { proveedoresRef.current = proveedores; }, [proveedores]);
+  // == Inventario: referencias vivas ==================
+  // Cada operación calcula sobre las refs y luego hace setState, para que dos operaciones
+  // seguidas (doble clic, carga masiva) no se pisen. OJO: esto ordena las operaciones de UN
+  // navegador. La atomicidad real entre varios usuarios o dispositivos simultáneos requiere
+  // mover el inventario a la API con transacciones (fuera del alcance de esta etapa).
   const lotesRef = useRef<Lote[]>(lotes);
   const envasesRef = useRef<Envase[]>(envases);
+  const inventarioRef = useRef<Producto[]>(inventario);
+  const movInvRef = useRef<MovimientoInventario[]>(movimientosInventario);
+  const ventasProcesadasRef = useRef<Set<string>>(new Set());
   useEffect(() => { lotesRef.current = lotes; }, [lotes]);
   useEffect(() => { envasesRef.current = envases; }, [envases]);
+  useEffect(() => { inventarioRef.current = inventario; }, [inventario]);
+  useEffect(() => { movInvRef.current = movimientosInventario; }, [movimientosInventario]);
+
+  const setInventarioSync = (fn: (prev: Producto[]) => Producto[]) => { inventarioRef.current = fn(inventarioRef.current); setInventario(inventarioRef.current); };
+  const setMovInvSync = (fn: (prev: MovimientoInventario[]) => MovimientoInventario[]) => { movInvRef.current = fn(movInvRef.current); setMovimientosInventario(movInvRef.current); };
+  const setLotesSync = (lista: Lote[]) => { if (lista !== lotesRef.current) { lotesRef.current = lista; setLotes(lista); } };
+  const setEnvasesSync = (lista: Envase[]) => { if (lista !== envasesRef.current) { envasesRef.current = lista; setEnvases(lista); } };
+  const estadoInventario = (): EstadoInventario => ({ productos: inventarioRef.current, envases: envasesRef.current, lotes: lotesRef.current, movimientos: movInvRef.current });
+  const aplicarInventario = (e: EstadoInventario) => {
+    if (e.productos !== inventarioRef.current) setInventarioSync(() => e.productos);
+    setEnvasesSync(e.envases);
+    setLotesSync(e.lotes);
+    if (e.movimientos !== movInvRef.current) setMovInvSync(() => e.movimientos);
+  };
+  /** Movimientos borrador (de las funciones puras) con id. */
+  const conId = (lista: MovimientoBorrador[]): MovimientoInventario[] => lista.map(m => ({ ...m, id: safeId('MI') }));
+  const fallo = (codigo: ErrorInventario['codigo'], mensaje: string): ResultadoInventario => ({ ok: false, error: { codigo, mensaje } });
 
   const metodoCosteo: MetodoCosteo = configuracionCumplimiento.metodoCosteo ?? 'promedio';
   const setMetodoCosteo = (metodo: MetodoCosteo) => setConfiguracionCumplimiento(prev => ({ ...prev, metodoCosteo: metodo }));
+  const politicaEnvaseAbierto: Politica = configuracionCumplimiento.politicaEnvaseAbierto ?? 'menos_contenido';
+  const permitirMezclarEnvases = !!configuracionCumplimiento.permitirMezclarEnvases;
+  const setPoliticaInventario = (cambios: { politicaEnvaseAbierto?: Politica; permitirMezclarEnvases?: boolean }) =>
+    setConfiguracionCumplimiento(prev => ({ ...prev, ...cambios }));
+  const opcionesInventario = (motivo?: string): OpcionesVenta => ({
+    metodo: metodoCosteo, politica: politicaEnvaseAbierto, permitirMezclar: permitirMezclarEnvases, nuevoId: () => safeId('INV'), motivo,
+  });
+  const stockDe = (p: Producto) => stockDisponible(p, envases);
 
-  /** Ingreso a inventario: crea el lote (y los envases si el producto los controla). */
+  /** Ingreso a inventario: crea SOLO el lote (los envases los crean addProducto y reponer). */
   const registrarLote = (producto: Producto, cantidadBase: number, costoUnitario: number, fecha = hoyISO(), compraId?: string) => {
-    if (!(cantidadBase > 0)) return;
+    if (!(cantidadBase > 0)) return undefined;
     const lote: Lote = { id: safeId('LOT'), productoId: producto.id, fecha, cantidadInicial: cantidadBase, cantidadRestante: cantidadBase, costoUnitario, compraId };
-    lotesRef.current = [...lotesRef.current, lote];
-    setLotes(lotesRef.current);
-    const nuevos = crearEnvases(producto, envasesRef.current, cantidadBase, lote.id);
-    if (nuevos.length) {
-      envasesRef.current = [...envasesRef.current, ...nuevos];
-      setEnvases(envasesRef.current);
-    }
+    setLotesSync([...lotesRef.current, lote]);
+    return lote;
   };
 
   /** Consume lotes según el método; devuelve el costo total de lo consumido. */
   const consumir = (producto: Producto, cantidadBase: number) => {
     const r = consumirLotes(lotesRef.current, producto.id, cantidadBase, metodoCosteo, Number(producto.costo) || 0);
-    if (r.lotes !== lotesRef.current) { lotesRef.current = r.lotes; setLotes(r.lotes); }
+    setLotesSync(r.lotes);
     return r;
   };
 
@@ -725,8 +779,17 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
   // ══ addVenta ════════════════════════════════════
 
-  const addVenta = (venta: Omit<Venta, 'id'>) => {
-    const newId = safeId('VT');
+  const addVenta = (entrada: Omit<Venta, 'id'> & { id?: string }): ResultadoInventario => {
+    const { id: idPropuesto, ...ventaSinId } = entrada;
+    const newId = idPropuesto ?? safeId('VT');
+    // Idempotencia: el mismo id (doble clic, reintento) no crea otra venta ni descuenta de nuevo.
+    if (ventasProcesadasRef.current.has(newId) || ventaYaAplicada(movInvRef.current, newId)) return { ok: true, id: newId, duplicada: true };
+    // Inventario primero: valida TODAS las líneas (stock, envase disponible). Si una falla no
+    // se guarda nada y el error vuelve a la pantalla (antes solo había un console.warn).
+    const inv = procesarVenta(estadoInventario(), newId, ventaSinId.productos ?? [], opcionesInventario());
+    if (inv.error) return { ok: false, error: inv.error };
+    ventasProcesadasRef.current.add(newId);
+    let venta: Omit<Venta, 'id'> = ventaSinId;
     venta = { ...venta, monto: redondearCLP(venta.monto), subtotal: redondearCLP(venta.subtotal), iva: redondearCLP(venta.iva) };
     const saldoPendiente = venta.estado === 'Pendiente' ? redondearCLP(venta.saldo_pendiente ?? venta.monto) : 0;
     // Se busca en la referencia viva (no en el `clientes` del render): en cargas masivas
@@ -762,32 +825,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         estado: documento.estado,
       },
     });
-    // ── Inventario: unidad base, presentaciones, receta, envases y costo congelado ──
-    // Cada línea descuenta cantidad × factor de su presentación (decant 5 ml = 5 ml) más
-    // los insumos de la receta, consume lotes con el método elegido y guarda su costo.
-    const pedidoPorProducto = new Map<string, number>();
-    const productosConCosto = (venta.productos ?? []).map(vp => {
-      if (vp.esInventariable === false) return vp;
-      const producto = inventario.find(p => p.id === vp.productoId);
-      if (!producto || producto.tipo !== 'producto' || !(vp.cantidad > 0)) return vp;
-      const pres = presentacionesActivas(producto).find(x => x.id === vp.presentacionId);
-      const cantidadBase = vp.cantidadBase ?? vp.cantidad * (pres?.factor ?? 1);
-      pedidoPorProducto.set(producto.id, (pedidoPorProducto.get(producto.id) ?? 0) + cantidadBase);
-      let costo = consumir(producto, cantidadBase).costoTotal;
-      if (pres && producto.controlEnvases) {
-        const r = consumirEnvases(producto, envasesRef.current, pres, vp.cantidad);
-        if (r.error) console.warn(`[inventario] ${producto.nombre}: ${r.error}`);
-        else { envasesRef.current = r.envases; setEnvases(r.envases); }
-      }
-      for (const insumo of pres?.receta ?? []) {
-        const pi = inventario.find(p => p.id === insumo.productoId);
-        if (!pi) continue;
-        const cant = insumo.cantidad * vp.cantidad;
-        pedidoPorProducto.set(pi.id, (pedidoPorProducto.get(pi.id) ?? 0) + cant);
-        costo += consumir(pi, cant).costoTotal;
-      }
-      return { ...vp, cantidadBase, costoVenta: costo, costoUnitario: Math.round(costo / vp.cantidad) };
-    });
+    // Costo congelado por línea y de qué envase/lote salió (services/inventarioFraccionado.ts).
+    const productosConCosto = inv.lineas;
 
     const newVenta: Venta = {
       ...venta,
@@ -812,31 +851,9 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     setDocumentosTributarios(prev => [documento, ...prev]);
     setIntegracionEventos(prev => [evento, ...prev]);
 
-    // El stock se descuenta agrupado por producto (en unidad base) para que dos líneas
-    // del mismo producto no se resten contra el mismo saldo.
-    pedidoPorProducto.forEach((pedido, productoId) => {
-      const producto = inventario.find(p => p.id === productoId);
-      if (!producto || producto.tipo !== 'producto') return;
-      // Nunca se descuenta mas de lo que hay. Se registra la salida efectiva y no la
-      // pedida: deleteVenta restituye lo que dice el movimiento, asi que ambas
-      // operaciones siguen siendo simetricas y el historial no miente.
-      const deducido = Math.min(Math.max(0, producto.stock), pedido);
-      if (deducido <= 0) return;
-      setInventario(prev => prev.map(p => (
-        p.id === productoId ? { ...p, stock: Math.max(0, p.stock - pedido) } : p
-      )));
-      setMovimientosInventario(prev => [{
-        id: safeId('MI'),
-        productoId,
-        tipo: 'salida',
-        cantidad: deducido,
-        fecha: new Date().toISOString(),
-        motivo: `Venta #${newId.split('-')[0]}`,
-        origenTipo: 'venta',
-        origenId: newId,
-        documentoId: documento.id,
-      }, ...prev]);
-    });
+    // Inventario ya validado: stock, envases, lotes y salidas (con su documento).
+    const salidasNuevas = new Set(inv.movimientos.map(m => m.id));
+    aplicarInventario({ ...inv.estado, movimientos: inv.estado.movimientos.map(m => (salidasNuevas.has(m.id) ? { ...m, documentoId: documento.id } : m)) });
 
     if (venta.cliente) {
       setClientes(prev => {
@@ -865,28 +882,20 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         metodo_pago: venta.metodo_pago ?? 'efectivo', referencia_id: newId,
       }, ...prev]);
     }
+    return { ok: true, id: newId };
   };
 
-  const deleteVenta = (id: string) => {
+  const deleteVenta = (id: string): ResultadoInventario => {
     const venta = ventas.find(v => v.id === id);
-    if (!venta) return;
+    if (!venta) return fallo('cantidad_invalida', 'No se encontró la venta.');
 
-    // 1) Devolver stock. Se restituye lo que efectivamente registro la venta en sus
-    // movimientos, no las lineas del documento: asi el stock vuelve exactamente al
-    // valor previo, incluso si la venta se guardo con faltante o llevaba texto libre.
-    const salidasPorProducto = new Map<string, number>();
-    movimientosInventario
-      .filter(m => m.origenTipo === 'venta' && m.origenId === id)
-      .forEach(m => salidasPorProducto.set(m.productoId, (salidasPorProducto.get(m.productoId) ?? 0) + (m.cantidad || 0)));
-    salidasPorProducto.forEach((devolver, productoId) => {
-      setInventario(prev => prev.map(p => (
-        p.id === productoId && p.tipo === 'producto' ? { ...p, stock: p.stock + devolver } : p
-      )));
-      const producto = inventario.find(p => p.id === productoId);
-      const linea = venta.productos.find(x => x.productoId === productoId);
-      const costoBase = linea?.costoVenta && linea.cantidadBase ? linea.costoVenta / linea.cantidadBase : Number(producto?.costo) || 0;
-      if (producto) registrarLote(producto, devolver, costoBase, hoyISO(), `devolucion-${id}`);
-    });
+    // 1) Inventario: vuelve a los MISMOS envases y lotes lo que registró la venta (un frasco
+    // completo vuelve a cerrado, los ml de un decant a su frasco). Las salidas quedan como
+    // historial marcadas «revertido» y una devolución las compensa. Ventas antiguas sin
+    // detalle por envase usan el respaldo de revertirVenta.
+    const inv = revertirVenta(estadoInventario(), id, opcionesInventario(`Anulación venta #${id.split('-')[0]}`));
+    if (inv.error) return { ok: false, error: inv.error };
+    aplicarInventario(inv.estado);
 
     // 2) Quitar movimientos de caja vinculados (ingreso de la venta + cobros)
     setMovimientos(prev => prev.filter(m => !(m.referencia_id === id)));
@@ -901,9 +910,6 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       documentoId && e.entidadTipo === 'documento_tributario' ? e.entidadId !== documentoId : true
     ));
 
-    // 5) Quitar la salida de inventario registrada por la venta
-    setMovimientosInventario(prev => prev.filter(m => !(m.origenTipo === 'venta' && m.origenId === id)));
-
     // 6) Ajustar cliente (menos ventas y menos deuda)
     if (venta.cliente) {
       const base = venta.saldo_base ?? venta.saldo_pendiente ?? 0;
@@ -915,60 +921,29 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     }
 
     setVentas(prev => prev.filter(v => v.id !== id));
+    return { ok: true, id };
   };
 
-  const updateVenta = (id: string, p: Partial<Venta>) => {
+  const updateVenta = (id: string, p: Partial<Venta>): ResultadoInventario => {
     const anterior = ventas.find(v => v.id === id);
-    if (!anterior) return;
+    if (!anterior) return fallo('cantidad_invalida', 'No se encontró la venta.');
 
-    const productosViejos = anterior.productos ?? [];
     const productosNuevos = p.productos ?? anterior.productos ?? [];
     const nombreNuevo = p.cliente ?? anterior.cliente;
     const fechaNueva = p.fecha ?? anterior.fecha;
     const totalNuevo = p.monto ?? anterior.monto;
     const baseNueva = p.saldo_base ?? p.saldo_pendiente ?? (anterior.saldo_base ?? anterior.saldo_pendiente ?? 0);
 
-    // 1) Stock en UNIDAD BASE (una línea de 4 decants de 5 ml descuenta 20 ml, no 4).
-    const base = (pp: VentaProducto) => pp.cantidadBase ?? pp.cantidad ?? 0;
-    const inventariable = (pp: VentaProducto) => pp.esInventariable !== false && inventario.some(x => x.id === pp.productoId && x.tipo === 'producto');
-    const idsProducto = new Set([...productosViejos.map(x => x.productoId), ...productosNuevos.map(x => x.productoId)]);
-    setInventario(prev => prev.map(prod => {
-      if (prod.tipo !== 'producto' || !idsProducto.has(prod.id)) return prod;
-      const viejo = productosViejos.filter(pp => pp.productoId === prod.id).reduce((a, pp) => a + base(pp), 0);
-      const nuevo = productosNuevos.filter(pp => pp.productoId === prod.id).reduce((a, pp) => a + base(pp), 0);
-      return { ...prod, stock: Math.max(0, prod.stock - (nuevo - viejo)) };
-    }));
-
-    // 1b) Costeo: lo vendido antes vuelve como lote a su costo y se consume lo nuevo con el
-    // método vigente; cada línea queda con su costo recalculado (los envases no se reabren).
-    productosViejos.filter(inventariable).forEach(pp => {
-      const prod = inventario.find(x => x.id === pp.productoId)!;
-      const costoBase = pp.costoVenta && base(pp) ? pp.costoVenta / base(pp) : Number(prod.costo) || 0;
-      registrarLote(prod, base(pp), costoBase, hoyISO(), `edicion-${id}`);
-    });
-    const productosRecosteados = productosNuevos.map(pp => {
-      if (!inventariable(pp) || !(pp.cantidad > 0)) return pp;
-      const prod = inventario.find(x => x.id === pp.productoId)!;
-      const costo = consumir(prod, base(pp)).costoTotal;
-      return { ...pp, cantidadBase: base(pp), costoVenta: costo, costoUnitario: Math.round(costo / pp.cantidad) };
-    });
-
-    // 2) Movimientos de inventario: reemplazar las salidas de la venta
-    setMovimientosInventario(prev => {
-      const sinViejos = prev.filter(m => !(m.origenTipo === 'venta' && m.origenId === id));
-      const nuevasSalidas = productosRecosteados.filter(inventariable).map(pp => ({
-        id: safeId('MI'),
-        productoId: pp.productoId,
-        tipo: 'salida' as const,
-        cantidad: base(pp),
-        costoUnitario: pp.costoVenta && base(pp) ? Math.round(pp.costoVenta / base(pp)) : undefined,
-        fecha: new Date().toISOString(),
-        motivo: `Venta #${id.split('-')[0]}`,
-        origenTipo: 'venta' as const,
-        origenId: id,
-      }));
-      return [...nuevasSalidas, ...sinViejos];
-    });
+    // 1) Inventario: se revierte lo que descontó la venta (mismos envases y lotes) y se
+    // descuenta lo nuevo con el método vigente. Si algo no alcanza NO se cambia nada.
+    const motivoEdicion = `Edición venta #${id.split('-')[0]}`;
+    const revertido = revertirVenta(estadoInventario(), id, opcionesInventario(motivoEdicion));
+    if (revertido.error) return { ok: false, error: revertido.error };
+    const inv = procesarVenta(revertido.estado, id, productosNuevos, opcionesInventario(motivoEdicion));
+    if (inv.error) return { ok: false, error: inv.error };
+    const salidasNuevas = new Set(inv.movimientos.map(m => m.id));
+    aplicarInventario({ ...inv.estado, movimientos: inv.estado.movimientos.map(m => (salidasNuevas.has(m.id) ? { ...m, documentoId: anterior.documento_id } : m)) });
+    const productosRecosteados = inv.lineas;
 
     // 3) Caja: eliminar el ingreso anterior y registrar el nuevo pago efectivo
     setMovimientos(prev => {
@@ -1042,6 +1017,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       estado_documento: p.estado_documento ?? anterior.estado_documento,
       modo_integracion: p.modo_integracion ?? anterior.modo_integracion,
     } : v));
+    return { ok: true, id };
   };
 
   // ══ addGasto ════════════════════════════════════
@@ -1207,56 +1183,162 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
   // ══ CRUD — Inventario ══════════════════════════
 
-  const addProducto = (producto: Omit<Producto, 'id'>) => {
+  /**
+   * Alta de producto. Con envases crea el lote inicial y los envases respetando los que ya
+   * estaban abiertos (19 cerrados + 1 abierto con 70 ml). Sin `inicial` (carga masiva) el
+   * stock en unidad base se reparte en envases cerrados y el resto queda en uno abierto.
+   */
+  const addProducto = (producto: Omit<Producto, 'id'>, inicial?: InventarioInicial): ResultadoInventario => {
     const newId = crypto.randomUUID();
-    setInventario(prev => [{ ...producto, id: newId }, ...prev]);
-    if (producto.tipo === 'producto' && producto.stock > 0) {
-      registrarLote({ ...producto, id: newId } as Producto, Number(producto.stock), Number(producto.costo) || 0);
-      setMovimientosInventario(prev => [{
-        id: crypto.randomUUID(), productoId: newId, tipo: 'ingreso',
-        cantidad: producto.stock, costoUnitario: producto.costo,
-        fecha: new Date().toISOString(), motivo: 'Inventario inicial',
-      }, ...prev]);
+    let nuevo: Producto = { ...producto, id: newId };
+    const ahora = new Date().toISOString();
+    if (nuevo.tipo === 'producto') {
+      const cantidad = r3(inicial?.cantidadBase ?? (Number(producto.stock) || 0));
+      const costoBase = inicial?.costoBase ?? (Number(producto.costo) || 0);
+      if (cantidad < 0) return fallo('cantidad_invalida', 'El stock no puede ser negativo.');
+      const movs: MovimientoBorrador[] = [];
+      if (usaEnvases(nuevo)) {
+        const capacidad = Number(nuevo.capacidadEnvase) || 0;
+        const abiertos = inicial?.abiertos ?? [];
+        if (abiertos.some(a => !(a > 0) || a > capacidad)) {
+          return fallo('cantidad_invalida', `Cada ${nombreEnvase(nuevo)} abierto debe tener más de 0 y hasta ${formatCantidad(capacidad, nuevo.unidadBase)}.`);
+        }
+        const cerrados = inicial?.cerrados ?? Math.floor(r3(cantidad / capacidad));
+        const sobrante = inicial ? 0 : r3(cantidad - cerrados * capacidad);
+        const lote = registrarLote(nuevo, cantidad, costoBase);
+        const creados = crearEnvases(nuevo, envasesRef.current, { cerrados, abiertos: [...abiertos, ...(sobrante > 0 ? [sobrante] : [])], loteId: lote?.id, ahora }, { nuevoId: () => safeId('ENV') });
+        setEnvasesSync([...envasesRef.current, ...creados]);
+        nuevo = { ...nuevo, stock: stockDisponible(nuevo, creados) };
+        creados.filter(e => e.estado === 'abierto').forEach(e => movs.push({
+          productoId: newId, tipo: 'apertura', cantidad: e.restante, fecha: ahora, motivo: `${e.codigo} ya estaba abierto al registrar`, envaseId: e.id,
+        }));
+      } else {
+        registrarLote(nuevo, cantidad, costoBase);
+        nuevo = { ...nuevo, stock: cantidad };
+      }
+      if (nuevo.stock > 0) movs.unshift({ productoId: newId, tipo: 'ingreso', cantidad: nuevo.stock, costoUnitario: costoBase, fecha: ahora, motivo: 'Inventario inicial' });
+      if (movs.length) setMovInvSync(prev => [...conId(movs), ...prev]);
     }
+    setInventarioSync(prev => [nuevo, ...prev]);
+    return { ok: true, id: newId };
   };
 
   const editProducto = (id: string, p: Partial<Producto>) => {
-    setInventario(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
+    setInventarioSync(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
   };
 
   const deleteProducto = (id: string) => {
-    setInventario(prev => prev.filter(p => p.id !== id));
+    setInventarioSync(prev => prev.filter(p => p.id !== id));
   };
 
-  const addMovimientoInventario = (m: Omit<MovimientoInventario, 'id'>) => {
+  /** Movimiento manual (productos por unidad o a granel). Motivo obligatorio y sin vender de más. */
+  const addMovimientoInventario = (m: Omit<MovimientoInventario, 'id'>): ResultadoInventario => {
     const newId = crypto.randomUUID();
-    const producto = inventario.find(p => p.id === m.productoId);
+    const producto = inventarioRef.current.find(p => p.id === m.productoId);
+    if (!m.motivo?.trim()) return fallo('motivo_requerido', 'Escribe el motivo.');
+    if (!Number(m.cantidad)) return fallo('cantidad_invalida', 'La cantidad debe ser distinta de 0.');
+    if (producto && usaEnvases(producto)) {
+      return fallo('envase_no_disponible', `«${producto.nombre}» se controla por ${nombreEnvase(producto, true)}: usa Abrir, Registrar merma o Reponer en su ficha.`);
+    }
     let costoMovimiento = m.costoUnitario;
     if (producto && producto.tipo === 'producto') {
+      const stock = r3(Number(producto.stock) || 0);
+      const sale = m.tipo === 'salida' || m.tipo === 'merma' ? Math.abs(m.cantidad) : m.tipo === 'ajuste' && m.cantidad < 0 ? -m.cantidad : 0;
+      if (sale > stock + 0.0005) return fallo('stock_insuficiente', `Solo hay ${formatCantidad(stock, producto.unidadBase)} de «${producto.nombre}».`);
       const fecha = (m.fecha || '').slice(0, 10) || hoyISO();
       if (m.tipo === 'ingreso' || m.tipo === 'devolucion' || (m.tipo === 'ajuste' && m.cantidad > 0)) {
         registrarLote(producto, m.cantidad, m.costoUnitario && m.costoUnitario > 0 ? m.costoUnitario : costoPromedio(lotesRef.current, producto.id, Number(producto.costo) || 0), fecha);
-      } else if (m.tipo === 'salida' || m.tipo === 'merma' || (m.tipo === 'ajuste' && m.cantidad < 0)) {
-        const cantidad = Math.abs(m.cantidad);
-        costoMovimiento = cantidad > 0 ? Math.round(consumir(producto, cantidad).costoTotal / cantidad) : 0;
+      } else if (sale > 0) {
+        costoMovimiento = Math.round(consumir(producto, sale).costoTotal / sale);
       }
     }
-    setMovimientosInventario(prev => [{ ...m, costoUnitario: costoMovimiento, id: newId }, ...prev]);
-    // El saldo se calcula DENTRO del actualizador funcional: si se calculara antes
-    // (leyendo `inventario` del render), varios movimientos al mismo producto en un
-    // mismo lote se pisarian entre si y se perderian los ajustes anteriores.
-    setInventario(prev => prev.map(p => {
+    setMovInvSync(prev => [{ ...m, costoUnitario: costoMovimiento, id: newId }, ...prev]);
+    setInventarioSync(prev => prev.map(p => {
       if (p.id !== m.productoId) return p;
-      let stock = p.stock;
+      let stock = Number(p.stock) || 0;
       if (m.tipo === 'ingreso' || m.tipo === 'devolucion') stock += m.cantidad;
-      else if (m.tipo === 'salida' || m.tipo === 'merma') stock = Math.max(0, stock - m.cantidad);
+      else if (m.tipo === 'salida' || m.tipo === 'merma') stock -= Math.abs(m.cantidad);
       else if (m.tipo === 'ajuste') stock += m.cantidad;
-      // El costo solo lo define un ingreso: en una salida, merma o ajuste el valor
-      // enviado puede venir de un campo oculto y dejaria de corresponder al producto.
-      // El costo mostrado es el promedio ponderado de los lotes vigentes (corrección #11).
+      // El costo solo lo define un ingreso; el mostrado es el promedio de los lotes vigentes (corrección #11).
       const redefineCosto = (m.tipo === 'ingreso') && m.costoUnitario != null && m.costoUnitario > 0;
-      return { ...p, stock, costo: redefineCosto ? Math.round(costoPromedio(lotesRef.current, p.id, m.costoUnitario!)) : p.costo };
+      return { ...p, stock: r3(Math.max(0, stock)), costo: redefineCosto ? Math.round(costoPromedio(lotesRef.current, p.id, m.costoUnitario!)) : p.costo };
     }));
+    return { ok: true, id: newId };
+  };
+
+  // == Envases (ficha del producto): abrir, merma/ajuste, reponer, convertir ==
+  const productoPorId = (id: string) => inventarioRef.current.find(p => p.id === id);
+  const sinProducto = () => fallo('envase_no_encontrado', 'No se encontró el producto.');
+  const aplicarEnvases = (productoId: string, envasesNuevos: Envase[], movs: MovimientoBorrador[]) => {
+    setEnvasesSync(envasesNuevos);
+    if (movs.length) setMovInvSync(prev => [...conId(movs), ...prev]);
+    setInventarioSync(prev => prev.map(p => (p.id === productoId ? { ...p, stock: stockDisponible(p, envasesNuevos) } : p)));
+  };
+
+  const abrirEnvase = (productoId: string, envaseId?: string): ResultadoInventario => {
+    const p = productoPorId(productoId);
+    if (!p) return sinProducto();
+    const r = abrirEnvasePuro(p, envasesRef.current, envaseId);
+    if (r.error) return { ok: false, error: r.error };
+    aplicarEnvases(productoId, r.envases, r.movimientos);
+    return { ok: true, id: r.movimientos[0]?.envaseId };
+  };
+
+  const operarEnvase = (productoId: string, d: { tipo: 'merma' | 'ajuste'; envaseId: string; cantidad: number; motivo: string }): ResultadoInventario => {
+    const p = productoPorId(productoId);
+    if (!p) return sinProducto();
+    const r = ajustarEnvase(p, envasesRef.current, d);
+    if (r.error) return { ok: false, error: r.error };
+    // La merma sale de los lotes con su costo (Reportes la muestra aparte del costo de venta).
+    const movs = r.movimientos.map(m => {
+      if (m.cantidad < 0 || m.tipo === 'merma') {
+        const cantidad = Math.abs(m.cantidad);
+        const c = consumir(p, cantidad);
+        return { ...m, costoUnitario: Math.round(c.costoTotal / cantidad), consumosLote: c.detalle.map(x => ({ loteId: x.loteId, cantidad: x.cantidad })) };
+      }
+      registrarLote(p, m.cantidad, costoPromedio(lotesRef.current, p.id, Number(p.costo) || 0));
+      return m;
+    });
+    aplicarEnvases(productoId, r.envases, movs);
+    return { ok: true };
+  };
+
+  const reponerEnvasesProducto = (productoId: string, d: { cantidadEnvases: number; costoEnvase: number; motivo: string }): ResultadoInventario => {
+    const p = productoPorId(productoId);
+    if (!p) return sinProducto();
+    if (!(Number(d.costoEnvase) >= 0)) return fallo('cantidad_invalida', 'El costo no puede ser negativo.');
+    const loteId = safeId('LOT');
+    const r = reponerEnvases(p, envasesRef.current, { cantidadEnvases: d.cantidadEnvases, motivo: d.motivo, loteId }, { nuevoId: () => safeId('ENV') });
+    if (r.error) return { ok: false, error: r.error };
+    const capacidad = Number(p.capacidadEnvase) || 1;
+    const costoBase = r3(Number(d.costoEnvase) / capacidad);
+    const total = r3(r.nuevos.reduce((a, e) => a + e.restante, 0));
+    setLotesSync([...lotesRef.current, { id: loteId, productoId, fecha: hoyISO(), cantidadInicial: total, cantidadRestante: total, costoUnitario: costoBase }]);
+    aplicarEnvases(productoId, r.envases, r.movimientos.map(m => ({ ...m, costoUnitario: costoBase })));
+    setInventarioSync(prev => prev.map(x => (x.id === productoId ? { ...x, costo: r3(costoPromedio(lotesRef.current, productoId, costoBase)) } : x)));
+    return { ok: true };
+  };
+
+  const convertirUnidadesProducto = (productoId: string, decision: DecisionUnidades): ResultadoInventario => {
+    const p = productoPorId(productoId);
+    if (!p) return sinProducto();
+    const r = convertirUnidades(p, envasesRef.current, lotesRef.current, decision, { nuevoId: () => safeId('ENV') });
+    if (r.error) return { ok: false, error: r.error };
+    setEnvasesSync(r.envases);
+    setLotesSync(r.lotes);
+    if (r.movimientos.length) setMovInvSync(prev => [...conId(r.movimientos), ...prev]);
+    setInventarioSync(prev => prev.map(x => (x.id === productoId ? r.producto : x)));
+    return { ok: true };
+  };
+
+  const simularVenta = (lineas: VentaProducto[], ventaEditadaId?: string) => {
+    let estado = estadoInventario();
+    if (ventaEditadaId) {
+      const r = revertirVenta(estado, ventaEditadaId, opcionesInventario());
+      if (!r.error) estado = r.estado;
+    }
+    const r = procesarVenta(estado, '__simulacion__', lineas, opcionesInventario());
+    return { lineas: r.lineas, error: r.error, envases: r.estado.envases };
   };
 
   // ══ CRUD — Promociones ═════════════════════════
@@ -1298,6 +1380,12 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       ...prev.map(d => d.id === original.id ? { ...d, estado: 'ajustado_con_nota_credito' } : d),
     ]);
     setIntegracionEventos(prev => [evento, ...prev]);
+    // Nota de crédito TOTAL que devuelve stock: revierte el inventario de la venta a los mismos
+    // envases y lotes. Una parcial no sabe qué ítems volvieron: se ajusta en Inventario.
+    if (devuelveStock && original.ventaId && monto >= original.total) {
+      const inv = revertirVenta(estadoInventario(), original.ventaId, opcionesInventario(`Nota de crédito ${notaCredito.folioInterno ?? ''}`.trim()));
+      if (!inv.error) aplicarInventario(inv.estado);
+    }
     if (original.ventaId) {
       setVentas(prev => prev.map(v => {
         if (v.id !== original.ventaId) return v;
@@ -1337,6 +1425,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       ventas, gastos, clientes, proveedores, movimientos, inventario, movimientosInventario, promociones, abonos,
       documentosTributarios, integracionEventos, pagosPOS, configuracionCumplimiento, saldoActual, saldos, fusionarClientesDuplicados,
       lotes, envases, metodoCosteo, setMetodoCosteo,
+      politicaEnvaseAbierto, permitirMezclarEnvases, setPoliticaInventario, stockDe,
+      abrirEnvase, operarEnvase, reponerEnvasesProducto, convertirUnidadesProducto, simularVenta,
       addVenta, updateVenta, addGasto, updateGasto, addCliente, updateCliente, addProveedor, updateProveedor, addProducto, editProducto, addMovimientoInventario, addPromocion, editPromocion,
       deleteVenta, deleteGasto, deleteCliente, deleteProveedor, deleteProducto, deletePromocion,
       addAbono, createNotaCredito, reconcilePagoPOS, previewVentaImpacto, getDocumentosByPeriodo, getF29Preparador,

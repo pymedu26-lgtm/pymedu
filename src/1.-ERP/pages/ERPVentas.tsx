@@ -1,5 +1,6 @@
-﻿import { useState, useMemo, useEffect, lazy, Suspense, useDeferredValue } from 'react';
-import { disponibilidad, presentacionesActivas } from '../services/costeo';
+﻿import { useState, useMemo, useEffect, useRef, lazy, Suspense, useDeferredValue } from 'react';
+import { presentacionesActivas } from '../services/costeo';
+import { textoDisponibilidad, describirConsumos, resumenStock, formatCantidad, usaEnvases, type ErrorInventario } from '../services/inventarioFraccionado';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
@@ -65,7 +66,8 @@ function ChipsCategorias({ categorias }: { categorias: string[] }) {
 export default function ERPVentas() {
   const { user: userAuth, perfil } = useAuth();
   const {
-    ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto, envases
+    ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto, envases,
+    simularVenta, abrirEnvase, politicaEnvaseAbierto,
   } = useERP();
   const [showModal, setShowModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
@@ -74,6 +76,11 @@ export default function ERPVentas() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [montoPagado, setMontoPagado] = useState('');
   const [avisoStock, setAvisoStock] = useState('');
+  /** Resultado de la carga masiva (ventas rechazadas por stock). */
+  const [avisoMasivo, setAvisoMasivo] = useState('');
+  /** Id estable de la venta nueva: un doble clic o reintento con el mismo id no descuenta dos veces. */
+  const idVentaRef = useRef<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
   const [activeTab, setActiveTab] = useState<'lista' | 'analisis'>('lista');
 
   useEffect(() => {
@@ -103,7 +110,14 @@ export default function ERPVentas() {
   });
 
   const handleImportMasivo = (nuevasVentas: Omit<Venta, 'id'>[]) => {
-    nuevasVentas.forEach(v => addVenta(v));
+    const rechazadas: string[] = [];
+    nuevasVentas.forEach((v, i) => {
+      const r = addVenta(v);
+      if ('error' in r) rechazadas.push(`fila ${i + 1}: ${r.error.mensaje}`);
+    });
+    setAvisoMasivo(rechazadas.length
+      ? `${rechazadas.length} de ${nuevasVentas.length} ventas no se importaron (no alcanzaba el stock). ${rechazadas.slice(0, 3).join(' · ')}${rechazadas.length > 3 ? '…' : ''}`
+      : '');
   };
 
   const [nuevaVenta, setNuevaVenta] = useState<Partial<Venta>>({
@@ -207,29 +221,6 @@ export default function ERPVentas() {
 
 const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefined;
 
-// Stock originalmente consumido por la venta que se esta editando: al guardar se
-// restaura y se vuelve a descontar, por lo que queda disponible como "buffer".
-const stockYaReservado = useMemo(() => {
-  const mapa: Record<string, number> = {};
-  (ventaEditada?.productos ?? []).forEach(pp => {
-    mapa[pp.productoId] = (mapa[pp.productoId] || 0) + (pp.cantidadBase ?? pp.cantidad ?? 0);
-  });
-  return mapa;
-}, [ventaEditada?.id, ventaEditada?.productos]);
-
-// Para el producto seleccionado, el stock disponible descuenta lo que el producto ya
-// tiene reservado (campo manual del inventario) y suma lo que la venta en edicion
-// tenia reservado, porque eso se restaura al guardar.
-const stockDisponible = productoSeleccionado
-  ? Math.max(0, productoSeleccionado.stock - (productoSeleccionado.stockReservado || 0))
-    + (editingId ? stockYaReservado[productoActual.productoId] || 0 : 0)
-  : 0;
-
-const stockInsuficiente = productoSeleccionado
-  ? productoSeleccionado.tipo === 'producto'
-      && (cantidadEnVenta(productoActual.productoId) + (productoActual.cantidad || 0) * factorActual) > stockDisponible
-  : false;
-
   /** Calcula neto e IVA (impuestos Chile, 19%) de un ítem según si el precio incluye IVA. */
   const calcularTotalesItem = (
     precioBase: number,
@@ -293,6 +284,27 @@ const stockInsuficiente = productoSeleccionado
       iva: totales.iva,
       total: totales.total,
     };
+  };
+
+  // ── Simulación con las MISMAS funciones que al guardar (services/inventarioFraccionado.ts):
+  // detecta stock insuficiente o que hay que abrir un frasco antes de agregar o confirmar.
+  const carrito = nuevaVenta.productos || [];
+  const itemCandidato = productoActual.esInventario && productoSeleccionado?.tipo === 'producto' && Number(productoActual.cantidad) > 0
+    ? construirItemVenta() : null;
+  const simCarrito = carrito.length > 0 ? simularVenta(carrito, editingId ?? undefined) : null;
+  const simConItem = itemCandidato ? simularVenta([...carrito, itemCandidato], editingId ?? undefined) : null;
+  const errorItem = simConItem?.error && (simConItem.error.linea === carrito.length || !simCarrito?.error) ? simConItem.error : undefined;
+  const lineaItemSimulada = simConItem && !simConItem.error ? simConItem.lineas[carrito.length] : undefined;
+  const stockInsuficiente = !!errorItem;
+  const mensajeVenta = (e: ErrorInventario) => (e.linea !== undefined ? `Línea ${e.linea + 1}: ${e.mensaje}` : e.mensaje);
+
+  /** «Abrir F4 y vender»: abre el frasco sugerido y agrega la línea solo si ahora alcanza. */
+  const abrirYAgregar = () => {
+    if (!productoSeleccionado || !itemCandidato || errorItem?.codigo !== 'requiere_abrir' || !errorItem.sugerido) return;
+    const r = abrirEnvase(productoSeleccionado.id, errorItem.sugerido.id);
+    if ('error' in r) { setAvisoStock(r.error.mensaje); return; }
+    if (simularVenta([...carrito, itemCandidato], editingId ?? undefined).error) return; // muestra la siguiente sugerencia
+    handleAgregarProducto();
   };
 
   const handleAgregarProducto = () => {
@@ -559,26 +571,8 @@ const stockInsuficiente = productoSeleccionado
         ? 0
         : Math.max(0, totalesVenta.total - pagoInicial);
 
-      // Candado de stock: la suma acumulada de cada producto en la venta no puede
-      // superar stock actual + (lo que esta venta en edicion ya tenia reservado).
-      const itemsPorProducto: Record<string, number> = {};
-      (nuevaVenta.productos || []).forEach(pp => {
-        itemsPorProducto[pp.productoId] = (itemsPorProducto[pp.productoId] || 0) + (pp.cantidad || 0);
-      });
-      const productoStockMap: Record<string, Producto> = {};
-      inventario.filter(i => i.tipo === 'producto').forEach(prod => { productoStockMap[prod.id] = prod as Producto; });
-      for (const pp of nuevaVenta.productos) {
-        const prod = productoStockMap[pp.productoId];
-        if (!prod) continue;
-        // mismo criterio que la vista previa: descuenta lo reservado y suma lo que
-        // esta misma venta (en edicion) ya tenia tomado.
-        const disponible = Math.max(0, prod.stock - (prod.stockReservado || 0))
-          + (editingId ? stockYaReservado[pp.productoId] || 0 : 0);
-        if (itemsPorProducto[pp.productoId] > disponible) {
-          setAvisoStock(`Stock insuficiente para "${prod.nombre}": se necesitan ${itemsPorProducto[pp.productoId]} unidades y hay ${Math.max(0, disponible)} disponibles.`);
-          return;
-        }
-      }
+      // Inventario: misma validación que al guardar (todas las líneas o ninguna).
+      if (simCarrito?.error) { setAvisoStock(mensajeVenta(simCarrito.error)); return; }
       setAvisoStock('');
 
       const datos = {
@@ -602,11 +596,10 @@ const stockInsuficiente = productoSeleccionado
         fecha_vencimiento: saldoPendiente > 0 ? nuevaVenta.fecha_vencimiento : undefined,
         nota: nuevaVenta.nota,
       };
-      if (editingId) {
-        updateVenta(editingId, datos);
-      } else {
-        addVenta(datos);
-      }
+      setGuardando(true);
+      const r = editingId ? updateVenta(editingId, datos) : addVenta({ ...datos, id: idVentaRef.current ?? undefined });
+      setGuardando(false);
+      if ('error' in r) { setAvisoStock(mensajeVenta(r.error)); return; }
       setShowModal(false);
       setEditingId(null);
       setMontoPagado('');
@@ -714,7 +707,7 @@ const stockInsuficiente = productoSeleccionado
             Exportar
           </button>
           <button 
-            onClick={() => { setEditingId(null); setShowModal(true); }}
+            onClick={() => { setEditingId(null); idVentaRef.current = crypto.randomUUID(); setAvisoStock(''); setShowModal(true); }}
             className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-lg">add</span>
@@ -722,6 +715,13 @@ const stockInsuficiente = productoSeleccionado
           </button>
         </div>
       </div>
+
+      {avisoMasivo && (
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-error/30 bg-error/10 px-4 py-3 text-sm font-bold text-error" role="alert">
+          <span>{avisoMasivo}</span>
+          <button type="button" onClick={() => setAvisoMasivo('')} aria-label="Cerrar aviso"><span className="material-symbols-outlined text-base">close</span></button>
+        </div>
+      )}
 
       {/* Summary Section */}
       <div className="space-y-4">
@@ -1160,14 +1160,14 @@ const stockInsuficiente = productoSeleccionado
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Presentación</label>
                     <div className="flex flex-wrap gap-2">
                       {presentacionesProducto.map(pr => {
-                        const disp = disponibilidad(productoSeleccionado, envases, pr);
+                        const disp = textoDisponibilidad(productoSeleccionado, envases, pr, politicaEnvaseAbierto);
                         const activa = pr.id === productoActual.presentacionId;
                         return (
                           <button key={pr.id} type="button" disabled={disp.unidades <= 0}
                             onClick={() => setProductoActual(prev => ({ ...prev, presentacionId: pr.id, precio: pr.precio }))}
                             className={`rounded-xl border px-3 py-2 text-left text-xs transition-colors disabled:opacity-40 ${activa ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/50 text-on-surface hover:bg-surface-container-low'}`}>
-                            <span className="block font-bold">{pr.nombre} · ${pr.precio.toLocaleString('es-CL')}</span>
-                            <span className="block text-[11px] opacity-80">{disp.texto}</span>
+                            <span className="block font-bold">{pr.nombre} · {disp.texto}</span>
+                            <span className="block text-[11px] opacity-80">${pr.precio.toLocaleString('es-CL')}</span>
                           </button>
                         );
                       })}
@@ -1186,9 +1186,8 @@ const stockInsuficiente = productoSeleccionado
                       className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface" 
                     />
                     {productoSeleccionado?.tipo === 'producto' && (
-                      <p className={`text-xs mt-1 ${stockInsuficiente ? 'text-error font-bold' : 'text-on-surface-variant'}`}>
-                        Stock: {Number(productoSeleccionado.stock).toLocaleString('es-CL')} {productoSeleccionado.unidadBase && productoSeleccionado.unidadBase !== 'unidad' ? productoSeleccionado.unidadBase : productoSeleccionado.unidadMedida}
-                        {presentacionActual && ` · esta venta descuenta ${((productoActual.cantidad || 0) * factorActual).toLocaleString('es-CL')} ${productoSeleccionado.unidadBase ?? ''}`}
+                      <p className="mt-1 text-xs text-on-surface-variant">
+                        Hay {usaEnvases(productoSeleccionado) ? resumenStock(productoSeleccionado, envases).texto : formatCantidad(productoSeleccionado.stock, productoSeleccionado.unidadBase)}
                       </p>
                     )}
                   </div>
@@ -1223,6 +1222,23 @@ const stockInsuficiente = productoSeleccionado
                     )}
                   </div>
                 </div>
+
+                {productoSeleccionado?.tipo === 'producto' && productoActual.esInventario && (errorItem || lineaItemSimulada?.consumosEnvase?.length) ? (
+                  errorItem?.codigo === 'requiere_abrir' && errorItem.sugerido ? (
+                    <div className="flex flex-col gap-2 rounded-xl border border-secondary/40 bg-secondary/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between" role="status">
+                      <p className="font-bold text-on-surface"><span className="material-symbols-outlined mr-1 align-middle text-base text-secondary">water_drop</span>{errorItem.mensaje}</p>
+                      <button type="button" onClick={abrirYAgregar} className="shrink-0 rounded-full bg-primary px-4 py-2 text-xs font-bold text-inverse-on-surface">
+                        Abrir {errorItem.sugerido.codigo} y vender
+                      </button>
+                    </div>
+                  ) : errorItem ? (
+                    <p className="rounded-xl bg-error/10 px-4 py-2.5 text-sm font-bold text-error" role="alert">{errorItem.mensaje}</p>
+                  ) : (
+                    <p className="rounded-xl bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary" role="status">
+                      Esta venta descuenta {describirConsumos(productoSeleccionado, envases, lineaItemSimulada!.consumosEnvase)}.
+                    </p>
+                  )
+                ) : null}
 
                 {promocionActiva && productoActual.esInventario && (
                   <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-tertiary/10 border border-tertiary/30 text-tertiary text-sm font-bold">
@@ -1277,6 +1293,14 @@ const stockInsuficiente = productoSeleccionado
                             <td className="px-4 py-2">
                               <span className="font-medium text-on-surface">{prod.productoNombre}</span>
                               {prod.esInventariable === false && <span className="block text-[10px] text-on-surface-variant/60">Item libre / no inventariable</span>}
+                              {(() => {
+                                const l = simCarrito?.lineas[idx];
+                                const pr = inventario.find(x => x.id === prod.productoId);
+                                if (simCarrito?.error?.linea === idx) return <span className="block text-[11px] font-bold text-error">{simCarrito.error.mensaje}</span>;
+                                return l?.consumosEnvase?.length && pr
+                                  ? <span className="block text-[11px] font-bold text-primary">Descuenta {describirConsumos(pr, envases, l.consumosEnvase)}</span>
+                                  : null;
+                              })()}
                               {prod.descuentoTipo && prod.descuentoTipo !== 'ninguno' && (
                                 <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold">
                                   <span className="material-symbols-outlined text-[12px]">local_offer</span>
@@ -1421,7 +1445,7 @@ const stockInsuficiente = productoSeleccionado
               </button>
               <button 
                 onClick={handleGuardar} 
-                disabled={!nuevaVenta.productos || nuevaVenta.productos.length === 0}
+                disabled={guardando || !nuevaVenta.productos || nuevaVenta.productos.length === 0 || !!simCarrito?.error}
                 className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
               >
                 Guardar Venta
