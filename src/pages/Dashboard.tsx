@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 import { useERP } from '../1.-ERP/context/ERPContext';
-import { calcularAlertas, estadoStock, type TipoAlerta } from '../1.-ERP/services/alertas';
+import { estadoStock, visibles, type TipoAlerta } from '../1.-ERP/services/alertas';
 import { stockDisponible } from '../1.-ERP/services/inventarioFraccionado';
 import { formatCLP, formatFecha, hoyISO } from '../lib/fechas';
 import { planPorId } from '../lib/planes';
@@ -16,6 +16,7 @@ export default function Dashboard() {
     documentosTributarios, pagosPOS, promociones, saldos,
     getF29Preparador,
     envases,
+    alertas: alertasContexto,
   } = useERP();
 
   const hoy = new Date();
@@ -45,15 +46,13 @@ export default function Dashboard() {
   const egresosHoy = movimientosHoy.filter(m => m.tipo === 'Egreso').reduce((acc, m) => acc + m.monto, 0);
 
   // Saldos y alertas desde la fuente única (correcciones #4 y #16)
-  const productosStockBajo = useMemo(() => inventario.filter(p => { const e = estadoStock(p, stockDisponible(p, envases)); return e === 'bajo' || e === 'sin_stock'; }), [inventario, envases]);
+  const productosStockBajo = useMemo(() => inventario.filter(p => { const e = estadoStock(p, stockDisponible(p, envases), envases); return e === 'bajo' || e === 'sin_stock'; }), [inventario, envases]);
   const totalCxC = saldos.resumen.porCobrar;
   const totalCxP = saldos.resumen.porPagar;
   const ventasPendientes = { length: saldos.resumen.ventasPorCobrar };
   const gastosPorPagar = { length: saldos.resumen.comprasPorPagar };
-  const alertas = useMemo(
-    () => calcularAlertas({ inventario, envases, saldos, documentosTributarios, pagosPOS, promociones, movimientos }),
-    [inventario, envases, saldos, documentosTributarios, pagosPOS, promociones, movimientos]
-  );
+  // Las 3 principales desde la MISMA fuente que la campana y el Centro de alertas (sin pospuestas ni descartadas).
+  const alertas = useMemo(() => visibles(alertasContexto), [alertasContexto]);
 
   const periodoActual = `${anioActual}-${String(mesActual + 1).padStart(2, '0')}`;
   const documentosMes = documentosTributarios.filter(d => d.periodoTributario === periodoActual);
@@ -89,7 +88,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto min-h-screen">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 bg-surface-container-lowest dark-card p-6 rounded-3xl shadow-sm">
         <div>

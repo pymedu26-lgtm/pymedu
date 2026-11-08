@@ -30,7 +30,7 @@ export async function indicadoresNegocio(usuarioId) {
 router.use(requireAuth);
 
 const COLECCIONES = new Set(['ventas', 'gastos', 'clientes', 'proveedores', 'movimientos', 'inventario', 'movimientosInventario',
-  'promociones', 'abonos', 'documentosTributarios', 'integracionEventos', 'pagosPOS', 'lotes', 'envases', 'config']);
+  'promociones', 'abonos', 'documentosTributarios', 'integracionEventos', 'pagosPOS', 'lotes', 'envases', 'notificaciones', 'config']);
 
 /**
  * Lectura por recurso, paginada y con búsqueda en el servidor (correcciones #1 y #5).
