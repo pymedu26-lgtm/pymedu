@@ -5,6 +5,8 @@ import Paginacion, { usePaginacion } from '../../components/Paginacion';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
 import ModalHistorialProveedor from '../../1.-ERP/components/ModalHistorialProveedor';
+import TablaResponsiva, { type ColumnaTabla } from '../../components/TablaResponsiva';
+import ModalResponsivo from '../../components/ModalResponsivo';
 
 const ModalCargaMasivaProveedores = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaProveedores'));
 
@@ -116,163 +118,160 @@ export default function ERPProveedores() {
     setNuevo({ nombre: '', categoria: CATEGORIAS[0], telefono: '', email: '', condicion_pago: '', rut: '' });
   };
 
+  const montoDeuda = (p: Proveedor) => {
+    const deuda = deudaDe(p);
+    return <span className={cn('font-extrabold whitespace-nowrap', deuda > 0 ? 'text-secondary' : 'text-success')}>{fmt(deuda)}</span>;
+  };
+  const chipCategoria = (p: Proveedor) => p.categoria
+    ? <span className="text-xs bg-surface-container-high text-on-surface-variant font-bold px-2 py-1 rounded-full whitespace-nowrap">{p.categoria}</span>
+    : null;
+
+  const columnasProveedores: ColumnaTabla<Proveedor>[] = [
+    {
+      clave: 'proveedor', titulo: 'Proveedor', celda: p => (
+        <>
+          <p className="font-bold text-on-surface">{p.nombre}</p>
+          {p.rut && <p className="text-xs text-on-surface-variant">{p.rut}</p>}
+        </>
+      ),
+    },
+    { clave: 'categoria', titulo: 'Categoría', celda: chipCategoria },
+    {
+      clave: 'contacto', titulo: 'Contacto', celda: p => (
+        <div className="text-on-surface-variant text-xs">
+          <p>{p.email || '—'}</p>
+          <p>{p.telefono || '—'}</p>
+        </div>
+      ),
+    },
+    { clave: 'deuda', titulo: 'Deuda pendiente', celda: montoDeuda },
+    { clave: 'condicion', titulo: 'Condición', celda: p => <span className="text-on-surface-variant">{p.condicion_pago || '—'}</span> },
+  ];
+
+  const botonEncabezado = 'flex min-h-11 grow sm:grow-0 items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full font-bold text-sm transition-all';
+  const claseCampo = 'w-full min-h-11 px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface';
+  const claseEtiqueta = 'block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5';
+
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span className="material-symbols-outlined text-4xl">local_shipping</span>
+        <div className="min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-primary flex items-center gap-3">
+            <span className="material-symbols-outlined text-3xl sm:text-4xl">local_shipping</span>
             Proveedores
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus proveedores y cuentas por pagar.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button onClick={() => setShowCargaMasiva(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
+            className={cn(botonEncabezado, 'bg-surface-container-lowest text-primary border border-primary/30 shadow-sm hover:bg-primary/5')}>
             <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportarProveedoresCSV}
-            className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
+            className={cn(botonEncabezado, 'bg-surface-container-lowest text-primary border border-primary/30 shadow-sm hover:bg-primary/5')}>
             <span className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
           <button onClick={abrirNuevo}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+            className={cn(botonEncabezado, 'bg-primary text-inverse-on-surface shadow-lg shadow-primary/20 hover:scale-105 transition-transform')}>
             <span className="material-symbols-outlined text-lg">person_add</span>
             Nuevo Proveedor
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20 min-w-0">
           <p className="text-[10px] font-black uppercase tracking-widest text-primary">Total proveedores</p>
-          <p className="text-3xl font-black text-primary mt-1">{proveedores.length}</p>
+          <p className="text-2xl xl:text-3xl font-black text-primary mt-1 break-words">{proveedores.length}</p>
         </div>
-        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20">
+        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20 min-w-0">
           <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Deuda total</p>
-          <p className="text-3xl font-black text-on-surface mt-1">{fmt(totalDeuda)}</p>
+          <p className="text-2xl xl:text-3xl font-black text-on-surface mt-1 break-words">{fmt(totalDeuda)}</p>
         </div>
       </div>
 
       <div className="relative">
         <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
-        <input type="text" placeholder="Buscar por nombre o categoría..." value={busqueda}
+        <input type="text" enterKeyHint="search" placeholder="Buscar por nombre o categoría..." value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+          className="w-full min-h-11 pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
       </div>
 
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-container-low border-b border-outline-variant/20">
-              <tr>
-                {['Proveedor', 'Categoría', 'Contacto', 'Deuda pendiente', 'Condición', 'Acciones'].map(h => (
-                  <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/10">
-              {proveedoresFiltrados.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-on-surface-variant">No se encontraron proveedores.</td></tr>
-              )}
-              {paginacion.visibles.map(p => (
-                <tr key={p.id} className="hover:bg-surface-container-low/50 transition-colors">
-                  <td className="p-4">
-                    <p className="font-bold text-on-surface">{p.nombre}</p>
-                    {p.rut && <p className="text-xs text-on-surface-variant">{p.rut}</p>}
-                  </td>
-                  <td className="p-4"><span className="text-xs bg-surface-container-high text-on-surface-variant font-bold px-2 py-1 rounded-full whitespace-nowrap">{p.categoria}</span></td>
-                  <td className="p-4 text-on-surface-variant text-xs">
-                    <p>{p.email || '—'}</p>
-                    <p>{p.telefono || '—'}</p>
-                  </td>
-                  <td className="p-4">
-                    <span className={cn('font-extrabold', deudaDe(p) > 0 ? 'text-secondary' : 'text-success')}>{fmt(deudaDe(p))}</span>
-                  </td>
-                  <td className="p-4 text-on-surface-variant">{p.condicion_pago || '—'}</td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => abrirEditar(p)}
-                    className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
-                    title="Editar">
-                    <span className="material-symbols-outlined text-base">edit</span>
-                  </button>
-                  <button
-                    onClick={() => setHistorialProveedor(p)}
-                    className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
-                    title="Historial de pagos/deudas">
-                    <span className="material-symbols-outlined text-base">history</span>
-                  </button>
-                  <button
-                    onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
-                    className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
-                    title="Eliminar">
-                    <span className="material-symbols-outlined text-base">delete</span>
-                  </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Sin overflow-hidden bajo md: el menú ⋯ de la última tarjeta no debe quedar recortado. */}
+      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm md:overflow-hidden">
+        <TablaResponsiva
+          filas={paginacion.visibles}
+          clave={p => p.id}
+          columnas={columnasProveedores}
+          tituloTarjeta={p => p.nombre}
+          subtituloTarjeta={p => [p.rut, p.categoria].filter(Boolean).join(' · ')}
+          insigniaTarjeta={montoDeuda}
+          datosTarjeta={p => [
+            { etiqueta: 'Condición', valor: p.condicion_pago || '—' },
+            { etiqueta: 'Teléfono', valor: p.telefono || '—' },
+            { etiqueta: 'Email', valor: <span className="break-all">{p.email || '—'}</span> },
+          ]}
+          acciones={p => [
+            { etiqueta: 'Editar', icono: 'edit', onClick: () => abrirEditar(p) },
+            { etiqueta: 'Historial de pagos/deudas', icono: 'history', onClick: () => setHistorialProveedor(p) },
+            { etiqueta: 'Eliminar', icono: 'delete', peligro: true, onClick: () => { setItemToDelete(p.id); setDeleteModalOpen(true); } },
+          ]}
+          vacio={<p className="p-8 text-center text-on-surface-variant">No se encontraron proveedores.</p>}
+        />
         <Paginacion {...paginacion} />
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-primary">{editandoId ? 'Editar Proveedor' : 'Nuevo Proveedor'}</h3>
-        <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
-          <span className="material-symbols-outlined">close</span>
-        </button>
-      </div>
-      <div className="p-6 space-y-4 overflow-y-auto">
-        <div>
-          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre / Razón social</label>
-          <input type="text" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
-            className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">RUT (opcional)</label>
-          <input type="text" value={nuevo.rut} onChange={e => setNuevo({ ...nuevo, rut: e.target.value })}
-            className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoría</label>
-          <select value={nuevo.categoria} onChange={e => setNuevo({ ...nuevo, categoria: e.target.value })}
-            className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface">
-            {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Teléfono</label>
-            <input type="text" value={nuevo.telefono} onChange={e => setNuevo({ ...nuevo, telefono: e.target.value })}
-              className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+        <ModalResponsivo
+          titulo={editandoId ? 'Editar Proveedor' : 'Nuevo Proveedor'}
+          onCerrar={cerrarModal}
+          ancho="sm:max-w-lg"
+          pie={
+            <>
+              <button type="button" onClick={cerrarModal} className="flex-1 min-h-11 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button type="button" onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 min-h-11 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50">{editandoId ? 'Guardar Cambios' : 'Guardar Proveedor'}</button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="proveedor-nombre" className={claseEtiqueta}>Nombre / Razón social</label>
+              <input id="proveedor-nombre" type="text" autoComplete="organization" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
+                className={claseCampo} />
+            </div>
+            <div>
+              <label htmlFor="proveedor-rut" className={claseEtiqueta}>RUT (opcional)</label>
+              <input id="proveedor-rut" type="text" autoComplete="off" value={nuevo.rut} onChange={e => setNuevo({ ...nuevo, rut: e.target.value })}
+                className={claseCampo} />
+            </div>
+            <div>
+              <label htmlFor="proveedor-categoria" className={claseEtiqueta}>Categoría</label>
+              <select id="proveedor-categoria" value={nuevo.categoria} onChange={e => setNuevo({ ...nuevo, categoria: e.target.value })}
+                className={claseCampo}>
+                {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="proveedor-telefono" className={claseEtiqueta}>Teléfono</label>
+                <input id="proveedor-telefono" type="tel" inputMode="tel" autoComplete="tel" value={nuevo.telefono} onChange={e => setNuevo({ ...nuevo, telefono: e.target.value })}
+                  className={claseCampo} />
+              </div>
+              <div>
+                <label htmlFor="proveedor-email" className={claseEtiqueta}>Email</label>
+                <input id="proveedor-email" type="email" inputMode="email" autoComplete="email" value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })}
+                  className={claseCampo} />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="proveedor-condicion" className={claseEtiqueta}>Condición de pago</label>
+              <input id="proveedor-condicion" type="text" placeholder="Ej: 30 días" value={nuevo.condicion_pago} onChange={e => setNuevo({ ...nuevo, condicion_pago: e.target.value })}
+                className={claseCampo} />
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Email</label>
-            <input type="text" value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })}
-              className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Condición de pago</label>
-          <input type="text" placeholder="Ej: 30 días" value={nuevo.condicion_pago} onChange={e => setNuevo({ ...nuevo, condicion_pago: e.target.value })}
-            className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
-        </div>
-      </div>
-      <div className="px-6 pb-6 flex gap-3 shrink-0">
-        <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-        <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50">{editandoId ? 'Guardar Cambios' : 'Guardar Proveedor'}</button>
-      </div>
-          </div>
-        </div>
+        </ModalResponsivo>
       )}
 
       {showCargaMasiva && (

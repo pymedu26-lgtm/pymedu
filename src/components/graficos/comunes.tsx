@@ -57,10 +57,10 @@ export function CajaTooltip({ titulo, filas }: {
   );
 }
 
-/** Leyenda HTML compacta (fuera del SVG, nunca empuja ni recorta el gráfico). */
-export function Leyenda({ items }: { items: Array<{ nombre: string; color: string; linea?: boolean }> }) {
+/** Leyenda HTML compacta (fuera del SVG, nunca empuja ni recorta el gráfico). `abajo`: bajo el gráfico (móvil). */
+export function Leyenda({ items, abajo }: { items: Array<{ nombre: string; color: string; linea?: boolean }>; abajo?: boolean }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-xs text-on-surface-variant">
+    <ul className={cn('flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface-variant', abajo ? 'mt-3 justify-center' : 'mb-3')}>
       {items.map(i => (
         <li key={i.nombre} className="flex items-center gap-1.5">
           <span className={cn('shrink-0', i.linea ? 'w-3.5 h-0.5 rounded-full' : 'w-2.5 h-2.5 rounded-sm')} style={{ background: i.color }} />

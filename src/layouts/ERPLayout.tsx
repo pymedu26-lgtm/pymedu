@@ -4,6 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useERP } from '../1.-ERP/context/ERPContext';
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import Toaster from '../components/Toaster';
+import { cuentaCampana, visibles, horaRelativa, type Alerta } from '../1.-ERP/services/alertas';
+
+const COLOR_ALERTA: Record<Alerta['tipo'], string> = {
+  critica: 'text-error bg-error/10', tributaria: 'text-violet bg-violet/15', advertencia: 'text-warning bg-warning/15', info: 'text-primary bg-primary/10', exito: 'text-success bg-success/15',
+};
 
 interface NavItem {
   name: string;
@@ -25,7 +32,7 @@ interface NavGroup {
 
 export default function ERPLayout() {
   const { perfil, signOut, puedeHacer } = useAuth();
-  const { saldos } = useERP();
+  const { saldos, alertas, marcarAlertas } = useERP();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,14 +40,25 @@ export default function ERPLayout() {
   const [openGroups, setOpenGroups] = useState<Set<string>>(
     () => new Set()
   );
-  // Bajo 1024 px el menú parte colapsado y se colapsa solo al achicar la ventana (corrección #26).
-  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1024);
+  // Desde 1024 px el menú es lateral (ancho o en íconos). Bajo 1024 px es un CAJÓN deslizable
+  // que se abre con la hamburguesa de la barra superior, se cierra al tocar fuera y al navegar.
+  const [esEscritorio, setEsEscritorio] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1024);
+  const [sidebarAbierto, setSidebarAbierto] = useState(true);
+  const [cajonAbierto, setCajonAbierto] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)');
-    const alCambiar = (e: MediaQueryListEvent) => setSidebarOpen(e.matches);
+    const alCambiar = (e: MediaQueryListEvent) => { setEsEscritorio(e.matches); if (e.matches) setCajonAbierto(false); };
     mq.addEventListener('change', alCambiar);
     return () => mq.removeEventListener('change', alCambiar);
   }, []);
+  useEffect(() => { setCajonAbierto(false); setCampanaAbierta(false); }, [location.pathname, location.search]);
+  /** En el cajón (móvil y tablet) el menú siempre se ve expandido. */
+  const sidebarOpen = esEscritorio ? sidebarAbierto : true;
+  const setSidebarOpen = (v: boolean) => (esEscritorio ? setSidebarAbierto(v) : setCajonAbierto(false));
+  // Campana: insignia con alertas nuevas (críticas y avisos) y las 5 principales.
+  const [campanaAbierta, setCampanaAbierta] = useState(false);
+  const nuevasCampana = cuentaCampana(alertas);
+  const principales = visibles(alertas).slice(0, 5);
   const [avatarError, setAvatarError] = useState(false);
   const [flyoutTop, setFlyoutTop] = useState(8);
   const flyoutRef = useRef<HTMLDivElement>(null);
@@ -340,21 +358,30 @@ name: 'Mi institución',
 
   return (
     <div className="flex min-h-screen bg-surface text-on-surface">
+      {/* Fondo del cajón (móvil y tablet): tocar fuera lo cierra. */}
+      {!esEscritorio && cajonAbierto && (
+        <div className="fixed inset-0 z-[1150] bg-scrim/50 backdrop-blur-[2px]" onClick={() => setCajonAbierto(false)} aria-hidden="true" />
+      )}
       {/* ── Sidebar ── */}
       <aside
+        aria-label="Menú principal"
+        aria-hidden={!esEscritorio && !cajonAbierto ? true : undefined}
+        style={!esEscritorio ? { paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } : undefined}
         className={cn(
-          'sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300',
-          !sidebarOpen && openGroups.size > 0 && 'z-[1100]',
-          sidebarOpen ? 'w-[248px]' : 'w-[64px]'
+          'flex flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300',
+          esEscritorio
+            ? cn('sticky left-0 top-0 z-50 h-screen', !sidebarOpen && openGroups.size > 0 && 'z-[1100]', sidebarOpen ? 'w-[248px]' : 'w-[64px]')
+            : cn('fixed inset-y-0 left-0 z-[1200] h-[100dvh] w-[280px] max-w-[85vw]', cajonAbierto ? 'translate-x-0' : '-translate-x-full invisible')
         )}
       >
         <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-3.5 shrink-0">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20"
+            aria-label={esEscritorio ? (sidebarOpen ? 'Contraer menú' : 'Expandir menú') : 'Cerrar menú'}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20 lg:h-9 lg:w-9"
           >
             <span className="material-symbols-outlined text-lg text-white">
-              {sidebarOpen ? 'menu_open' : 'menu'}
+              {esEscritorio ? (sidebarOpen ? 'menu_open' : 'menu') : 'close'}
             </span>
           </button>
 
@@ -564,7 +591,17 @@ name: 'Mi institución',
 
       {/* ── Main content area ── */}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-3 border-b border-outline-variant/60 bg-surface-container-lowest/95 px-4 shadow-sm backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-40 flex min-h-14 w-full items-center justify-between gap-2 border-b border-outline-variant/60 bg-surface-container-lowest/95 px-3 shadow-sm backdrop-blur-md sm:gap-3 sm:px-6"
+          style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+          {!esEscritorio && (
+            <div className="flex min-w-0 items-center gap-1">
+              <button type="button" onClick={() => setCajonAbierto(true)} aria-label="Abrir menú" aria-expanded={cajonAbierto}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-on-surface hover:bg-surface-container">
+                <span className="material-symbols-outlined">menu</span>
+              </button>
+              <Link to="/erp/inicio" className="truncate text-base font-black tracking-tight text-primary">PymEdu</Link>
+            </div>
+          )}
           {location.pathname !== '/erp/inicio' && (
             <div className="hidden max-w-md flex-1 items-center md:flex">
               <div className="group relative w-full">
@@ -594,7 +631,7 @@ name: 'Mi institución',
 
             <button
               onClick={toggleTheme}
-              className="relative rounded-full p-2 transition-colors hover:bg-surface-container cursor-default"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-surface-container cursor-default"
               title={theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
             >
               <span className="material-symbols-outlined text-xl text-on-surface-variant">
@@ -602,12 +639,65 @@ name: 'Mi institución',
               </span>
             </button>
 
-            <Link to="/erp/alertas" title="Centro de alertas" className="relative rounded-full p-2 transition-colors hover:bg-surface-container">
-              <span className="material-symbols-outlined text-xl text-on-surface-variant">notifications</span>
-              {hayVencidos && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface-container-lowest bg-error" />}
-            </Link>
+            <div className="relative">
+              <button type="button" onClick={() => setCampanaAbierta(v => !v)} aria-expanded={campanaAbierta} aria-haspopup="dialog"
+                aria-label={nuevasCampana > 0 ? `Alertas: ${nuevasCampana} nuevas` : 'Alertas'}
+                className="relative flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-surface-container">
+                <span className="material-symbols-outlined text-xl text-on-surface-variant">notifications</span>
+                {nuevasCampana > 0 && (
+                  <span className="absolute right-0.5 top-0.5 min-w-[18px] rounded-full border-2 border-surface-container-lowest bg-error px-1 text-center text-[10px] font-black leading-[14px] text-inverse-on-surface">
+                    {nuevasCampana > 9 ? '9+' : nuevasCampana}
+                  </span>
+                )}
+              </button>
+              {campanaAbierta && createPortal(
+                <>
+                  <div className="fixed inset-0 z-[1250] bg-scrim/40 sm:bg-transparent" onClick={() => setCampanaAbierta(false)} />
+                  {/* Portal en body: el backdrop-blur del encabezado volvía relativo a él todo lo «fixed». Hoja inferior en móvil; panel bajo la campana desde sm. */}
+                  <div role="dialog" aria-label="Alertas principales"
+                    className="fixed inset-x-0 bottom-0 z-[1260] flex max-h-[80dvh] flex-col rounded-t-3xl bg-surface-container-lowest shadow-2xl ring-1 ring-black/5 sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[4.25rem] sm:max-h-[70vh] sm:w-96 sm:rounded-2xl"
+                    style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                    <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-outline-variant sm:hidden" />
+                    <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
+                      <p className="text-sm font-black text-on-surface">{nuevasCampana > 0 ? `${nuevasCampana} nueva${nuevasCampana === 1 ? '' : 's'}` : 'Alertas'}</p>
+                      {nuevasCampana > 0 && (
+                        <button type="button" onClick={() => marcarAlertas(alertas.filter(a => a.estado === 'nueva').flatMap(a => a.grupo ? a.grupo.map(g => g.clave) : [a.clave]), 'vista')}
+                          className="min-h-9 rounded-full px-3 text-xs font-bold text-primary hover:bg-primary/10">Marcar todo como visto</button>
+                      )}
+                    </div>
+                    <ul className="min-h-0 flex-1 divide-y divide-outline-variant/20 overflow-y-auto">
+                      {principales.length === 0 && <li className="px-4 py-8 text-center text-sm text-on-surface-variant">Todo al día.</li>}
+                      {principales.map(a => (
+                        <li key={a.id}>
+                          <button type="button" className="flex min-h-14 w-full items-start gap-3 px-4 py-3 text-left hover:bg-surface-container-low"
+                            onClick={() => {
+                              marcarAlertas(a.grupo ? a.grupo.map(g => g.clave) : [a.clave], 'vista');
+                              setCampanaAbierta(false);
+                              navigate(a.acciones[0]?.url ?? '/erp/alertas');
+                            }}>
+                            <span className={cn('material-symbols-outlined shrink-0 rounded-xl p-1.5 text-lg', COLOR_ALERTA[a.tipo])}>{a.icono}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1 text-sm font-bold text-on-surface">
+                                {a.estado === 'nueva' && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="nueva" />}
+                                <span className="truncate">{a.titulo}</span>
+                              </span>
+                              <span className="line-clamp-2 text-xs text-on-surface-variant">{a.detalle}</span>
+                              <span className="text-[10px] font-bold text-outline">{horaRelativa(a.creadaEn)}</span>
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link to="/erp/alertas" onClick={() => setCampanaAbierta(false)}
+                      className="flex min-h-12 items-center justify-center border-t border-outline-variant/20 text-sm font-bold text-primary hover:bg-primary/5">
+                      Ver todas las alertas
+                    </Link>
+                  </div>
+                </>, document.body
+              )}
+            </div>
 
-            <div className="h-7 w-px bg-outline-variant" />
+            <div className="hidden h-7 w-px bg-outline-variant sm:block" />
 
             <div className="relative">
               <button
@@ -667,10 +757,11 @@ Cerrar sesión
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <Outlet />
         </div>
       </main>
+      <Toaster />
     </div>
   );
 }

@@ -83,12 +83,12 @@ function Kpi({ titulo, icono, valor, pie, detalle, negativo }: {
   titulo: string; icono: string; valor: string; pie?: ReactNode; detalle?: string; negativo?: boolean;
 }) {
   return (
-    <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/20 p-4 min-w-0">
+    <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/20 p-3 sm:p-4 min-w-0">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant truncate">{titulo}</p>
         <span className="material-symbols-outlined text-base text-outline">{icono}</span>
       </div>
-      <p className={cn('text-xl font-black mt-1 tabular-nums truncate', negativo ? 'text-error' : 'text-on-surface')} title={valor}>{valor}</p>
+      <p className={cn('text-lg sm:text-xl font-black mt-1 tabular-nums truncate', negativo ? 'text-error' : 'text-on-surface')} title={valor}>{valor}</p>
       {pie && <p className="text-[11px] mt-1 truncate">{pie}</p>}
       {detalle && <p className="text-[11px] text-on-surface-variant mt-0.5 truncate" title={detalle}>{detalle}</p>}
     </div>
@@ -437,48 +437,48 @@ export default function ERPReportes() {
 
   /* ══ Pantalla ══ */
   const botonModo = (m: Modo) => cn(
-    'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+    'flex-1 sm:flex-none min-h-11 sm:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
     modo === m ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
   );
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6">
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span className="material-symbols-outlined text-4xl">bar_chart</span>
+        <div className="min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-primary flex items-center gap-3">
+            <span className="material-symbols-outlined text-3xl sm:text-4xl">bar_chart</span>
             Reportes y Tributos
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Resultados del periodo, comparación, IVA mensual (F29) y descargas.</p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex p-1 bg-surface-container-high rounded-xl" role="tablist" aria-label="Tipo de periodo">
+          <div className="flex w-full sm:w-auto p-1 bg-surface-container-high rounded-xl" role="tablist" aria-label="Tipo de periodo">
             {MODOS.map(m => (
               <button key={m.valor} type="button" role="tab" aria-selected={modo === m.valor} onClick={() => setModo(m.valor)} className={botonModo(m.valor)}>
                 {m.etiqueta}
               </button>
             ))}
           </div>
-          {modo === 'mes' && <SelectorDesplegable className="w-52" icono="calendar_month" valor={mes} opciones={opcionesMes} onChange={setMes} />}
-          {modo === 'trimestre' && <SelectorDesplegable className="w-60" icono="date_range" valor={trimestre} opciones={opcionesTrimestre} onChange={setTrimestre} />}
-          {modo === 'anio' && <SelectorDesplegable className="w-36" icono="event" valor={anio} opciones={opcionesAnio} onChange={setAnio} />}
+          {modo === 'mes' && <SelectorDesplegable className="w-full sm:w-52" icono="calendar_month" valor={mes} opciones={opcionesMes} onChange={setMes} />}
+          {modo === 'trimestre' && <SelectorDesplegable className="w-full sm:w-60" icono="date_range" valor={trimestre} opciones={opcionesTrimestre} onChange={setTrimestre} />}
+          {modo === 'anio' && <SelectorDesplegable className="w-full sm:w-36" icono="event" valor={anio} opciones={opcionesAnio} onChange={setAnio} />}
           {modo === 'rango' && (
             <>
-              <div className="flex flex-col text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <div className="flex flex-1 sm:flex-none min-w-0 flex-col text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                 Desde
-                <SelectorFecha className="w-40 mt-1" value={rangoManual.inicio} onChange={inicio => setRangoManual(r => ({ ...r, inicio }))} />
+                <SelectorFecha className="w-full sm:w-40 mt-1" value={rangoManual.inicio} onChange={inicio => setRangoManual(r => ({ ...r, inicio }))} />
               </div>
-              <div className="flex flex-col text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <div className="flex flex-1 sm:flex-none min-w-0 flex-col text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                 Hasta
-                <SelectorFecha className="w-40 mt-1" value={rangoManual.fin} onChange={fin => setRangoManual(r => ({ ...r, fin }))} />
+                <SelectorFecha className="w-full sm:w-40 mt-1" value={rangoManual.fin} onChange={fin => setRangoManual(r => ({ ...r, fin }))} />
               </div>
             </>
           )}
-          <button onClick={descargarPdf} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/50 bg-surface-container-lowest text-on-surface text-sm font-bold hover:border-primary/40 transition-colors">
+          <button onClick={descargarPdf} className="flex flex-1 sm:flex-none min-h-11 items-center justify-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/50 bg-surface-container-lowest text-on-surface text-sm font-bold hover:border-primary/40 transition-colors">
             <span className="material-symbols-outlined text-lg text-error">picture_as_pdf</span>
             PDF
           </button>
-          <button onClick={descargarExcel} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/50 bg-surface-container-lowest text-on-surface text-sm font-bold hover:border-primary/40 transition-colors">
+          <button onClick={descargarExcel} className="flex flex-1 sm:flex-none min-h-11 items-center justify-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/50 bg-surface-container-lowest text-on-surface text-sm font-bold hover:border-primary/40 transition-colors">
             <span className="material-symbols-outlined text-lg text-success">table_view</span>
             Excel
           </button>
@@ -494,7 +494,7 @@ export default function ERPReportes() {
 
       <div className={cn('space-y-6 transition-opacity', actualizando && 'opacity-60')}>
         {/* ── Indicadores con comparación ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
           {indicadores.map(k => (
             <Fragment key={k.titulo}>
               <Kpi titulo={k.titulo} icono={k.icono} valor={k.valor} negativo={k.negativo}
@@ -504,7 +504,7 @@ export default function ERPReportes() {
         </div>
 
         {/* ── Caja del periodo y saldos globales a hoy ── */}
-        <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
           <Kpi titulo="Mermas de inventario" icono="delete_sweep" valor={formatCLP(mermas)}
             detalle={nMermas ? plural(nMermas, 'ajuste por merma', 'ajustes por merma') + ' · gasto, no costo de venta' : 'Sin mermas en el periodo'} />
           <Kpi titulo="Cobrado en el periodo" icono="call_received" valor={formatCLP(cobrado)} detalle="Abonos recibidos de clientes" />
@@ -516,7 +516,7 @@ export default function ERPReportes() {
         </div>
 
         {/* ── Flujo del periodo + saldo acumulado ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           <TarjetaGrafico
             className="lg:col-span-2" icono="stacked_bar_chart" titulo="Ingresos, egresos y resultado"
             subtitulo={`${NOMBRE_GRANULARIDAD[flujo.granularidad].replace(/^p/, 'P')} · ${etiquetaRango}`}
@@ -536,7 +536,7 @@ export default function ERPReportes() {
         </div>
 
         {/* ── Composición ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
           <TarjetaGrafico icono="donut_large" titulo="Ventas por categoría" subtitulo="Top 6 y el resto en «Otros»">
             <GraficoDona items={ventasPorCategoria} vacio="Sin ventas en el periodo" />
           </TarjetaGrafico>
@@ -549,7 +549,7 @@ export default function ERPReportes() {
         </div>
 
         {/* ── Rankings ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <TarjetaGrafico icono="inventory_2" titulo="Productos más vendidos" subtitulo="Por monto vendido">
             <GraficoBarras items={topProductos} max={8} color={paleta.categorias[0]} vacio="Sin ventas en el periodo" />
           </TarjetaGrafico>
@@ -558,7 +558,7 @@ export default function ERPReportes() {
           </TarjetaGrafico>
         </div>
 
-        {/* ── Resumen por mes (rangos de más de un mes) ── */}
+        {/* ── Resumen por mes (rangos de más de un mes): reporte denso de cifras, se queda como tabla con scroll horizontal propio ── */}
         {variosMeses && (
           <TarjetaGrafico icono="table_chart" titulo="Resumen por mes" subtitulo={etiquetaRango}>
             <div className="overflow-x-auto -mx-5">
@@ -593,7 +593,7 @@ export default function ERPReportes() {
           </TarjetaGrafico>
         )}
 
-        {/* ── F29: una fila por mes cuando el rango cubre varios ── */}
+        {/* ── F29: una fila por mes cuando el rango cubre varios (tabla densa con scroll horizontal propio) ── */}
         <TarjetaGrafico
           icono="account_balance_wallet"
           titulo={variosMeses ? 'Liquidación IVA mensual (F29) por mes' : `Liquidación IVA mensual (F29) — ${f29Meses[0]?.etiqueta ?? etiquetaRango}`}
@@ -628,7 +628,7 @@ export default function ERPReportes() {
               </table>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 text-sm">
               {[
                 { label: 'IVA débito', value: f29Total.ivaDebito },
                 { label: 'IVA crédito', value: f29Total.ivaCredito },
@@ -641,7 +641,7 @@ export default function ERPReportes() {
               ].map(item => (
                 <div key={item.label} className="rounded-xl bg-surface-container-low p-3 min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant truncate">{item.label}</p>
-                  <p className="text-lg font-black text-on-surface mt-1 tabular-nums">{item.cantidad ? item.value.toLocaleString('es-CL') : formatCLP(item.value)}</p>
+                  <p className="text-base sm:text-lg font-black text-on-surface mt-1 tabular-nums break-words">{item.cantidad ? item.value.toLocaleString('es-CL') : formatCLP(item.value)}</p>
                 </div>
               ))}
             </div>
@@ -649,8 +649,8 @@ export default function ERPReportes() {
           {alertasF29.length > 0 && (
             <ul className="mt-4 space-y-2">
               {alertasF29.slice(0, 8).map(a => (
-                <li key={a} className="flex items-center gap-2 text-sm text-on-surface bg-secondary/10 rounded-xl px-3 py-2">
-                  <span className="material-symbols-outlined text-base text-secondary">warning</span>{a}
+                <li key={a} className="flex items-start gap-2 text-sm text-on-surface bg-secondary/10 rounded-xl px-3 py-2">
+                  <span className="material-symbols-outlined text-base text-secondary shrink-0">warning</span>{a}
                 </li>
               ))}
               {alertasF29.length > 8 && <li className="text-xs text-on-surface-variant">y {alertasF29.length - 8} alertas más</li>}
@@ -659,7 +659,7 @@ export default function ERPReportes() {
         </TarjetaGrafico>
 
         {/* ── Detalle reciente ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {[
             { titulo: 'Ventas del periodo', total: ventasP.length, vacio: 'Sin ventas en el periodo', color: 'text-on-surface',
               filas: recientes.ventas.map(v => ({ id: v.id, nombre: v.cliente || 'Sin cliente', sub: [formatFecha(v.fecha), tipoDoc(v), folio(v.documento_id, v.nota)].filter(Boolean).join(' · '), monto: v.monto })) },

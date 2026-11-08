@@ -3,6 +3,7 @@ import { Area, Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, Responsiv
 import { formatCLP, formatCLPCorto } from '@/lib/fechas';
 import { CajaTooltip, EstadoVacio, Leyenda } from './comunes';
 import { usePaletaGraficos } from './paleta';
+import { useEsMovil } from './useEsMovil';
 
 export type TipoMarca = 'area' | 'barra' | 'linea';
 export interface DefSerie { clave: string; nombre: string; color: string; tipo?: TipoMarca }
@@ -27,12 +28,16 @@ interface Props {
  * Serie temporal (área, barras o línea, combinables) sobre tramos continuos.
  * El eje X oculta solo las etiquetas que no caben (minTickGap) y el eje Y usa montos
  * compactos; el tooltip muestra la fecha completa del tramo y los montos exactos.
+ * En teléfonos: algo más bajo, menos marcas en ambos ejes y la leyenda bajo el gráfico.
  */
 function GraficoSerie({
   puntos, series, tipo = 'area', alto = 260, formato = formatCLP, formatoEje = formatCLPCorto, apilado, vacio,
 }: Props) {
   const p = usePaletaGraficos();
+  const movil = useEsMovil();
   const id = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const altoReal = movil ? Math.min(alto, 220) : alto;
+  const fuenteEje = movil ? 10 : 11;
 
   const { hayDatos, hayNegativos, anchoEje } = useMemo(() => {
     let max = 0;
@@ -42,21 +47,25 @@ function GraficoSerie({
       if (Math.abs(v) > max) max = Math.abs(v);
       if (v < 0) neg = true;
     }
-    return { hayDatos: max > 0, hayNegativos: neg, anchoEje: Math.max(32, (formatoEje(neg ? -max : max).length) * 6.5 + 8) };
-  }, [puntos, series, formatoEje]);
+    return { hayDatos: max > 0, hayNegativos: neg, anchoEje: Math.max(32, (formatoEje(neg ? -max : max).length) * (movil ? 6 : 6.5) + 8) };
+  }, [puntos, series, formatoEje, movil]);
 
-  if (!hayDatos) return <EstadoVacio alto={alto} texto={vacio} />;
+  if (!hayDatos) return <EstadoVacio alto={altoReal} texto={vacio} />;
 
   const animar = puntos.length <= 200;
   const conPuntos = puntos.length <= 12;
   const conBarras = series.some(s => (s.tipo ?? tipo) === 'barra');
 
+  const leyenda = series.length > 1
+    ? <Leyenda abajo={movil} items={series.map(s => ({ nombre: s.nombre, color: s.color, linea: (s.tipo ?? tipo) === 'linea' }))} />
+    : null;
+
   return (
-    <div>
-      {series.length > 1 && <Leyenda items={series.map(s => ({ nombre: s.nombre, color: s.color, linea: (s.tipo ?? tipo) === 'linea' }))} />}
-      <div style={{ height: alto }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={puntos} margin={{ top: 6, right: 6, bottom: 0, left: 0 }} barGap={2} barCategoryGap="22%">
+    <div className="min-w-0">
+      {!movil && leyenda}
+      <div style={{ height: altoReal }}>
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: altoReal }}>
+          <ComposedChart data={puntos} margin={{ top: 6, right: movil ? 4 : 6, bottom: 0, left: 0 }} barGap={2} barCategoryGap="22%">
             <defs>
               {series.map(s => (
                 <linearGradient key={s.clave} id={`${id}-${s.clave}`} x1="0" y1="0" x2="0" y2="1">
@@ -68,11 +77,11 @@ function GraficoSerie({
             <CartesianGrid vertical={false} stroke={p.grilla} strokeOpacity={0.6} strokeDasharray="3 3" />
             <XAxis
               dataKey="etiqueta" tickLine={false} axisLine={{ stroke: p.grilla }} tickMargin={6}
-              tick={{ fill: p.eje, fontSize: 11 }} interval="preserveStartEnd" minTickGap={16}
+              tick={{ fill: p.eje, fontSize: fuenteEje }} interval="preserveStartEnd" minTickGap={movil ? 28 : 16}
             />
             <YAxis
-              tickLine={false} axisLine={false} width={anchoEje} tickCount={5}
-              tick={{ fill: p.eje, fontSize: 11 }} tickFormatter={formatoEje}
+              tickLine={false} axisLine={false} width={anchoEje} tickCount={movil ? 4 : 5}
+              tick={{ fill: p.eje, fontSize: fuenteEje }} tickFormatter={formatoEje}
             />
             {hayNegativos && <ReferenceLine y={0} stroke={p.eje} strokeOpacity={0.5} />}
             <Tooltip
@@ -108,6 +117,7 @@ function GraficoSerie({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      {movil && leyenda}
     </div>
   );
 }

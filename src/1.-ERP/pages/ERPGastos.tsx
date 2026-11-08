@@ -14,6 +14,8 @@ import GraficoDona from '../../components/graficos/GraficoDona';
 import GraficoBarras from '../../components/graficos/GraficoBarras';
 import { TarjetaGrafico } from '../../components/graficos/comunes';
 import { usePaletaGraficos } from '../../components/graficos/paleta';
+import TablaResponsiva, { type ColumnaTabla } from '../../components/TablaResponsiva';
+import ModalResponsivo from '../../components/ModalResponsivo';
 
 const ModalCargaMasivaGastos = lazy(() => import('../components/ModalCargaMasivaGastos'));
 
@@ -259,29 +261,67 @@ export default function ERPGastos() {
     setEditingId(null);
   };
 
+  const chipEstado = (g: Gasto) => (
+    <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap',
+      g.estado === 'Pagado' ? 'bg-success-container text-on-success-container' : 'bg-secondary/20 text-secondary')}>
+      {g.estado}
+    </span>
+  );
+  const etiquetasGasto = (g: Gasto) => (g.esFactura || g.recurrente) ? (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      {g.esFactura && <span className="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded-full">Factura</span>}
+      {g.recurrente && <span className="text-[10px] bg-tertiary/10 text-tertiary font-bold px-1.5 py-0.5 rounded-full">Recurrente</span>}
+    </span>
+  ) : null;
+  const saldoGasto = (g: Gasto) => {
+    const saldo = getSaldoPendienteGasto(g.id);
+    return saldo > 0 ? <span className="font-bold text-secondary">{fmt(saldo)}</span> : <span className="font-bold text-success">$0</span>;
+  };
+
+  const columnasGastos: ColumnaTabla<Gasto>[] = [
+    { clave: 'fecha', titulo: 'Fecha', celda: g => <span className="text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</span> },
+    {
+      clave: 'proveedor', titulo: 'Proveedor / Concepto', celda: g => (
+        <>
+          <p className="font-bold text-on-surface">{g.proveedor}</p>
+          {etiquetasGasto(g) && <div className="mt-0.5">{etiquetasGasto(g)}</div>}
+        </>
+      ),
+    },
+    { clave: 'categoria', titulo: 'Categoría', celda: g => <span className="text-xs bg-surface-container-high text-on-surface-variant font-bold px-2 py-1 rounded-full whitespace-nowrap">{g.categoria}</span> },
+    { clave: 'monto', titulo: 'Monto', celda: g => <span className="font-bold text-on-surface whitespace-nowrap">{fmt(g.monto)}</span> },
+    { clave: 'saldo', titulo: 'Saldo', celda: g => <span className="whitespace-nowrap">{saldoGasto(g)}</span> },
+    { clave: 'metodo', titulo: 'Método', celda: g => <span className="text-on-surface-variant text-xs capitalize">{g.metodo_pago || '---'}</span> },
+    { clave: 'estado', titulo: 'Estado', celda: chipEstado },
+  ];
+
+  const botonEncabezado = 'flex min-h-11 grow sm:grow-0 items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full text-sm font-bold transition-all';
+  const claseCampo = 'w-full min-h-11 px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface';
+  const claseEtiqueta = 'block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5';
+
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <h2 className="text-3xl font-extrabold text-on-surface flex items-center gap-3">
-            <span className="material-symbols-outlined text-error text-4xl">receipt_long</span>
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-on-surface flex items-center gap-3">
+            <span className="material-symbols-outlined text-error text-3xl sm:text-4xl">receipt_long</span>
             Gastos y Compras
           </h2>
-          <p className="text-on-surface-variant mt-1 text-sm">Registra todos los egresos y controla tu credito fiscal IVA.</p>
+          <p className="text-on-surface-variant mt-1 text-sm">Registra todos los egresos y controla tu crédito fiscal IVA.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <button onClick={() => setShowCargaMasiva(true)}
-            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
+            className={cn(botonEncabezado, 'bg-surface-container-lowest text-primary border border-primary/30 shadow-sm hover:bg-primary/5')}>
             <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportarGastosCSV}
-            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
+            className={cn(botonEncabezado, 'bg-surface-container-lowest text-primary border border-primary/30 shadow-sm hover:bg-primary/5')}>
             <span className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
           <button onClick={() => { setEditingId(null); setShowModal(true); }}
-            className="px-6 py-3 bg-error text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform flex items-center gap-2">
+            className={cn(botonEncabezado, 'bg-error text-inverse-on-surface shadow-lg shadow-error/20 hover:scale-105 transition-transform')}>
             <span className="material-symbols-outlined text-lg">add</span>
             Registrar Gasto
           </button>
@@ -309,7 +349,7 @@ export default function ERPGastos() {
 
       {/* Gráficos: serie del periodo ancha + estado de pago; categorías (barras con %) + proveedores */}
       {gastosDelPeriodo.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           <TarjetaGrafico
             className="lg:col-span-2"
             icono="bar_chart"
@@ -342,11 +382,11 @@ export default function ERPGastos() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 min-w-0">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
-          <input type="text" placeholder="Buscar por proveedor o categoria..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+          <input type="text" enterKeyHint="search" placeholder="Buscar por proveedor o categoría..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
+            className="w-full min-h-11 pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
         </div>
         <SelectorDesplegable
           valor={categoria}
@@ -358,172 +398,137 @@ export default function ERPGastos() {
         />
       </div>
 
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-container-low border-b border-outline-variant/20">
-              <tr>
-                {['Fecha', 'Proveedor / Concepto', 'Categoria', 'Monto', 'Saldo', 'Metodo', 'Estado', 'Acciones'].map(h => (
-                  <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/10">
-              {gastosFiltrados.length === 0 && (
-                <tr><td colSpan={8} className="p-8 text-center text-on-surface-variant">No se encontraron gastos.</td></tr>
-              )}
-              {gastosFiltrados.map(g => {
-                const saldo = getSaldoPendienteGasto(g.id);
-                return (
-                  <tr key={g.id} className={cn('hover:bg-surface-container-low/50 transition-colors', saldo > 0 ? 'bg-secondary/5' : '')}>
-                    <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</td>
-                    <td className="p-4">
-                      <p className="font-bold text-on-surface">{g.proveedor}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {g.esFactura && <span className="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded-full">Factura</span>}
-                        {g.recurrente && <span className="text-[10px] bg-tertiary/10 text-tertiary font-bold px-1.5 py-0.5 rounded-full">Recurrente</span>}
-                      </div>
-                    </td>
-                    <td className="p-4"><span className="text-xs bg-surface-container-high text-on-surface-variant font-bold px-2 py-1 rounded-full whitespace-nowrap">{g.categoria}</span></td>
-                    <td className="p-4 font-bold text-on-surface">{fmt(g.monto)}</td>
-                    <td className="p-4 font-bold">
-                      {saldo > 0 ? <span className="text-secondary">{fmt(saldo)}</span> : <span className="text-success">$0</span>}
-                    </td>
-                    <td className="p-4 text-on-surface-variant text-xs capitalize">{g.metodo_pago || '---'}</td>
-                    <td className="p-4">
-                      <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold',
-                        g.estado === 'Pagado' ? 'bg-success-container text-on-success-container' : 'bg-secondary/20 text-secondary')}>
-                        {g.estado}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => abrirEdicion(g)}
-                          className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10">
-                          <span className="material-symbols-outlined text-base">edit</span>
-                        </button>
-                        <button onClick={() => { setItemToDelete(g.id); setDeleteModalOpen(true); }}
-                          className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
-                          <span className="material-symbols-outlined text-base">delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {/* Sin overflow-hidden bajo md: el menú ⋯ de la última tarjeta no debe quedar recortado. */}
+      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm md:overflow-hidden">
+        <TablaResponsiva
+          filas={gastosFiltrados}
+          clave={g => g.id}
+          columnas={columnasGastos}
+          tituloTarjeta={g => g.proveedor}
+          subtituloTarjeta={g => (
+            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span>{formatFecha(g.fecha)} · {g.categoria}</span>
+              {etiquetasGasto(g)}
+            </span>
+          )}
+          insigniaTarjeta={chipEstado}
+          datosTarjeta={g => [
+            { etiqueta: 'Monto', valor: fmt(g.monto) },
+            { etiqueta: 'Saldo', valor: saldoGasto(g) },
+            { etiqueta: 'Método', valor: <span className="capitalize">{g.metodo_pago || '---'}</span> },
+          ]}
+          acciones={g => [
+            { etiqueta: 'Editar', icono: 'edit', onClick: () => abrirEdicion(g) },
+            { etiqueta: 'Eliminar', icono: 'delete', peligro: true, onClick: () => { setItemToDelete(g.id); setDeleteModalOpen(true); } },
+          ]}
+          vacio={<p className="p-8 text-center text-on-surface-variant">No se encontraron gastos.</p>}
+        />
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
-              <h3 className="text-xl font-bold text-error">{editingId ? 'Editar Gasto' : 'Registrar Gasto'}</h3>
-              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-error transition-colors">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-grow">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Proveedor / Concepto</label>
-                    <input type="text" value={nuevoGasto.proveedor} onChange={e => setNuevoGasto({ ...nuevoGasto, proveedor: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" placeholder="Ej: CGE, Arriendo local" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Monto Total</label>
-                      <CampoMoneda valor={nuevoGasto.monto} onChange={monto => setNuevoGasto({ ...nuevoGasto, monto })}
-                        className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
-                      <SelectorFecha value={nuevoGasto.fecha} onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha: fecha })} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoría</label>
-                      <SelectorDesplegable
-                        className="w-full"
-                        valor={nuevoGasto.categoria}
-                        onChange={valor => setNuevoGasto({ ...nuevoGasto, categoria: valor })}
-                        opciones={CATEGORIAS_GASTO.map(c => ({ valor: c, etiqueta: c }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Método de Pago</label>
-                      <SelectorDesplegable
-                        className="w-full"
-                        valor={nuevoGasto.metodo_pago}
-                        onChange={valor => setNuevoGasto({ ...nuevoGasto, metodo_pago: valor as MetodoPago })}
-                        opciones={METODOS.map(m => ({ valor: m.value, etiqueta: m.label }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Estado de Pago</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => setNuevoGasto({ ...nuevoGasto, estado: 'Pagado' })}
-                        className={cn('py-3 rounded-xl border-2 font-bold text-sm transition-all',
-                          nuevoGasto.estado === 'Pagado' ? 'border-success/50 bg-success-container text-on-success-container' : 'border-outline-variant/50 text-on-surface-variant hover:border-outline')}>
-                        Pagado
-                      </button>
-                      <button onClick={() => setNuevoGasto({ ...nuevoGasto, estado: 'Por Pagar' })}
-                        className={cn('py-3 rounded-xl border-2 font-bold text-sm transition-all',
-                          nuevoGasto.estado === 'Por Pagar' ? 'border-secondary bg-secondary/10 text-secondary' : 'border-outline-variant/50 text-on-surface-variant hover:border-outline')}>
-                        Por Pagar
-                      </button>
-                    </div>
-                  </div>
-
-                  {nuevoGasto.estado === 'Por Pagar' && (
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha de Vencimiento</label>
-                      <SelectorFecha
-                        value={nuevoGasto.fecha_vencimiento || ''}
-                        onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha_vencimiento: fecha })}
-                      />
-                    </div>
-                  )}
+        <ModalResponsivo
+          titulo={<span className="text-error">{editingId ? 'Editar Gasto' : 'Registrar Gasto'}</span>}
+          onCerrar={cerrarModal}
+          ancho="sm:max-w-5xl"
+          pie={
+            <>
+              <button type="button" onClick={cerrarModal} className="flex-1 min-h-11 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button type="button" onClick={handleGuardar} className="flex-1 min-h-11 py-3 rounded-2xl bg-error text-inverse-on-surface font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform">{editingId ? 'Guardar Cambios' : 'Guardar Gasto'}</button>
+            </>
+          }
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div>
+                <label className={claseEtiqueta}>Proveedor / Concepto</label>
+                <input type="text" value={nuevoGasto.proveedor} onChange={e => setNuevoGasto({ ...nuevoGasto, proveedor: e.target.value })}
+                  className={claseCampo} placeholder="Ej: CGE, Arriendo local" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={claseEtiqueta}>Monto Total</label>
+                  <CampoMoneda valor={nuevoGasto.monto} onChange={monto => setNuevoGasto({ ...nuevoGasto, monto })}
+                    className="min-h-11 px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
                 </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border-2 border-outline-variant/20 hover:border-primary/30 transition-colors">
-                      <input type="checkbox" checked={nuevoGasto.esFactura} onChange={e => setNuevoGasto({ ...nuevoGasto, esFactura: e.target.checked })} className="w-5 h-5 rounded" />
-                      <div>
-                        <p className="font-bold text-on-surface text-sm">Es una factura (crédito fiscal IVA)</p>
-                        <p className="text-xs text-on-surface-variant">El IVA de facturas se resta del IVA a pagar en el F29</p>
-                      </div>
-                    </label>
-                    <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border-2 border-outline-variant/20 hover:border-tertiary/30 transition-colors">
-                      <input type="checkbox" checked={nuevoGasto.recurrente} onChange={e => setNuevoGasto({ ...nuevoGasto, recurrente: e.target.checked })} className="w-5 h-5 rounded" />
-                      <div>
-                        <p className="font-bold text-on-surface text-sm">Gasto Recurrente (mensual)</p>
-                        <p className="text-xs text-on-surface-variant">Arriendo, luz, internet u otros gastos fijos mensuales</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Notas (opcional)</label>
-                    <input type="text" value={nuevoGasto.notas || ''} onChange={e => setNuevoGasto({ ...nuevoGasto, notas: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" placeholder="Observaciones..." />
-                  </div>
+                <div>
+                  <label className={claseEtiqueta}>Fecha</label>
+                  <SelectorFecha value={nuevoGasto.fecha} onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha: fecha })} />
                 </div>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={claseEtiqueta}>Categoría</label>
+                  <SelectorDesplegable
+                    className="w-full"
+                    valor={nuevoGasto.categoria}
+                    onChange={valor => setNuevoGasto({ ...nuevoGasto, categoria: valor })}
+                    opciones={CATEGORIAS_GASTO.map(c => ({ valor: c, etiqueta: c }))}
+                  />
+                </div>
+                <div>
+                  <label className={claseEtiqueta}>Método de Pago</label>
+                  <SelectorDesplegable
+                    className="w-full"
+                    valor={nuevoGasto.metodo_pago}
+                    onChange={valor => setNuevoGasto({ ...nuevoGasto, metodo_pago: valor as MetodoPago })}
+                    opciones={METODOS.map(m => ({ valor: m.value, etiqueta: m.label }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={claseEtiqueta}>Estado de Pago</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setNuevoGasto({ ...nuevoGasto, estado: 'Pagado' })}
+                    className={cn('min-h-11 py-3 rounded-xl border-2 font-bold text-sm transition-all',
+                      nuevoGasto.estado === 'Pagado' ? 'border-success/50 bg-success-container text-on-success-container' : 'border-outline-variant/50 text-on-surface-variant hover:border-outline')}>
+                    Pagado
+                  </button>
+                  <button type="button" onClick={() => setNuevoGasto({ ...nuevoGasto, estado: 'Por Pagar' })}
+                    className={cn('min-h-11 py-3 rounded-xl border-2 font-bold text-sm transition-all',
+                      nuevoGasto.estado === 'Por Pagar' ? 'border-secondary bg-secondary/10 text-secondary' : 'border-outline-variant/50 text-on-surface-variant hover:border-outline')}>
+                    Por Pagar
+                  </button>
+                </div>
+              </div>
+
+              {nuevoGasto.estado === 'Por Pagar' && (
+                <div>
+                  <label className={claseEtiqueta}>Fecha de Vencimiento</label>
+                  <SelectorFecha
+                    value={nuevoGasto.fecha_vencimiento || ''}
+                    onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha_vencimiento: fecha })}
+                  />
+                </div>
+              )}
             </div>
-            <div className="px-6 py-4 border-t border-outline-variant/20 flex gap-3 bg-surface-container-low/50 shrink-0">
-              <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={handleGuardar} className="flex-1 py-3 rounded-2xl bg-error text-inverse-on-surface font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform">{editingId ? 'Guardar Cambios' : 'Guardar Gasto'}</button>
+
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border-2 border-outline-variant/20 hover:border-primary/30 transition-colors">
+                  <input type="checkbox" checked={nuevoGasto.esFactura} onChange={e => setNuevoGasto({ ...nuevoGasto, esFactura: e.target.checked })} className="w-5 h-5 shrink-0 rounded" />
+                  <div className="min-w-0">
+                    <p className="font-bold text-on-surface text-sm">Es una factura (crédito fiscal IVA)</p>
+                    <p className="text-xs text-on-surface-variant">El IVA de facturas se resta del IVA a pagar en el F29</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border-2 border-outline-variant/20 hover:border-tertiary/30 transition-colors">
+                  <input type="checkbox" checked={nuevoGasto.recurrente} onChange={e => setNuevoGasto({ ...nuevoGasto, recurrente: e.target.checked })} className="w-5 h-5 shrink-0 rounded" />
+                  <div className="min-w-0">
+                    <p className="font-bold text-on-surface text-sm">Gasto Recurrente (mensual)</p>
+                    <p className="text-xs text-on-surface-variant">Arriendo, luz, internet u otros gastos fijos mensuales</p>
+                  </div>
+                </label>
+              </div>
+
+              <div>
+                <label className={claseEtiqueta}>Notas (opcional)</label>
+                <input type="text" value={nuevoGasto.notas || ''} onChange={e => setNuevoGasto({ ...nuevoGasto, notas: e.target.value })}
+                  className={cn(claseCampo, 'focus:border-primary')} placeholder="Observaciones..." />
+              </div>
             </div>
           </div>
-        </div>
+        </ModalResponsivo>
       )}
 
       <ConfirmDeleteModal isOpen={deleteModalOpen}

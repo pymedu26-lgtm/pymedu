@@ -33,3 +33,6 @@ Thumbs.db
 
 # Base de datos local de prueba (PGlite)
 server/.data/
+
+# Capturas de verificación responsive (npm run capturas)
+capturas-responsive/

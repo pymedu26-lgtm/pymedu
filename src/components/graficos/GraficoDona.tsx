@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react';
-import { Cell, Pie, PieChart } from 'recharts';
+import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { formatCLP, formatCLPCorto } from '@/lib/fechas';
 import { topN, type ItemValor } from '@/lib/series';
 import { cn } from '@/lib/utils';
@@ -43,19 +43,21 @@ function GraficoDona({
     <div className="@container">
       <div className="flex flex-col @sm:flex-row items-center gap-4 @sm:gap-6">
         <div className="relative shrink-0" style={{ width: TAM, height: TAM }} onMouseLeave={() => setActivo(null)}>
-          <PieChart width={TAM} height={TAM}>
-            <Pie
-              data={datos} dataKey="valor" nameKey="nombre" cx="50%" cy="50%"
-              innerRadius={TAM / 2 - 30} outerRadius={TAM / 2 - 2} startAngle={90} endAngle={-270}
-              stroke={p.superficie} strokeWidth={2} minAngle={2}
-              isAnimationActive={datos.length <= 200}
-              onMouseEnter={(_, i) => setActivo(i)}
-            >
-              {datos.map((d, i) => (
-                <Cell key={d.nombre} fill={color(d, i)} fillOpacity={activo === null || activo === i ? 1 : 0.3} />
-              ))}
-            </Pie>
-          </PieChart>
+          <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: TAM, height: TAM }}>
+            <PieChart>
+              <Pie
+                data={datos} dataKey="valor" nameKey="nombre" cx="50%" cy="50%"
+                innerRadius={TAM / 2 - 30} outerRadius={TAM / 2 - 2} startAngle={90} endAngle={-270}
+                stroke={p.superficie} strokeWidth={2} minAngle={2}
+                isAnimationActive={datos.length <= 200}
+                onMouseEnter={(_, i) => setActivo(i)}
+              >
+                {datos.map((d, i) => (
+                  <Cell key={d.nombre} fill={color(d, i)} fillOpacity={activo === null || activo === i ? 1 : 0.3} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-8">
             <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant truncate max-w-full">
               {foco ? foco.nombre : etiquetaTotal}
