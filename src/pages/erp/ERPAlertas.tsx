@@ -19,15 +19,15 @@ const origenLabel: Record<AlertaOrigen, string> = {
 
 
 export default function ERPAlertas() {
-  const { inventario, movimientos, documentosTributarios, pagosPOS, promociones, saldos } = useERP();
+  const { inventario, envases, movimientos, documentosTributarios, pagosPOS, promociones, saldos } = useERP();
   const [filtro, setFiltro] = useState<AlertaTipo | 'todas'>('todas');
   const [leidas, setLeidas] = useState<Set<string>>(() => new Set());
 
 
   // Fuente única compartida con el Panel general (corrección #16).
   const alertas = useMemo(
-    () => calcularAlertas({ inventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos }),
-    [inventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos]
+    () => calcularAlertas({ inventario, envases, saldos, documentosTributarios, pagosPOS, promociones, movimientos }),
+    [inventario, envases, saldos, documentosTributarios, pagosPOS, promociones, movimientos]
   );
 
   const marcarLeida = (id: string) => {

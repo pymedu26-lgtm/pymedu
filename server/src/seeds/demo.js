@@ -35,6 +35,7 @@ function proximo(diaSemana, horaUTC, semanas = 0) {
 export async function sembrarDemoLocal() {
   await sembrarMentorias();
   await sembrarErp();
+  await sembrarFraccionados();
 }
 
 // ═══════════════════════════════ Mentorías ═══════════════════════════════
@@ -168,6 +169,69 @@ async function sembrarMentorias() {
 
 // ═══════════════════════════════ ERP ═══════════════════════════════
 
+/**
+ * Productos fraccionables del documento «Inventario fraccionado» (idempotente: se agregan solo
+ * si faltan, sin borrar nada). Corre también sobre bases locales ya sembradas.
+ *  - Lattafa Asad: 20 frascos de 100 ml (19 cerrados + 1 abierto con 70 ml), decants 3/5/10 ml.
+ *  - Manzana Fuji: comprada por tonelada (2 t = 2.000 kg), vendida por kilo y por 500 g.
+ */
+async function sembrarFraccionados() {
+  const yo = await idDe('emprendedor@pymedu.com');
+  if (!yo) return;
+  const existe = await uno(`SELECT 1 AS si FROM erp_datos WHERE usuario_id = ? AND coleccion = 'inventario' AND data->>'nombre' = 'Lattafa Asad'`, yo.id);
+  if (existe) return;
+  const atomizador = await uno(`SELECT id FROM erp_datos WHERE usuario_id = ? AND coleccion = 'inventario' AND data->>'nombre' = 'Atomizador 5 ml'`, yo.id);
+  const ahora = new Date();
+  const hace = (dias) => new Date(ahora.getTime() - dias * 86400000).toISOString();
+  const filas = [];
+  const agregar = (coleccion, obj) => { filas.push([coleccion, obj.id, obj]); return obj; };
+  const receta = atomizador ? [{ productoId: atomizador.id, cantidad: 1 }] : undefined;
+
+  const asad = agregar('inventario', {
+    id: randomUUID(), nombre: 'Lattafa Asad', codigo: 'LAT-ASAD', categoria: 'Perfumería', tipo: 'producto', descripcion: 'Eau de parfum 100 ml',
+    costo: 300, precio: 45000, incluyeIva: true, stock: 1970, stockMinimo: 300, unidadMedida: 'ml', unidadBase: 'ml', estado: 'activo', esInventariable: true,
+    tipoOperativo: 'producto_simple', formaCompra: 'envase', nombreEnvase: 'frasco', controlEnvases: true, capacidadEnvase: 100,
+    presentaciones: [
+      { id: randomUUID(), nombre: 'Frasco 100 ml', factor: 100, precio: 45000, tipo: 'completa', origen: 'envase_cerrado', activa: true },
+      { id: randomUUID(), nombre: 'Decant 3 ml', factor: 3, precio: 3500, tipo: 'porcion', origen: 'envase_abierto', activa: true, costoInsumos: 150, ...(receta ? { receta } : {}) },
+      { id: randomUUID(), nombre: 'Decant 5 ml', factor: 5, precio: 5000, tipo: 'porcion', origen: 'envase_abierto', activa: true, costoInsumos: 150, ...(receta ? { receta } : {}) },
+      { id: randomUUID(), nombre: 'Decant 10 ml', factor: 10, precio: 9000, tipo: 'porcion', origen: 'envase_abierto', activa: true, costoInsumos: 200, ...(receta ? { receta } : {}) },
+    ],
+  });
+  const loteAsad = agregar('lotes', { id: randomUUID(), productoId: asad.id, fecha: hace(15).slice(0, 10), cantidadInicial: 2000, cantidadRestante: 1970, costoUnitario: 300 });
+  let abierto = null;
+  for (let i = 1; i <= 20; i++) {
+    const e = agregar('envases', {
+      id: randomUUID(), productoId: asad.id, loteId: loteAsad.id, codigo: `F${i}`, capacidad: 100,
+      restante: i === 20 ? 70 : 100, estado: i === 20 ? 'abierto' : 'cerrado', ...(i === 20 ? { abiertoEn: hace(6) } : {}),
+    });
+    if (i === 20) abierto = e;
+  }
+  agregar('movimientosInventario', { id: randomUUID(), productoId: asad.id, tipo: 'ingreso', cantidad: 2000, costoUnitario: 300, fecha: hace(15), motivo: 'Compra a Perfumes Importados Ltda.', lote: loteAsad.id });
+  agregar('movimientosInventario', { id: randomUUID(), productoId: asad.id, tipo: 'apertura', cantidad: 100, fecha: hace(6), motivo: 'Apertura de F20', envaseId: abierto.id });
+  agregar('movimientosInventario', {
+    id: randomUUID(), productoId: asad.id, tipo: 'salida', cantidad: 30, costoUnitario: 300, fecha: hace(3), motivo: 'Decants de prueba (6 × 5 ml)',
+    envaseId: abierto.id, consumos: [{ envaseId: abierto.id, cantidad: 30 }],
+  });
+
+  const manzana = agregar('inventario', {
+    id: randomUUID(), nombre: 'Manzana Fuji', codigo: 'FRU-MANZ', categoria: 'Frutas', tipo: 'producto', descripcion: 'Comprada por tonelada',
+    costo: 400, precio: 990, incluyeIva: true, stock: 2000, stockMinimo: 200, unidadMedida: 'kg', unidadBase: 'kg', estado: 'activo', esInventariable: true,
+    tipoOperativo: 'producto_simple', formaCompra: 'granel', controlEnvases: false,
+    presentaciones: [
+      { id: randomUUID(), nombre: '1 kg', factor: 1, precio: 990, tipo: 'porcion', origen: 'granel', activa: true },
+      { id: randomUUID(), nombre: '500 g', factor: 0.5, precio: 550, tipo: 'porcion', origen: 'granel', activa: true },
+    ],
+  });
+  const loteManzana = agregar('lotes', { id: randomUUID(), productoId: manzana.id, fecha: hace(4).slice(0, 10), cantidadInicial: 2000, cantidadRestante: 2000, costoUnitario: 400 });
+  agregar('movimientosInventario', { id: randomUUID(), productoId: manzana.id, tipo: 'ingreso', cantidad: 2000, costoUnitario: 400, fecha: hace(4), motivo: 'Compra de 2 toneladas', lote: loteManzana.id });
+
+  for (const [col, id, obj] of filas) {
+    await ejecutar(`INSERT INTO erp_datos (usuario_id, coleccion, id, data) VALUES (?, ?, ?, ?::jsonb) ON CONFLICT DO NOTHING`, yo.id, col, id, JSON.stringify(obj));
+  }
+  console.log(`[demo] Inventario fraccionado: Lattafa Asad (19 cerrados + 1 abierto con 70 ml) y Manzana Fuji (2 t)`);
+}
+
 async function sembrarErp() {
   const yo = await idDe('emprendedor@pymedu.com');
   if (!yo) return;
@@ -199,17 +263,18 @@ async function sembrarErp() {
   const perfume = agregar('inventario', {
     id: randomUUID(), nombre: 'Perfume Oud', codigo: 'P-PERF', categoria: 'Perfumería', tipo: 'producto', costo: 600, precio: 89990, incluyeIva: true,
     stock: 300, stockMinimo: 50, unidadMedida: 'ml', unidadBase: 'ml', estado: 'activo', esInventariable: true, controlEnvases: true, capacidadEnvase: 100,
+    formaCompra: 'envase', nombreEnvase: 'frasco',
     presentaciones: [
-      { id: randomUUID(), nombre: 'Frasco 100 ml', factor: 100, precio: 89990, origen: 'envase_cerrado', activa: true },
-      { id: randomUUID(), nombre: 'Decant 5 ml', factor: 5, precio: 6000, origen: 'envase_abierto', activa: true, receta: [{ productoId: atomizador.id, cantidad: 1 }] },
+      { id: randomUUID(), nombre: 'Frasco 100 ml', factor: 100, precio: 89990, origen: 'envase_cerrado', tipo: 'completa', activa: true },
+      { id: randomUUID(), nombre: 'Decant 5 ml', factor: 5, precio: 6000, origen: 'envase_abierto', tipo: 'porcion', activa: true, receta: [{ productoId: atomizador.id, cantidad: 1 }] },
     ],
   });
   const papas = agregar('inventario', {
     id: randomUUID(), nombre: 'Papas', codigo: 'P-PAPA', categoria: 'Verdulería', tipo: 'producto', costo: 400, precio: 900, incluyeIva: true,
-    stock: 1000, stockMinimo: 100, unidadMedida: 'kg', unidadBase: 'kg', estado: 'activo', esInventariable: true, controlEnvases: false,
+    stock: 1000, stockMinimo: 100, unidadMedida: 'kg', unidadBase: 'kg', estado: 'activo', esInventariable: true, controlEnvases: false, formaCompra: 'granel',
     presentaciones: [
-      { id: randomUUID(), nombre: 'Saco 25 kg', factor: 25, precio: 15000, origen: 'granel', activa: true },
-      { id: randomUUID(), nombre: 'Kilo suelto', factor: 1, precio: 900, origen: 'granel', activa: true },
+      { id: randomUUID(), nombre: 'Saco 25 kg', factor: 25, precio: 15000, origen: 'granel', tipo: 'porcion', activa: true },
+      { id: randomUUID(), nombre: 'Kilo suelto', factor: 1, precio: 900, origen: 'granel', tipo: 'porcion', activa: true },
     ],
   });
   const hoy = new Date();

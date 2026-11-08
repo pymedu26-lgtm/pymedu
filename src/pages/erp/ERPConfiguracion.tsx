@@ -7,7 +7,7 @@ import { cn } from '../../lib/utils';
 import { formatCLP, formatFecha } from '../../lib/fechas';
 import { PLANES, planPorId, WEBPAY_MODO_PRUEBA } from '../../lib/planes';
 
-type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion';
+type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion' | 'inventario';
 
 const RUBROS = [
   'Alimentación y Bebidas', 'Comercio Minorista', 'Servicios Profesionales',
@@ -38,13 +38,14 @@ const TABS: { id: Tab; icono: string; label: string }[] = [
   { id: 'negocio', icono: 'storefront', label: 'Mi Negocio' },
   { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta' },
   { id: 'equipo', icono: 'group', label: 'Equipo' },
+  { id: 'inventario', icono: 'inventory_2', label: 'Inventario' },
   { id: 'integraciones', icono: 'cloud_sync', label: 'Integraciones' },
   { id: 'facturacion', icono: 'credit_card', label: 'Suscripción' },
 ];
 
 export default function ERPConfiguracion() {
   const { perfil, actualizarPerfil, puedeHacer } = useAuth();
-  const { configuracionCumplimiento, updatePpmTasa } = useERP();
+  const { configuracionCumplimiento, updatePpmTasa, metodoCosteo, setMetodoCosteo, politicaEnvaseAbierto, permitirMezclarEnvases, setPoliticaInventario } = useERP();
   const [tab, setTab] = useState<Tab>('negocio');
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
@@ -483,6 +484,53 @@ export default function ERPConfiguracion() {
                 </Link>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ Inventario: costeo y frascos abiertos (services/inventarioFraccionado.ts) ══ */}
+      {tab === 'inventario' && (
+        <div className="space-y-6 max-w-xl">
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">calculate</span>Método de costeo</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Cambia el método solo al inicio de un año: afecta el costo de las próximas ventas y tus reportes. LIFO no se acepta en Chile.</p>
+            </div>
+            {([
+              { valor: 'promedio', titulo: 'Promedio ponderado', detalle: 'Usa el promedio de todo tu stock, recalculado en cada compra.' },
+              { valor: 'fifo', titulo: 'FIFO / PEPS', detalle: 'Cada venta usa el costo de la compra más antigua con stock.' },
+            ] as const).map(op => (
+              <label key={op.valor} className={cn('flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-3', metodoCosteo === op.valor ? 'border-primary bg-primary/5' : 'border-outline-variant/30')}>
+                <input type="radio" name="metodo-costeo" className="mt-1 accent-primary" checked={metodoCosteo === op.valor} disabled={!puedeHacer('editar_mi_negocio')}
+                  onChange={() => { setMetodoCosteo(op.valor); notificar('ok', 'Método de costeo actualizado.'); }} />
+                <span><span className="block text-sm font-bold text-on-surface">{op.titulo}</span><span className="block text-xs text-on-surface-variant">{op.detalle}</span></span>
+              </label>
+            ))}
+          </div>
+
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">water_drop</span>Frascos y sacos abiertos</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Al vender una porción (decant, kilo suelto) el sistema elige de qué envase abierto sacarla. Nunca abre uno nuevo sin preguntarte.</p>
+            </div>
+            {([
+              { valor: 'menos_contenido', titulo: 'El que tiene menos (recomendado)', detalle: 'Termina primero los envases casi vacíos.' },
+              { valor: 'mas_antiguo', titulo: 'El abierto hace más tiempo', detalle: 'Útil si el producto pierde calidad una vez abierto.' },
+            ] as const).map(op => (
+              <label key={op.valor} className={cn('flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-3', politicaEnvaseAbierto === op.valor ? 'border-primary bg-primary/5' : 'border-outline-variant/30')}>
+                <input type="radio" name="politica-envase" className="mt-1 accent-primary" checked={politicaEnvaseAbierto === op.valor} disabled={!puedeHacer('editar_mi_negocio')}
+                  onChange={() => { setPoliticaInventario({ politicaEnvaseAbierto: op.valor }); notificar('ok', 'Preferencia guardada.'); }} />
+                <span><span className="block text-sm font-bold text-on-surface">{op.titulo}</span><span className="block text-xs text-on-surface-variant">{op.detalle}</span></span>
+              </label>
+            ))}
+            <label className="flex items-start gap-3 rounded-2xl border border-outline-variant/30 p-3">
+              <input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={permitirMezclarEnvases} disabled={!puedeHacer('editar_mi_negocio')}
+                onChange={e => { setPoliticaInventario({ permitirMezclarEnvases: e.target.checked }); notificar('ok', 'Preferencia guardada.'); }} />
+              <span>
+                <span className="block text-sm font-bold text-on-surface">Permitir completar una porción con dos envases</span>
+                <span className="block text-xs text-on-surface-variant">Por ejemplo, un decant de 5 ml con 3 ml de F3 y 2 ml de F4. Si está apagado, se te pedirá abrir otro envase.</span>
+              </span>
+            </label>
           </div>
         </div>
       )}

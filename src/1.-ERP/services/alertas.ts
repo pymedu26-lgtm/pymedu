@@ -1,6 +1,7 @@
 // Fuente ÚNICA de alertas (corrección #16): Panel general y Centro de alertas leen de aquí,
 // así ambos muestran las mismas alertas y el mismo conteo de críticas.
-import type { Producto, Promocion, Movimiento } from '../context/ERPContext';
+import type { Producto, Promocion, Movimiento, Envase } from '../context/ERPContext';
+import { stockDisponible, usaEnvases, resumenStock, formatCantidad } from './inventarioFraccionado';
 import type { DocumentoTributario, PagoPOS } from './documentCompliance';
 import type { Saldos } from './saldos';
 import { formatCLP, formatFecha, hoyISO, diasEntre } from '../../lib/fechas';
@@ -46,6 +47,8 @@ export function vencimientoF29(periodo: string, facturaElectronica = true): stri
 
 export function calcularAlertas(d: {
   inventario: Producto[];
+  /** Con envases el stock real es la suma de sus envases (fuente única). */
+  envases?: Envase[];
   saldos: Saldos;
   documentosTributarios: DocumentoTributario[];
   pagosPOS: PagoPOS[];
@@ -59,16 +62,16 @@ export function calcularAlertas(d: {
 
   // 1. Stock: un aviso por producto (los sin stock son críticos).
   for (const p of d.inventario) {
-    const estado = estadoStock(p);
+    const stock = stockDisponible(p, d.envases ?? []);
+    const estado = estadoStock(p, stock);
     if (estado !== 'bajo' && estado !== 'sin_stock') continue;
-    const unidad = p.unidadBase && p.unidadBase !== 'unidad' ? ` ${p.unidadBase}` : ' unidades';
     items.push({
       id: `stock-${p.id}`, tipo: estado === 'sin_stock' ? 'critica' : 'advertencia', origen: 'sistema',
       icono: estado === 'sin_stock' ? 'inventory' : 'warning',
       titulo: estado === 'sin_stock' ? `Sin stock: «${p.nombre}»` : `Stock bajo: «${p.nombre}»`,
       detalle: estado === 'sin_stock'
         ? 'No puedes venderlo hasta reabastecerte.'
-        : `Quedan ${Number(p.stock).toLocaleString('es-CL')}${unidad} (mínimo ${Number(p.stockMinimo).toLocaleString('es-CL')}${unidad}).`,
+        : `Quedan ${usaEnvases(p) ? resumenStock(p, d.envases ?? []).texto : formatCantidad(stock, p.unidadBase)} (mínimo ${formatCantidad(Number(p.stockMinimo) || 0, p.unidadBase)}).`,
       accion_label: 'Ver inventario', accion_url: '/erp/inventario',
     });
   }

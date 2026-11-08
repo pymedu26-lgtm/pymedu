@@ -130,3 +130,23 @@ CREATE TABLE IF NOT EXISTS erp.linea_venta (
   costo_venta INTEGER NOT NULL DEFAULT 0                 -- no se recalcula después
 );
 CREATE INDEX IF NOT EXISTS idx_linea_venta ON erp.linea_venta(venta_id);
+
+-- ── Inventario fraccionado simple (rama feat/inventario-fraccionado-simple) ──
+-- Campos nuevos del JSON (src/1.-ERP/services/inventarioFraccionado.ts y registroProducto.ts).
+-- Solo referencia para la migración futura: ninguna pantalla lee estas tablas todavía.
+ALTER TABLE erp.producto ADD COLUMN IF NOT EXISTS forma_compra TEXT CHECK (forma_compra IN ('unidad','envase','granel'));
+ALTER TABLE erp.producto ADD COLUMN IF NOT EXISTS nombre_envase TEXT CHECK (nombre_envase IN ('frasco','botella','saco','caja'));
+ALTER TABLE erp.producto ADD COLUMN IF NOT EXISTS requiere_revision_unidades BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE erp.presentacion_venta ADD COLUMN IF NOT EXISTS tipo TEXT CHECK (tipo IN ('completa','porcion'));
+ALTER TABLE erp.presentacion_venta ADD COLUMN IF NOT EXISTS costo_insumos INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE erp.configuracion_negocio ADD COLUMN IF NOT EXISTS politica_envase_abierto TEXT NOT NULL DEFAULT 'menos_contenido';
+ALTER TABLE erp.configuracion_negocio ADD COLUMN IF NOT EXISTS permitir_mezclar_envases BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE erp.movimiento_inventario ADD COLUMN IF NOT EXISTS revertido BOOLEAN NOT NULL DEFAULT false;
+-- De qué envase salió cada parte de una salida/devolución (para anular exacto).
+CREATE TABLE IF NOT EXISTS erp.consumo_envase (
+  movimiento_id TEXT NOT NULL REFERENCES erp.movimiento_inventario(id) ON DELETE CASCADE,
+  envase_id TEXT NOT NULL REFERENCES erp.envase(id) ON DELETE RESTRICT,
+  cantidad NUMERIC(14,3) NOT NULL,
+  envase_vendido_completo BOOLEAN NOT NULL DEFAULT false,
+  PRIMARY KEY (movimiento_id, envase_id)
+);

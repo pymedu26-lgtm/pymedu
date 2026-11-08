@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 import { useERP } from '../1.-ERP/context/ERPContext';
 import { calcularAlertas, estadoStock, type TipoAlerta } from '../1.-ERP/services/alertas';
+import { stockDisponible } from '../1.-ERP/services/inventarioFraccionado';
 import { formatCLP, formatFecha, hoyISO } from '../lib/fechas';
 import { planPorId } from '../lib/planes';
 
@@ -14,6 +15,7 @@ export default function Dashboard() {
     ventas, gastos, inventario, movimientosInventario, movimientos,
     documentosTributarios, pagosPOS, promociones, saldos,
     getF29Preparador,
+    envases,
   } = useERP();
 
   const hoy = new Date();
@@ -43,14 +45,14 @@ export default function Dashboard() {
   const egresosHoy = movimientosHoy.filter(m => m.tipo === 'Egreso').reduce((acc, m) => acc + m.monto, 0);
 
   // Saldos y alertas desde la fuente única (correcciones #4 y #16)
-  const productosStockBajo = useMemo(() => inventario.filter(p => estadoStock(p) === 'bajo' || estadoStock(p) === 'sin_stock'), [inventario]);
+  const productosStockBajo = useMemo(() => inventario.filter(p => { const e = estadoStock(p, stockDisponible(p, envases)); return e === 'bajo' || e === 'sin_stock'; }), [inventario, envases]);
   const totalCxC = saldos.resumen.porCobrar;
   const totalCxP = saldos.resumen.porPagar;
   const ventasPendientes = { length: saldos.resumen.ventasPorCobrar };
   const gastosPorPagar = { length: saldos.resumen.comprasPorPagar };
   const alertas = useMemo(
-    () => calcularAlertas({ inventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos }),
-    [inventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos]
+    () => calcularAlertas({ inventario, envases, saldos, documentosTributarios, pagosPOS, promociones, movimientos }),
+    [inventario, envases, saldos, documentosTributarios, pagosPOS, promociones, movimientos]
   );
 
   const periodoActual = `${anioActual}-${String(mesActual + 1).padStart(2, '0')}`;

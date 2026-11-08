@@ -1,3 +1,4 @@
+import { stockDisponible } from '../../1.-ERP/services/inventarioFraccionado';
 import { Fragment, useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { useERP, type Gasto, type Venta } from '../../1.-ERP/context/ERPContext';
 import { useAuth } from '../../context/AuthContext';
@@ -95,7 +96,7 @@ function Kpi({ titulo, icono, valor, pie, detalle, negativo }: {
 }
 
 export default function ERPReportes() {
-  const { ventas, gastos, inventario, abonos, documentosTributarios, saldos, getF29Preparador, movimientosInventario } = useERP();
+  const { ventas, gastos, inventario, abonos, documentosTributarios, saldos, getF29Preparador, movimientosInventario, envases } = useERP();
   const { perfil } = useAuth();
   const paleta = usePaletaGraficos();
 
@@ -283,7 +284,8 @@ export default function ERPReportes() {
     gastos: [...gastosP].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 30),
   }), [ventasP, gastosP]);
 
-  const valorInventario = useMemo(() => inventario.reduce((a, p) => a + (p.costo || 0) * (p.stock || 0), 0), [inventario]);
+  // Stock real (con envases = suma de sus envases) × costo por unidad base.
+  const valorInventario = useMemo(() => inventario.reduce((a, p) => a + (p.costo || 0) * stockDisponible(p, envases), 0), [inventario, envases]);
   const mayorTramo = useMemo(
     () => flujo.puntos.reduce<(typeof flujo.puntos)[number] | null>((m, p) => (p.ingresos > (m?.ingresos ?? 0) ? p : m), null),
     [flujo]
