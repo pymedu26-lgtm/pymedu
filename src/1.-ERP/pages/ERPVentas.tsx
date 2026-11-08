@@ -688,12 +688,12 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
 
   return (
     <div className="p-8 space-y-8">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap gap-4 justify-between items-center">
         <div>
           <h2 className="text-3xl font-extrabold text-primary tracking-tight">Ventas</h2>
           <p className="text-on-surface-variant mt-1">Registra y controla tus ingresos por ventas.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button 
             onClick={() => setShowCargaMasiva(true)}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2"

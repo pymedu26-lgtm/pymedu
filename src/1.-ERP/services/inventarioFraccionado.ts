@@ -243,10 +243,12 @@ export function venderPorcion(p: Producto, envases: Envase[], pres: Presentacion
     if (!sugerido) {
       return sin(error('stock_insuficiente', `Ningún ${nombreEnvase(p)} abierto tiene ${formatCantidad(c, p.unidadBase)} y no quedan cerrados.`, { productoId: p.id }));
     }
-    const mayor = abiertos.length ? abiertos.reduce((a, e) => (e.restante > a.restante ? e : a)) : undefined;
+    // El mensaje describe el inventario ANTES de la venta (no el estado a medio asignar).
+    const abiertosAntes = envasesDe(envases, p.id).filter(e => e.estado === 'abierto').sort(porCodigo);
+    const detalleAbiertos = abiertosAntes.map(e => `${e.codigo}: ${formatCantidad(e.restante, p.unidadBase)}`).join(', ');
     return sin(error('requiere_abrir',
-      mayor
-        ? `${mayor.codigo} solo tiene ${formatCantidad(mayor.restante, p.unidadBase)}. Hay que abrir ${sugerido.codigo}.`
+      abiertosAntes.length
+        ? `Lo abierto (${detalleAbiertos}) no alcanza para ${formatCantidad(total, p.unidadBase)}. Hay que abrir ${sugerido.codigo}.`
         : `No hay ${nombreEnvase(p, true)} abiertos. Hay que abrir ${sugerido.codigo}.`,
       { productoId: p.id, sugerido: { id: sugerido.id, codigo: sugerido.codigo } }));
   }

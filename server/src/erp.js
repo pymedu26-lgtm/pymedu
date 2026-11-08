@@ -69,18 +69,25 @@ router.get('/', async (req, res) => {
 });
 
 // Upsert por lotes: { rows: [{ coleccion, id, data }] }
+// Una sola sentencia por bloque de 500: una venta toca a la vez ventas, inventario, envases,
+// lotes y movimientos, y deben quedar guardados todos o ninguno (antes era una fila por
+// consulta y un corte a mitad de camino dejaba el stock y los envases descuadrados).
 router.post('/upsert', async (req, res) => {
   try {
-    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    const unicas = new Map();
+    for (const r of Array.isArray(req.body?.rows) ? req.body.rows : []) {
+      if (r && r.coleccion && r.id) unicas.set(`${r.coleccion}\u0000${r.id}`, r); // sin repetidos en la misma sentencia
+    }
+    const rows = [...unicas.values()];
     const ahora = new Date().toISOString();
-    for (const r of rows) {
-      if (!r || !r.coleccion || !r.id) continue;
+    for (let i = 0; i < rows.length; i += 500) {
+      const bloque = rows.slice(i, i + 500);
       await db.prepare(`
         INSERT INTO erp_datos (usuario_id, coleccion, id, data, updated_at)
-        VALUES (?, ?, ?, ?::jsonb, ?)
+        VALUES ${bloque.map(() => '(?, ?, ?, ?::jsonb, ?)').join(', ')}
         ON CONFLICT (usuario_id, coleccion, id)
         DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
-      `).run(req.perfil.id, r.coleccion, r.id, JSON.stringify(r.data ?? {}), ahora);
+      `).run(...bloque.flatMap((r) => [req.perfil.id, r.coleccion, r.id, JSON.stringify(r.data ?? {}), ahora]));
     }
     res.json({ ok: true });
   } catch (error) {

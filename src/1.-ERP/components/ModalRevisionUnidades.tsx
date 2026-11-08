@@ -15,7 +15,10 @@ export default function ModalRevisionUnidades({ productos, onCerrar }: { product
   const [indice, setIndice] = useState(0);
   const p = productos[Math.min(indice, productos.length - 1)];
   const tieneEnvases = !!p?.controlEnvases && envasesDe(envases, p.id).some(envaseVigente);
-  const [opcion, setOpcion] = useState<DecisionUnidades['tipo']>('envases');
+  /** Opción inicial sin convertir nada: usar los envases si existen; si se mide en kg/ml, dejarlo igual. */
+  const opcionInicial = (x?: Producto): DecisionUnidades['tipo'] =>
+    x?.controlEnvases && envasesDe(envases, x.id).some(envaseVigente) ? 'usar_envases' : x?.unidadBase && x.unidadBase !== 'unidad' ? 'mantener' : 'envases';
+  const [opcion, setOpcion] = useState<DecisionUnidades['tipo']>(() => opcionInicial(productos[0]));
   const [nombreEnvase, setNombreEnvase] = useState<NombreEnvase>('frasco');
   const [contenido, setContenido] = useState(0);
   const [unidad, setUnidad] = useState<UnidadEntrada>(p?.unidadBase === 'kg' || p?.unidadBase === 'g' ? 'kg' : 'ml');
@@ -31,7 +34,7 @@ export default function ModalRevisionUnidades({ productos, onCerrar }: { product
     if (!sig) { onCerrar(); return; }
     setIndice(indice + 1);
     setContenido(0);
-    setOpcion('envases');
+    setOpcion(opcionInicial(sig));
     setUnidad(sig.unidadBase === 'kg' || sig.unidadBase === 'g' ? 'kg' : 'ml');
     setCostoEnvase(Number(sig.costo) || 0);
   };

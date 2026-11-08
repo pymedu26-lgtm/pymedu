@@ -166,8 +166,11 @@ export const api = {
   getErp: () =>
     request<{ data: { coleccion: string; id: string; data: unknown }[] }>('/api/erp'),
 
-  upsertErp: (rows: { coleccion: string; id: string; data: unknown }[]) =>
-    request<{ ok: boolean }>('/api/erp/upsert', json({ rows })),
+  /** `keepalive` (cuerpos < 60 KB) deja terminar el guardado aunque se cierre la pestaña. */
+  upsertErp: (rows: { coleccion: string; id: string; data: unknown }[]) => {
+    const opciones = json({ rows });
+    return request<{ ok: boolean }>('/api/erp/upsert', { ...opciones, keepalive: String(opciones.body).length < 60000 });
+  },
 
   deleteErp: (coleccion: string, ids: string[]) =>
     request<{ ok: boolean }>('/api/erp/delete', json({ coleccion, ids })),

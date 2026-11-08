@@ -461,6 +461,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   /** Última versión guardada de cada objeto, por colección (null = aún no hay línea base). */
   const guardadoRef = useRef<Record<string, Map<string, object>> | null>(null);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Guardado pendiente (para enviarlo de inmediato si se cierra u oculta la pestaña). */
+  const guardadoPendienteRef = useRef<(() => Promise<void>) | null>(null);
 
   const saldoActual = movimientos.reduce((acc, m) => m.tipo === 'Ingreso' ? acc + m.monto : acc - m.monto, 0);
 
@@ -569,27 +571,35 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     }
 
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    persistTimerRef.current = setTimeout(async () => {
+    const guardar = async () => {
+      guardadoPendienteRef.current = null;
       const base = guardadoRef.current!;
       try {
+        // Todo lo que cambió (venta + stock + envases + lotes + movimientos) viaja en la MISMA
+        // petición: el servidor lo guarda en una sola sentencia (todo o nada).
+        const filas: { coleccion: string; id: string; data: unknown }[] = [];
+        const borrados: [string, string[]][] = [];
+        const nuevasBases: [string, Map<string, object>][] = [];
         for (const [coleccion, items] of Object.entries(snapshot)) {
           const previo = base[coleccion] ?? new Map<string, object>();
           const cambiados = items.filter(it => previo.get(it.id) !== it);
           const vivos = new Set(items.map(i => i.id));
-          const borrados = [...previo.keys()].filter(id => !vivos.has(id));
-          if (cambiados.length === 0 && borrados.length === 0) continue;
-
-          // Lotes de 500 para no mandar cuerpos gigantes en cargas masivas.
-          for (let i = 0; i < cambiados.length; i += 500) {
-            await api.upsertErp(cambiados.slice(i, i + 500).map(it => ({ coleccion, id: it.id, data: it })));
-          }
-          if (borrados.length > 0) await api.deleteErp(coleccion, borrados);
-          base[coleccion] = new Map(items.map(i => [i.id, i as object]));
+          const quitar = [...previo.keys()].filter(id => !vivos.has(id));
+          if (cambiados.length === 0 && quitar.length === 0) continue;
+          cambiados.forEach(it => filas.push({ coleccion, id: it.id, data: it }));
+          if (quitar.length > 0) borrados.push([coleccion, quitar]);
+          nuevasBases.push([coleccion, new Map(items.map(i => [i.id, i as object]))]);
         }
+        // Bloques de 500 para no mandar cuerpos gigantes en cargas masivas.
+        for (let i = 0; i < filas.length; i += 500) await api.upsertErp(filas.slice(i, i + 500));
+        for (const [coleccion, ids] of borrados) await api.deleteErp(coleccion, ids);
+        nuevasBases.forEach(([coleccion, mapa]) => { base[coleccion] = mapa; });
       } catch (err) {
         console.error('No se pudo guardar el ERP:', err);
       }
-    }, 600);
+    };
+    guardadoPendienteRef.current = guardar;
+    persistTimerRef.current = setTimeout(() => { persistTimerRef.current = null; guardar(); }, 600);
 
     return () => {
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
@@ -598,6 +608,24 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     ventas, gastos, clientes, proveedores, movimientos, inventario,
     movimientosInventario, promociones, abonos, documentosTributarios,
     integracionEventos, pagosPOS, lotes, envases, configFila]);
+
+  // Si se cierra u oculta la pestaña con un guardado en espera, se envía de inmediato
+  // (keepalive): una venta recién hecha no se pierde por cerrar el navegador.
+  useEffect(() => {
+    const vaciar = () => {
+      if (!persistTimerRef.current || !guardadoPendienteRef.current) return;
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+      void guardadoPendienteRef.current();
+    };
+    const alOcultar = () => { if (document.visibilityState === 'hidden') vaciar(); };
+    window.addEventListener('pagehide', vaciar);
+    document.addEventListener('visibilitychange', alOcultar);
+    return () => {
+      window.removeEventListener('pagehide', vaciar);
+      document.removeEventListener('visibilitychange', alOcultar);
+    };
+  }, []);
 
   // ══ Saldos: fuente única (corrección #4) ═══════════
   const saldos = useMemo(() => {
