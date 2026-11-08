@@ -58,6 +58,10 @@ export interface VentaProducto {
   cantidadBase?: number;
   /** Costo de venta congelado al vender según el método de costeo (no se recalcula después). */
   costoVenta?: number;
+  /** De qué envase salió cada parte (decant de F3, frasco F7 completo): permite revertir exacto. */
+  consumosEnvase?: ConsumoEnvase[];
+  /** Lotes consumidos (costo): se devuelven a los mismos lotes al anular. */
+  consumosLote?: ConsumoLote[];
   subtotal: number;
   iva: number;
   total: number;
@@ -209,11 +213,28 @@ export interface Producto {
   unidadesCompra?: { id: string; nombre: string; factor: number }[]
   /** Control por envases (frascos/sacos con saldo propio). Recomendado para no perecibles. */
   controlEnvases?: boolean
-  /** Capacidad de cada envase en unidad base (ej. 100 ml por frasco). */
+  /** Contenido de cada envase ORIGINAL en unidad base (ej. 100 ml por frasco). No es el tamaño del decant. */
   capacidadEnvase?: number
+  /**
+   * Cómo se compra (formulario «¿Cómo lo compras?»). De aquí se DERIVAN controlEnvases y
+   * unidadBase: envase → controlEnvases = true. Ver services/registroProducto.ts.
+   */
+  formaCompra?: FormaCompra
+  /** Nombre del envase para los textos: frasco, botella, saco o caja. */
+  nombreEnvase?: NombreEnvase
+  /** Dato antiguo con unidades dudosas: no se convierte solo, se revisa en Inventario. */
+  requiereRevisionUnidades?: boolean
 }
 
+/**
+ * Unidad base del stock. Productos nuevos usan solo 'unidad', 'ml' (volumen) o 'kg' (peso):
+ * L → ml ×1000; g → kg ÷1000; toneladas → kg ×1000. 'l' y 'g' se mantienen por datos antiguos.
+ */
 export type UnidadBase = 'unidad' | 'ml' | 'l' | 'g' | 'kg';
+export type FormaCompra = 'unidad' | 'envase' | 'granel';
+export type NombreEnvase = 'frasco' | 'botella' | 'saco' | 'caja';
+export interface ConsumoEnvase { envaseId: string; cantidad: number; envaseVendidoCompleto?: boolean }
+export interface ConsumoLote { loteId: string; cantidad: number }
 export type MetodoCosteo = 'fifo' | 'promedio';
 
 export interface Presentacion {
@@ -224,10 +245,14 @@ export interface Presentacion {
   /** Precio con IVA. */
   precio: number;
   sku?: string;
-  /** De dónde sale: granel, un envase cerrado completo o el envase abierto. */
+  /** Se calcula (nunca lo elige el usuario): completa → envase_cerrado; porción con envases → envase_abierto; sin envases → granel. */
   origen?: 'granel' | 'envase_cerrado' | 'envase_abierto';
+  /** Frasco/saco completo o una porción (decant, kilo). */
+  tipo?: 'completa' | 'porcion';
+  /** Costo neto de insumos no inventariados por cada venta (frasco vacío, etiqueta). */
+  costoInsumos?: number;
   activa: boolean;
-  /** Insumos que también se descuentan (ej. 1 atomizador por decant). */
+  /** Insumos del inventario que también se descuentan (ej. 1 atomizador por decant). */
   receta?: { productoId: string; cantidad: number }[];
 }
 
@@ -244,7 +269,10 @@ export interface Lote {
   vencimiento?: string;
 }
 
-/** Envase con saldo propio (tabla destino: erp.envase). */
+/**
+ * Envase con saldo propio (tabla destino: erp.envase). Nunca se borra: 'agotado' = consumido
+ * por porciones, 'vendido' = salió completo. Su historial son los movimientos con envaseId/consumos.
+ */
 export interface Envase {
   id: string;
   productoId: string;
@@ -259,7 +287,8 @@ export interface Envase {
 export interface MovimientoInventario {
   id: string;
   productoId: string;
-  tipo: 'ingreso' | 'salida' | 'ajuste' | 'merma' | 'devolucion';
+  /** 'apertura' no cambia el total disponible (cerrado → abierto). */
+  tipo: 'ingreso' | 'salida' | 'ajuste' | 'merma' | 'devolucion' | 'apertura';
   cantidad: number;
   costoUnitario?: number;
   fecha: string;
@@ -269,6 +298,14 @@ export interface MovimientoInventario {
   documentoId?: string;
   bodegaId?: string;
   lote?: string;
+  /** Envase afectado (apertura, merma en un frasco abierto). */
+  envaseId?: string;
+  /** Detalle por envase de una salida o devolución. */
+  consumos?: { envaseId: string; cantidad: number; envaseVendidoCompleto?: boolean }[];
+  /** Lotes consumidos por una salida (para devolverlos exactos). */
+  consumosLote?: ConsumoLote[];
+  /** La salida fue compensada por una devolución (anulación/edición): se conserva como historial. */
+  revertido?: boolean;
 }
 
 export interface Promocion {

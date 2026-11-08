@@ -85,6 +85,10 @@ export interface ConfiguracionCumplimiento {
   contadorEmail?: string;
   /** Método de costeo del inventario (por defecto promedio). LIFO no se acepta en Chile. */
   metodoCosteo?: 'fifo' | 'promedio';
+  /** Qué frasco abierto usar para una porción: el que tiene menos (para terminarlo) o el abierto hace más tiempo. */
+  politicaEnvaseAbierto?: 'menos_contenido' | 'mas_antiguo';
+  /** Permite completar una porción con dos envases abiertos (por defecto no). */
+  permitirMezclarEnvases?: boolean;
 }
 
 export interface SaleDocumentInput {
