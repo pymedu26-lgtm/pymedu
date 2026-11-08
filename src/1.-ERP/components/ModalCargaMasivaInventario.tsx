@@ -4,6 +4,7 @@ import { Producto } from '../context/ERPContext';
 import {
   descargarLibroPlantilla, elegirEnum, extensionValida,
   formatPesos, mapearColumnas, normKey, parseBooleano, parseNumero,
+  limpiarCelda,
 } from './cargaMasivaUtil';
 
 interface ModalCargaMasivaInventarioProps {
@@ -146,7 +147,7 @@ export default function ModalCargaMasivaInventario({
         const columnas = mapearColumnas(filas[indiceEncabezado], ALIAS);
         const celda = (fila: unknown[], campo: CampoClave) => {
           const i = columnas[campo];
-          return i >= 0 ? fila[i] ?? '' : '';
+          return i >= 0 ? limpiarCelda(fila[i]) : '';
         };
 
         const existentesCodigos = new Map(inventarioExistente.map(p => [normKey(p.codigo), p.id]));

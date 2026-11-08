@@ -83,6 +83,8 @@ export interface ConfiguracionCumplimiento {
   ppmTasa: number;
   usaFoliosManual: boolean;
   contadorEmail?: string;
+  /** Método de costeo del inventario (por defecto promedio). LIFO no se acepta en Chile. */
+  metodoCosteo?: 'fifo' | 'promedio';
 }
 
 export interface SaleDocumentInput {

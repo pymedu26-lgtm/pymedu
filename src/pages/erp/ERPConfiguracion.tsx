@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useERP } from '../../1.-ERP/context/ERPContext';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { formatCLP, formatFecha } from '../../lib/fechas';
+import { PLANES, planPorId, WEBPAY_MODO_PRUEBA } from '../../lib/planes';
 
 type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion';
 
@@ -26,6 +28,12 @@ const SEGMENTOS = [
   { valor: 'C', label: 'Perfil C — Cadena (21 a 100 empleados)' },
 ] as const;
 
+const MODO_SII: Record<string, string> = {
+  sandbox: 'Prueba (sin envío al SII)',
+  manual_controlled: 'Manual controlado',
+  api_integrated: 'Integrado por API',
+};
+
 const TABS: { id: Tab; icono: string; label: string }[] = [
   { id: 'negocio', icono: 'storefront', label: 'Mi Negocio' },
   { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta' },
@@ -36,7 +44,7 @@ const TABS: { id: Tab; icono: string; label: string }[] = [
 
 export default function ERPConfiguracion() {
   const { perfil, actualizarPerfil, puedeHacer } = useAuth();
-  const { configuracionCumplimiento, updatePpmTasa, user } = useERP();
+  const { configuracionCumplimiento, updatePpmTasa } = useERP();
   const [tab, setTab] = useState<Tab>('negocio');
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
@@ -105,6 +113,7 @@ export default function ERPConfiguracion() {
   // ══ Mi Cuenta ═════════════════════════════════════
   const [formCuenta, setFormCuenta] = useState({
     nombre_completo: perfil?.nombre_completo ?? '',
+    contrasena_actual: '',
     nueva_contrasena: '',
     confirmar_contrasena: '',
     notif_email: !!(perfil?.notif_email ?? true),
@@ -128,22 +137,22 @@ export default function ERPConfiguracion() {
       notif_email: formCuenta.notif_email,
       notif_push: formCuenta.notif_push,
     };
+    // Cambio de contraseña: el servidor exige la actual, mínimo 8 y distinta de la actual (corrección #7).
     if (formCuenta.nueva_contrasena || formCuenta.confirmar_contrasena) {
-      if (formCuenta.nueva_contrasena.length < 6) {
-        notificar('error', 'La contraseña debe tener al menos 6 caracteres');
-        return;
-      }
-      if (formCuenta.nueva_contrasena !== formCuenta.confirmar_contrasena) {
-        notificar('error', 'Las contraseñas no coinciden');
-        return;
-      }
+      const error = !formCuenta.contrasena_actual ? 'Ingresa tu contraseña actual para cambiarla'
+        : formCuenta.nueva_contrasena.length < 8 ? 'La nueva contraseña debe tener al menos 8 caracteres'
+        : formCuenta.nueva_contrasena !== formCuenta.confirmar_contrasena ? 'Las contraseñas no coinciden'
+        : formCuenta.nueva_contrasena === formCuenta.contrasena_actual ? 'La nueva contraseña debe ser distinta de la actual'
+        : '';
+      if (error) { notificar('error', error); return; }
+      payload.contrasena_actual = formCuenta.contrasena_actual;
       payload.nueva_contrasena = formCuenta.nueva_contrasena;
       payload.confirmar_contrasena = formCuenta.confirmar_contrasena;
     }
     setGuardando(true);
     try {
       await actualizarPerfil(payload);
-      setFormCuenta(p => ({ ...p, nueva_contrasena: '', confirmar_contrasena: '' }));
+      setFormCuenta(p => ({ ...p, contrasena_actual: '', nueva_contrasena: '', confirmar_contrasena: '' }));
       notificar('ok', 'Cuenta actualizada correctamente');
     } catch (e) {
       notificar('error', e instanceof Error ? e.message : 'No se pudo guardar');
@@ -166,6 +175,7 @@ export default function ERPConfiguracion() {
   }, [puedeGestionarEquipo, perfil?.institucion_id]);
 
   // ══ Integraciones / SII ═══════════════════════════
+  const siiModoPrueba = configuracionCumplimiento.modoIntegracion === 'sandbox' || configuracionCumplimiento.ambiente !== 'produccion';
   const [ppm, setPpm] = useState(String(configuracionCumplimiento.ppmTasa));
   const [ppmGuardado, setPpmGuardado] = useState(false);
 
@@ -368,9 +378,14 @@ export default function ERPConfiguracion() {
               Cambiar contraseña
             </h3>
             <div>
+              <label className={labelCls}>Contraseña actual</label>
+              <input type="password" autoComplete="current-password" value={formCuenta.contrasena_actual} onChange={e => setFormCuenta(p => ({ ...p, contrasena_actual: e.target.value }))}
+                placeholder="Tu contraseña de hoy" className={inputCls} />
+            </div>
+            <div>
               <label className={labelCls}>Nueva contraseña</label>
-              <input type="password" value={formCuenta.nueva_contrasena} onChange={e => setFormCuenta(p => ({ ...p, nueva_contrasena: e.target.value }))}
-                placeholder="Mínimo 6 caracteres" className={inputCls} />
+              <input type="password" autoComplete="new-password" minLength={8} value={formCuenta.nueva_contrasena} onChange={e => setFormCuenta(p => ({ ...p, nueva_contrasena: e.target.value }))}
+                placeholder="Mínimo 8 caracteres" className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Confirmar contraseña</label>
@@ -438,7 +453,7 @@ export default function ERPConfiguracion() {
                             </span>
                           </td>
                           <td className="px-8 py-4 text-right text-xs font-bold text-on-surface-variant capitalize">
-                            {String(m.membresia_nivel ?? 'free')}
+                            {planPorId(String(m.membresia_nivel ?? 'free')).nombre}
                           </td>
                         </tr>
                       ))}
@@ -453,7 +468,7 @@ export default function ERPConfiguracion() {
                     <span className="material-symbols-outlined text-primary">group</span>
                   </div>
                   <div>
-                    <p className="font-bold text-on-surface">Tu equipo se gestiona desde las Administración</p>
+                    <p className="font-bold text-on-surface">Tu equipo se gestiona desde la Administración</p>
                     <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
                       Los colaboradores, roles y permisos del ERP se administran según tu vinculación a una institución.
                       Como tu rol actual es <strong className="text-on-surface capitalize">{perfil.rol.replace(/_/g, ' ')}</strong>, puedes
@@ -479,13 +494,19 @@ export default function ERPConfiguracion() {
             <h3 className="text-lg font-bold text-on-surface mb-2 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">account_balance</span>
               Integración con SII
+              {siiModoPrueba && <span className="ml-auto text-[10px] font-extrabold uppercase tracking-widest bg-warning/15 text-warning px-2.5 py-1 rounded-full">Modo prueba</span>}
             </h3>
             <p className="text-sm text-on-surface-variant mb-6">Parámetros que el ERP usa para la declaración de impuestos (F29 e IVA mensual).</p>
+            {siiModoPrueba && (
+              <p className="-mt-3 mb-5 p-3 rounded-xl bg-warning/10 text-xs font-medium text-on-surface-variant leading-relaxed">
+                Los documentos se generan en ambiente de prueba: no se envían al SII ni tienen validez tributaria.
+              </p>
+            )}
 
             <div className="divide-y divide-outline-variant/10 mb-6">
               {[
-                { label: 'Modo de integración', valor: configuracionCumplimiento.modoIntegracion },
-                { label: 'Ambiente', valor: configuracionCumplimiento.ambiente },
+                { label: 'Modo de integración', valor: MODO_SII[configuracionCumplimiento.modoIntegracion] ?? configuracionCumplimiento.modoIntegracion },
+                { label: 'Ambiente', valor: configuracionCumplimiento.ambiente === 'produccion' ? 'Producción' : 'Prueba' },
                 { label: 'Uso de folios manuales', valor: configuracionCumplimiento.usaFoliosManual ? 'Habilitado' : 'Deshabilitado' },
                 { label: 'Declaradores disponibles', valor: 'F29 mensual' },
               ].map(item => (
@@ -513,7 +534,7 @@ export default function ERPConfiguracion() {
             <div className="flex items-center gap-3 mb-4">
               <span className="material-symbols-outlined text-primary">percent</span>
               <div>
-                <h3 className="font-bold text-on-surface">Tasa de PPM (Pagos Provisional Mensuales)</h3>
+                <h3 className="font-bold text-on-surface">Tasa de PPM (Pagos Provisionales Mensuales)</h3>
                 <p className="text-xs text-on-surface-variant">Ingresa el porcentaje que aparece en tu resolución de PPM para el cálculo del F29.</p>
               </div>
             </div>
@@ -529,8 +550,16 @@ export default function ERPConfiguracion() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest dark-card p-5 text-sm text-on-surface-variant">
-            <p><span className="font-black text-on-surface">Cuenta conectada:</span> {user?.email}</p>
+          {/* Estado real de conexión (corrección #31): no hay credenciales SII guardadas, así que nunca "conectada" a medias */}
+          <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest dark-card p-5 text-sm text-on-surface-variant space-y-2">
+            <p className="flex items-center justify-between gap-3">
+              <span className="font-black text-on-surface">SII</span>
+              <span>{siiModoPrueba ? 'Modo prueba' : configuracionCumplimiento.modoIntegracion === 'api_integrated' ? `Conectada como ${perfil.negocio_rut || perfil.email}` : 'No conectada (declaración manual)'}</span>
+            </p>
+            <p className="flex items-center justify-between gap-3">
+              <span className="font-black text-on-surface">Webpay (suscripción)</span>
+              <span>{WEBPAY_MODO_PRUEBA ? 'Modo prueba' : 'Producción'}</span>
+            </p>
           </div>
         </div>
       )}
@@ -548,7 +577,7 @@ export default function ERPConfiguracion() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">Plan Actual</p>
-                <h4 className="text-xl font-extrabold text-on-surface capitalize">{perfil.membresia_nivel ?? 'free'}</h4>
+                <h4 className="text-xl font-extrabold text-on-surface">{planPorId(perfil.membresia_nivel).nombre}</h4>
               </div>
               <span className={cn('material-symbols-outlined text-4xl',
                 perfil.membresia_nivel === 'free' ? 'text-on-surface-variant/50' : 'text-success')}>
@@ -556,7 +585,7 @@ export default function ERPConfiguracion() {
               </span>
             </div>
             {perfil.membresia_expira && perfil.membresia_nivel !== 'free' && (
-              <p className="text-xs text-on-surface-variant mt-2">Próxima renovación: <strong className="text-on-surface">{perfil.membresia_expira}</strong></p>
+              <p className="text-xs text-on-surface-variant mt-2">Vigente hasta: <strong className="text-on-surface">{formatFecha(perfil.membresia_expira)}</strong></p>
             )}
           </div>
 
@@ -564,7 +593,7 @@ export default function ERPConfiguracion() {
             <Link to="/erp/suscripcion"
               className="w-full flex items-center justify-center gap-2 py-4 bg-warning hover:bg-warning/90 text-inverse-on-surface font-bold rounded-2xl text-base transition-colors shadow-lg shadow-warning/25">
               <span className="material-symbols-outlined">rocket_launch</span>
-              Pasarse a Premium — $10.000/mes
+              Mejorar mi plan — desde {formatCLP(PLANES[1].precio)}/mes
             </Link>
           ) : (
             <div className="space-y-3">

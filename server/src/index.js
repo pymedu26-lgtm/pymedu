@@ -1,15 +1,18 @@
 import { readFileSync, existsSync } from 'fs';
+import { gzip } from 'zlib';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
-import db, { inicializar } from './db.js';
+import db, { inicializar, modoBD } from './db.js';
 import authRouter, { requireAuth, sanitizarPerfil } from './auth.js';
 import webpayRouter from './webpay.js';
 import vinculacionRouter from './vinculacion.js';
 import erpRouter from './erp.js';
 import membresiaRouter from './membresia.js';
 import adminRouter from './admin.js';
+import rolesRouter from './cuentas/rutas.js';
+import mentoriasRouter from './mentorias/rutas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +35,24 @@ try {
 
 const app = express();
 app.use(cors());
+
+// Compresión gzip de respuestas JSON grandes (corrección #1: /api/erp pesaba ~23 MB).
+// Sin dependencias: zlib nativo y asíncrono para no bloquear el proceso.
+app.use((req, res, next) => {
+  if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return next();
+  const enviarJson = res.json.bind(res);
+  res.json = (cuerpo) => {
+    const texto = JSON.stringify(cuerpo);
+    if (texto.length < 4096) return enviarJson(cuerpo);
+    gzip(texto, { level: 6 }, (error, comprimido) => {
+      if (error || res.headersSent) return error ? res.type('application/json').send(texto) : undefined;
+      res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' });
+      res.end(comprimido);
+    });
+    return res;
+  };
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
 
@@ -41,9 +62,11 @@ app.use('/api/vinculacion', vinculacionRouter);
 app.use('/api/erp', erpRouter);
 app.use('/api/membresia', membresiaRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/roles', rolesRouter);          // Núcleo: roles dinámicos
+app.use('/api/mentorias', mentoriasRouter);  // App Mentorías
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, servicio: 'PymEdu API', entorno: process.env.RAILWAY_ENV || 'local', ts: Date.now() });
+  res.json({ ok: true, servicio: 'PymEdu API', entorno: process.env.RAILWAY_ENV || 'local', baseDatos: modoBD(), ts: Date.now() });
 });
 
 app.get('/api/instituciones', async (req, res) => {

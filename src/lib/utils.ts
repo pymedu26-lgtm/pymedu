@@ -5,9 +5,5 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** Formatea una fecha ISO 'YYYY-MM-DD' (o con hora) como 'DD/MM/YYYY' sin conversión de zona horaria. */
-export function formatFecha(iso?: string): string {
-  const [y, m, d] = (iso ?? '').split('T')[0].split('-');
-  if (!y || !m || !d) return iso || '—';
-  return `${d}/${m}/${y}`;
-}
+// Formato único dd-mm-aaaa (corrección #29). Se reexporta para no romper los imports existentes.
+export { formatFecha, formatCLP } from './fechas';

@@ -3,289 +3,143 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import manifest from '../manifest.json';
 
-type Course = {
+// Corrección #22: títulos, resúmenes y duración reales de cada lección (extraídos del HTML a manifest.json).
+// Terminología: módulo = Financiero / Legal; cada módulo tiene niveles y cada nivel, lecciones.
+
+type ModuloId = 'Fin' | 'Legal';
+
+interface Leccion {
   id: string;
   title: string;
-  description: string;
-  duration: string;
-  level: string;
-  progress: number;
-  icon: string;
-  color: 'primary' | 'secondary' | 'emerald' | 'amber' | 'indigo';
-  outcome?: string;
+  resumen: string;
+  duracion: string;
   category: string;
-  lesson?: number;
+  type: string;
+  level: number;
+  lesson: number;
+}
+
+interface Nivel { titulo: string; descripcion: string; icon: string }
+
+const MODULOS: Record<ModuloId, { nombre: string; icon: string; niveles: Record<number, Nivel> }> = {
+  Fin: {
+    nombre: 'Financiero', icon: 'insights',
+    niveles: {
+      1: { titulo: 'Nivel 1: Primeros pasos', descripcion: 'Dinero, presupuesto, ahorro, tarjetas y seguridad: la base de tus finanzas.', icon: 'school' },
+      2: { titulo: 'Nivel 2: Operar mejor', descripcion: 'Flujo de caja, costos, formalización, IVA y F29, financiamiento y precios.', icon: 'trending_up' },
+      3: { titulo: 'Nivel 3: Decidir con datos', descripcion: 'Contabilidad, punto de equilibrio, evaluación de inversiones, KPIs y crecimiento.', icon: 'query_stats' },
+    },
+  },
+  Legal: {
+    nombre: 'Legal', icon: 'gavel',
+    niveles: {
+      1: { titulo: 'Nivel 1: Formaliza tu empresa', descripcion: 'Forma legal, constitución, patentes, permisos e identidad digital.', icon: 'account_balance' },
+      2: { titulo: 'Nivel 2: Contratos y clientes', descripcion: 'Contratos, arriendo comercial, Ley del Consumidor, pago a 30 días y e-commerce.', icon: 'handshake' },
+      3: { titulo: 'Nivel 3: Tu equipo de trabajo', descripcion: 'Contrato de trabajo, sueldo y cotizaciones, finiquito, honorarios y prevención.', icon: 'badge' },
+      4: { titulo: 'Nivel 4: Protege tus activos', descripcion: 'Marca, datos personales, propiedad intelectual y confidencialidad.', icon: 'verified_user' },
+      5: { titulo: 'Nivel 5: Deudas, conflictos y cierre', descripcion: 'Cobranza, insolvencia, conflictos entre socios y término de giro.', icon: 'gavel' },
+    },
+  },
 };
 
-const mapManifestToCourses = (category: 'gratis' | 'suscripcion') => {
-  return manifest[category].map(c => ({
-    id: c.id,
-    title: c.title,
-    description: `Leccion ${c.level}.${c.lesson} del modulo ${c.type}.`,
-    duration: '35 min',
-    level: c.level === 1 ? 'Basico' : c.level === 2 ? 'Intermedio' : 'Avanzado',
-    progress: 0,
-    icon: c.type === 'Fin' ? 'insights' : 'gavel',
-    color: c.type === 'Fin' ? 'primary' : 'indigo',
-    category: c.category,
-    type: c.type,
-    lesson: c.lesson,
-    levelNum: c.level
-  }));
+const LECCIONES = [...manifest.gratis, ...manifest.suscripcion] as Leccion[];
+
+const leccionesDe = (modulo: ModuloId) => LECCIONES.filter(c => c.type === modulo);
+const nivelesDe = (modulo: ModuloId) => {
+  const porNivel = new Map<number, Leccion[]>();
+  leccionesDe(modulo).forEach(c => porNivel.set(c.level, [...(porNivel.get(c.level) ?? []), c]));
+  return [...porNivel.entries()].sort(([a], [b]) => a - b);
 };
+const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
-const allCourses = [...mapManifestToCourses('gratis'), ...mapManifestToCourses('suscripcion')];
-
-const getCoursesByTab = (tab: 'comercial' | 'legal') => {
-  const typeFilter = tab === 'comercial' ? 'Fin' : 'Legal';
-  const filtered = allCourses.filter(c => c.type === typeFilter);
-
-  return {
-    basico: filtered.filter(c => c.levelNum === 1),
-    intermedio: filtered.filter(c => c.levelNum === 2),
-    avanzado: filtered.filter(c => c.levelNum >= 3),
-  };
-};
-
-const CourseCard = ({ course }: { course: any; key?: string }) => {
+const LessonCard = ({ leccion, modulo }: { leccion: Leccion; modulo: ModuloId; key?: string }) => {
   const navigate = useNavigate();
-  const colorMap: Record<string, { bg: string, text: string, badgeBg: string, badgeText: string, progress: string }> = {
-    primary: { bg: 'bg-primary/5', text: 'text-primary', badgeBg: 'bg-primary/10', badgeText: 'text-primary', progress: 'bg-primary' },
-    secondary: { bg: 'bg-secondary/5', text: 'text-secondary', badgeBg: 'bg-secondary/10', badgeText: 'text-secondary', progress: 'bg-secondary' },
-    emerald: { bg: 'bg-primary/5', text: 'text-primary', badgeBg: 'bg-primary/10', badgeText: 'text-primary', progress: 'bg-primary' },
-    amber: { bg: 'bg-warning-container', text: 'text-on-warning-container', badgeBg: 'bg-warning-container', badgeText: 'text-on-warning-container', progress: 'bg-warning' },
-    indigo: { bg: 'bg-primary/5', text: 'text-primary', badgeBg: 'bg-primary/10', badgeText: 'text-primary', progress: 'bg-primary' },
-  };
-
-  const colors = colorMap[course.color] || colorMap.primary;
-
   return (
     <article className="bg-surface-container-lowest rounded-[28px] shadow-sm border border-outline-variant/30 overflow-hidden group hover:shadow-lg hover:shadow-primary/5 transition-all flex flex-col">
-      <div className={cn("h-28 relative flex items-center justify-center transition-colors", colors.bg)}>
-        <span className={cn("material-symbols-outlined text-5xl opacity-70 group-hover:opacity-100 transition-opacity", colors.text)}>
-          {course.icon}
-        </span>
+      <div className="h-24 relative flex items-center justify-center bg-primary/5">
+        <span className="material-symbols-outlined text-5xl text-primary opacity-70 group-hover:opacity-100 transition-opacity">{MODULOS[modulo].icon}</span>
         <span className="absolute right-4 top-4 rounded-full bg-surface-container-lowest/90 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-on-surface shadow-sm">
-          {course.category === 'gratis' ? 'Acceso Libre' : 'Premium'}
+          {leccion.category === 'gratis' ? 'Acceso libre' : 'Premium'}
         </span>
       </div>
       <div className="p-6 flex flex-col flex-1">
         <div className="flex justify-between items-start mb-3">
-          <span className={cn("text-[10px] font-extrabold px-2 py-1 rounded-full uppercase tracking-wider", colors.badgeBg, colors.badgeText)}>
-            {course.level}
+          <span className="text-[10px] font-extrabold px-2 py-1 rounded-full uppercase tracking-wider bg-primary/10 text-primary">
+            Lección {leccion.level}.{leccion.lesson}
           </span>
-          <span className="text-xs font-bold text-outline flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm">schedule</span> {course.duration}
-          </span>
+          {leccion.duracion && (
+            <span className="text-xs font-bold text-outline flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">schedule</span> {leccion.duracion}
+            </span>
+          )}
         </div>
-        <h3 className="font-black text-on-surface text-lg mb-2 leading-tight group-hover:text-primary transition-colors h-14 overflow-hidden">{course.title}</h3>
-        <p className="text-sm text-on-surface-variant mb-4 leading-6 flex-1">{course.description}</p>
-
-        <div className="mb-4 rounded-2xl border border-outline-variant/25 bg-surface-container-low px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-outline">Resultado practico</p>
-          <p className="mt-1 text-sm font-bold text-on-surface">
-            {course.outcome ?? 'Terminas con una accion clara para aplicar en tu negocio.'}
-          </p>
-        </div>
-
-        <div className="mt-auto">
-          <div className="w-full bg-surface-container-high rounded-full h-2 mb-3 overflow-hidden">
-            <div className={cn("h-2 rounded-full", colors.progress)} style={{ width: `${course.progress}%` }}></div>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-outline font-bold">{course.progress}% completado</p>
-            <button
-              onClick={() => navigate(`/erp/academia/${course.category}/${course.id}`)}
-              className="inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-black text-inverse-on-surface transition-colors hover:bg-primary/90"
-            >
-              Empezar
-              <span className="material-symbols-outlined text-sm">arrow_forward</span>
-            </button>
-          </div>
-        </div>
+        <h3 className="font-black text-on-surface text-lg mb-2 leading-tight group-hover:text-primary transition-colors">{leccion.title}</h3>
+        <p className="text-sm text-on-surface-variant mb-5 leading-6 flex-1 line-clamp-4">{leccion.resumen}</p>
+        <button
+          onClick={() => navigate(`/erp/academia/${leccion.category}/${leccion.id}`)}
+          className="mt-auto self-end inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-black text-inverse-on-surface transition-colors hover:bg-primary/90"
+        >
+          Empezar
+          <span className="material-symbols-outlined text-sm">arrow_forward</span>
+        </button>
       </div>
     </article>
   );
 };
 
-const CourseSection = ({
-  title,
-  description,
-  icon,
-  courses,
-  tone = 'primary',
-}: {
-  title: string;
-  description: string;
-  icon: string;
-  courses: any[];
-  tone?: 'primary' | 'secondary' | 'amber';
-}) => {
-  const toneClass = {
-    primary: 'bg-primary/10 text-primary',
-    secondary: 'bg-secondary/10 text-secondary',
-    amber: 'bg-warning-container text-on-warning-container',
-  }[tone];
-
-  if (courses.length === 0) return null;
-
-  return (
-    <section className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className={cn('flex h-12 w-12 items-center justify-center rounded-2xl', toneClass)}>
-            <span className="material-symbols-outlined text-2xl">{icon}</span>
-          </div>
-          <div>
-            <h3 className="text-xl font-black text-on-surface">{title}</h3>
-            <p className="text-sm leading-6 text-on-surface-variant">{description}</p>
-          </div>
-        </div>
-        <span className="w-fit rounded-full border border-outline-variant/40 bg-surface-container-lowest px-4 py-2 text-xs font-black uppercase tracking-wider text-on-surface-variant">
-          {courses.length} modulos
-        </span>
-      </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {courses.map(course => (
-          <CourseCard key={course.id} course={course} />
-        ))}
-      </div>
-    </section>
-  );
-};
-
 export default function ERPAcademia() {
-  const [activeTab, setActiveTab] = useState<'comercial' | 'legal'>('comercial');
-  const courses = getCoursesByTab(activeTab);
+  const [modulo, setModulo] = useState<ModuloId>('Fin');
+  const niveles = nivelesDe(modulo);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6 pb-24 lg:p-8">
       <div className="rounded-[28px] border border-outline-variant/30 bg-surface-container-lowest p-2 shadow-sm">
         <div className="grid gap-2 md:grid-cols-2">
-        <button
-          onClick={() => setActiveTab('comercial')}
-          className={cn(
-            "rounded-2xl px-5 py-4 text-left text-sm transition-all",
-            activeTab === 'comercial'
-              ? "bg-primary text-inverse-on-surface shadow-lg shadow-primary/15"
-              : "bg-surface-container-low text-on-surface-variant hover:bg-primary/5 hover:text-primary"
-          )}
-        >
-          <span className="flex items-center gap-2 font-black">
-            <span className="material-symbols-outlined text-lg">storefront</span>
-            Crecimiento del negocio
-          </span>
-          <span className={cn("mt-1 block text-xs leading-5", activeTab === 'comercial' ? 'text-white/68' : 'text-on-surface-variant')}>
-            Finanzas, clientes, inventario, marketing, precios y KPIs.
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('legal')}
-          className={cn(
-            "rounded-2xl px-5 py-4 text-left text-sm transition-all",
-            activeTab === 'legal'
-              ? "bg-primary text-inverse-on-surface shadow-lg shadow-primary/15"
-              : "bg-surface-container-low text-on-surface-variant hover:bg-primary/5 hover:text-primary"
-          )}
-        >
-          <span className="flex items-center gap-2 font-black">
-            <span className="material-symbols-outlined text-lg">assignment_turned_in</span>
-            Cumplimiento y documentos
-          </span>
-          <span className={cn("mt-1 block text-xs leading-5", activeTab === 'legal' ? 'text-white/68' : 'text-on-surface-variant')}>
-            SII, contratos, deudas, Sercotec, Mercado Publico y carpetas.
-          </span>
-        </button>
+          {(Object.keys(MODULOS) as ModuloId[]).map(id => {
+            const activo = modulo === id;
+            return (
+              <button key={id} onClick={() => setModulo(id)}
+                className={cn('rounded-2xl px-5 py-4 text-left text-sm transition-all',
+                  activo ? 'bg-primary text-inverse-on-surface shadow-lg shadow-primary/15' : 'bg-surface-container-low text-on-surface-variant hover:bg-primary/5 hover:text-primary')}>
+                <span className="flex items-center gap-2 font-black">
+                  <span className="material-symbols-outlined text-lg">{MODULOS[id].icon}</span>
+                  Módulo {MODULOS[id].nombre}
+                </span>
+                <span className={cn('mt-1 block text-xs leading-5', activo ? 'text-white/70' : 'text-on-surface-variant')}>
+                  {plural(leccionesDe(id).length, 'lección', 'lecciones')} en {plural(nivelesDe(id).length, 'nivel', 'niveles')}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {activeTab === 'comercial' && (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="rounded-[32px] border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-sm">
-            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-primary">Ruta recomendada</p>
-            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.9fr] lg:items-center">
-              <div>
-                <h3 className="text-2xl font-black text-on-surface">Primero orden, despues crecimiento.</h3>
-                <p className="mt-2 max-w-3xl text-sm leading-7 text-on-surface-variant">
-                  Si no sabes por donde partir, esta vista te muestra una secuencia natural: entender numeros basicos, cuidar clientes, ordenar inventario y recien despues escalar marketing o precios.
-                </p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {['Entender', 'Aplicar', 'Medir'].map((item, index) => (
-                  <div key={item} className="rounded-2xl bg-primary/5 px-4 py-3">
-                    <p className="text-xs font-black uppercase tracking-wider text-primary">Paso {index + 1}</p>
-                    <p className="mt-1 text-sm font-black text-on-surface">{item}</p>
+      <div key={modulo} className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {niveles.map(([nivel, lecciones]) => {
+          const info = MODULOS[modulo].niveles[nivel] ?? { titulo: `Nivel ${nivel}`, descripcion: '', icon: 'school' };
+          return (
+            <section key={nivel} className="space-y-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <span className="material-symbols-outlined text-2xl">{info.icon}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <CourseSection
-            title="Nivel 1: Primeros pasos"
-            description="Fundamentos para entender que esta pasando en el negocio sin lenguaje tecnico."
-            icon="school"
-            courses={courses.basico}
-          />
-          <CourseSection
-            title="Nivel 2: Operar mejor"
-            description="Herramientas para evitar perdidas, ordenar stock y atraer clientes con acciones simples."
-            icon="trending_up"
-            courses={courses.intermedio}
-            tone="secondary"
-          />
-          <CourseSection
-            title="Nivel 3: Decidir con datos"
-            description="Precios, margenes y KPIs explicados para que el dueno sepa que cambiar y por que."
-            icon="query_stats"
-            courses={courses.avanzado}
-          />
-        </div>
-      )}
-
-      {activeTab === 'legal' && (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <section className="rounded-[32px] border border-outline-variant/30 command-gradient p-6 text-white shadow-xl shadow-primary/20">
-            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-on-primary-container">Ruta documental y cumplimiento</p>
-            <div className="mt-3 grid gap-5 lg:grid-cols-[1fr_0.9fr] lg:items-end">
-              <div>
-                <h3 className="text-3xl font-black">Aprender por tarea, no por sigla</h3>
-                <p className="mt-2 max-w-3xl text-sm leading-7 text-white/75">
-                  SII, Sercotec, SUPERIR y Mercado Publico aparecen como rutas simples: que documento falta, donde se guarda y quien puede ayudar a subirlo.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                {['Deudas y alertas', 'Facturacion y notas', 'Carpeta Sercotec', 'Mercado Publico'].map(item => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 font-bold">
-                    {item}
+                  <div>
+                    <h3 className="text-xl font-black text-on-surface">{info.titulo}</h3>
+                    <p className="text-sm leading-6 text-on-surface-variant">{info.descripcion}</p>
                   </div>
-                ))}
+                </div>
+                <span className="w-fit rounded-full border border-outline-variant/40 bg-surface-container-lowest px-4 py-2 text-xs font-black uppercase tracking-wider text-on-surface-variant">
+                  {plural(lecciones.length, 'lección', 'lecciones')}
+                </span>
               </div>
-            </div>
-          </section>
-
-          <CourseSection
-            title="Nivel 1: Fundamentos legales"
-            description="IVA, renta, facturacion y documentos tributarios explicados para preparar el mes con calma."
-            icon="account_balance"
-            courses={courses.basico}
-            tone="amber"
-          />
-          <CourseSection
-            title="Nivel 2: Operacion y Contratos"
-            description="Alertas tempranas, registro de deuda, abonos y notas de credito con trazabilidad entendible."
-            icon="account_balance_wallet"
-            courses={courses.intermedio}
-            tone="amber"
-          />
-          <CourseSection
-            title="Nivel 3: Gestion Avanzada"
-            description="Carpetas, certificados, propuestas y acceso controlado para terceros que apoyan al emprendedor."
-            icon="workspace_premium"
-            courses={courses.avanzado}
-          />
-        </div>
-      )}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {lecciones.map(l => <LessonCard key={l.id} leccion={l} modulo={modulo} />)}
+              </div>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

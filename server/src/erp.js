@@ -4,7 +4,58 @@ import { requireAuth } from './auth.js';
 
 const router = Router();
 
+/**
+ * API interna del ERP para otras apps (Mentorías): indicadores agregados del negocio.
+ * Solo números de resumen; nunca documentos. Si el ERP no tiene datos → conectado: false.
+ */
+export async function indicadoresNegocio(usuarioId) {
+  const hace90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+  const f = await db.prepare(`
+    SELECT count(*)::int AS filas,
+      count(*) FILTER (WHERE coleccion = 'ventas' AND data->>'estado' = 'Pendiente')::int AS ventas_por_cobrar,
+      count(*) FILTER (WHERE coleccion = 'inventario')::int AS productos,
+      COALESCE(sum((data->>'monto')::numeric) FILTER (WHERE coleccion = 'ventas' AND data->>'fecha' >= ?), 0)::float8 AS ventas90,
+      COALESCE(sum((data->>'monto')::numeric) FILTER (WHERE coleccion = 'gastos' AND data->>'fecha' >= ?), 0)::float8 AS gastos90
+    FROM erp_datos WHERE usuario_id = ?
+  `).get(hace90, hace90, usuarioId);
+  return {
+    conectado: (f?.filas ?? 0) > 0,
+    ventasPorCobrar: f?.ventas_por_cobrar ?? 0,
+    productos: f?.productos ?? 0,
+    ventas90: f?.ventas90 ?? 0,
+    gastos90: f?.gastos90 ?? 0,
+  };
+}
+
 router.use(requireAuth);
+
+const COLECCIONES = new Set(['ventas', 'gastos', 'clientes', 'proveedores', 'movimientos', 'inventario', 'movimientosInventario',
+  'promociones', 'abonos', 'documentosTributarios', 'integracionEventos', 'pagosPOS', 'lotes', 'envases', 'config']);
+
+/**
+ * Lectura por recurso, paginada y con búsqueda en el servidor (correcciones #1 y #5).
+ * GET /api/erp/recursos/clientes?pagina=1&tamano=50&q=perez&orden=nombre
+ * Base para dejar de descargar toda la colección en cada página.
+ */
+router.get('/recursos/:coleccion', async (req, res) => {
+  try {
+    const { coleccion } = req.params;
+    if (!COLECCIONES.has(coleccion)) return res.status(400).json({ error: 'coleccion_invalida' });
+    const tamano = Math.min(200, Math.max(1, parseInt(req.query.tamano, 10) || 50));
+    const pagina = Math.max(1, parseInt(req.query.pagina, 10) || 1);
+    const orden = /^[a-z_]{1,40}$/i.test(String(req.query.orden ?? '')) ? String(req.query.orden) : 'fecha';
+    const params = [req.perfil.id, coleccion];
+    let filtro = '';
+    if (req.query.q) { filtro = ' AND data::text ILIKE ?'; params.push(`%${String(req.query.q).slice(0, 80)}%`); }
+    const total = await db.prepare(`SELECT count(*)::int AS n FROM erp_datos WHERE usuario_id = ? AND coleccion = ?${filtro}`).get(...params);
+    const filas = await db.prepare(`SELECT data FROM erp_datos WHERE usuario_id = ? AND coleccion = ?${filtro}
+      ORDER BY data->>'${orden}' DESC NULLS LAST, id LIMIT ${tamano} OFFSET ${(pagina - 1) * tamano}`).all(...params);
+    res.json({ data: filas.map((f) => f.data), total: total.n, pagina, tamano });
+  } catch (error) {
+    console.error('[erp] Error listando recurso:', error);
+    res.status(500).json({ error: 'error_interno' });
+  }
+});
 
 // Todas las filas ERP del usuario: [{ coleccion, id, data }]
 router.get('/', async (req, res) => {

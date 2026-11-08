@@ -136,8 +136,8 @@ export default function UsuariosGlobales() {
       setError('Nombre, email y contraseña son obligatorios.');
       return;
     }
-    if (nuevoUsuario.password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+    if (nuevoUsuario.password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres.');
       return;
     }
     setCreando(true);
@@ -414,7 +414,7 @@ export default function UsuariosGlobales() {
                   value={nuevoUsuario.password}
                   onChange={e => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                 />
               </div>
               <div>

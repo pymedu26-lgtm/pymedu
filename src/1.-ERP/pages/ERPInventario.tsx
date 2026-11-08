@@ -1,5 +1,10 @@
 ﻿import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 const ModalCargaMasivaInventario = lazy(() => import('../components/ModalCargaMasivaInventario'));
+import { estadoStock as estadoStockCompartido } from '../services/alertas';
+import { resumenEnvases, presentacionesActivas } from '../services/costeo';
+import EditorFraccionamiento from '../components/EditorFraccionamiento';
+import Paginacion, { usePaginacion } from '../../components/Paginacion';
+import { formatCLP } from '../../lib/fechas';
 import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
 import { useAuth } from '../../context/AuthContext';
 import { puedeEditarModulo } from '@/lib/roles';
@@ -7,12 +12,20 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SelectorFecha from '../components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
-import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { etiquetaRangoPeriodo, rangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
-import { useColoresTema } from '@/lib/useColoresTema';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
+import { rangoMes as rangoMesLocal } from '@/lib/fechas';
+import { agruparSerie, totalesPor, NOMBRE_GRANULARIDAD } from '@/lib/series';
+import GraficoSerie from '../../components/graficos/GraficoSerie';
+import GraficoDona from '../../components/graficos/GraficoDona';
+import GraficoBarras from '../../components/graficos/GraficoBarras';
+import { TarjetaGrafico } from '../../components/graficos/comunes';
+import { usePaletaGraficos } from '../../components/graficos/paleta';
 
-const COLORES_CATEGORIA = ['primary', 'secondary', 'tertiary', 'teal', 'violet'] as const;
+/** Cantidades en unidades (los gráficos de inventario no son montos). */
+const formatoUds = (n: number) => `${Math.round(n).toLocaleString('es-CL')} uds`;
+const formatoEjeUds = (n: number) => Math.round(n).toLocaleString('es-CL');
+const formatoProductos = (n: number) => `${n.toLocaleString('es-CL')} productos`;
 
 export type EstadoStock = 'sin_stock' | 'bajo' | 'ok' | 'no_aplica';
 
@@ -25,11 +38,13 @@ export type EstadoStock = 'sin_stock' | 'bajo' | 'ok' | 'no_aplica';
  * `stock` permite evaluar contra el stock de otro periodo; si se omite usa el actual.
  */
 function estadoStock(producto: Producto, stock: number = producto.stock): EstadoStock {
-  if (producto.tipo !== 'producto' || producto.estado !== 'activo') return 'no_aplica';
-  if (stock <= 0) return 'sin_stock';
-  if (stock <= producto.stockMinimo) return 'bajo';
-  return 'ok';
+  // Delegado al criterio único (services/alertas.ts): compara NÚMEROS (corrección #10).
+  return estadoStockCompartido(producto, stock);
 }
+
+/** Costo y precio reales aunque vengan como texto o en campos de servicio (corrección #11). */
+const costoDe = (p: Producto) => Number(p.costo) || Number(p.costoFijo) || Number(p.costoHora) || 0;
+const precioDe = (p: Producto) => Number(p.precio) || Number(p.precioFijo) || Number(p.tarifaHora) || presentacionesActivas(p)[0]?.precio || 0;
 
 const ETIQUETA_STOCK: Record<EstadoStock, { texto: string; clase: string }> = {
   sin_stock: { texto: 'Sin stock', clase: 'bg-error-container text-on-error-container' },
@@ -103,12 +118,13 @@ const UNIDADES_PRODUCTO: { valor: string; etiqueta: string }[] = [
 ]
 
 export default function ERPInventario() {
-  const { inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
+  const { inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario, envases, metodoCosteo, setMetodoCosteo } = useERP();
   // La matriz de roles define quien escribe en cada modulo, pero hasta ahora solo se
   // dibujaba en la pantalla de administracion y ninguna pagina la consultaba.
-  const { perfil } = useAuth();
-  const puedeEditar = puedeEditarModulo(perfil?.rol, 'inventario');
-  const c = useColoresTema();
+  const { perfil, tienePermiso } = useAuth();
+  // Permiso del rol dinámico (si no hay roles cargados, cae en la matriz fija anterior).
+  const puedeEditar = tienePermiso('inventario.escribir') || puedeEditarModulo(perfil?.rol, 'inventario');
+  const paleta = usePaletaGraficos();
   const [activeTab, setActiveTab] = useState<'lista' | 'movimientos'>('lista');
   const [showModal, setShowModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
@@ -127,18 +143,12 @@ export default function ERPInventario() {
   const [periodoMovimientos, setPeriodoMovimientos] = useState('este_mes');
   const [rangoMovimientos, setRangoMovimientos] = useState({ fechaInicio: '', fechaFin: '' });
 
-  /** Rango de mes natural en ISO 'YYYY-MM-DD', igual que en Ventas. */
-  const rangoMes = (offset: number) => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  /** Rango de mes natural en fechas locales (toISOString() corría el día por UTC). */
+  const rangoMes = (offset: number) => rangoMesLocal(offset);
 
   useEffect(() => {
-    if (periodoMovimientos === 'personalizado') return;
-    const { inicio, fin } = periodoMovimientos === 'mes_anterior' ? rangoMes(-1) : rangoMes(0);
-    setRangoMovimientos({ fechaInicio: inicio, fechaFin: fin });
+    const rango = rangoPeriodo(periodoMovimientos);
+    if (rango) setRangoMovimientos({ fechaInicio: rango.inicio, fechaFin: rango.fin });
   }, [periodoMovimientos]);
 
   /** El rango manual parte con el mes actual; las fechas quedan editables. */
@@ -182,33 +192,20 @@ export default function ERPInventario() {
   }), [movimientosEnRango]);
 
   /**
-   * Movimientos por dia del periodo: un punto por fecha, con entradas y salidas
-   * por separado. Si el rango cruza meses (Personalizado) la etiqueta lleva
-   * dia/mes/año; agrupar solo por dia de mes mezclaba meses distintos en la
-   * misma columna. Las fechas ISO ordenan cronologicamente.
+   * Entradas y salidas del periodo en tramos continuos que cubren TODO el rango (día,
+   * semana o mes según su largo): con varios meses ya no se dibuja un punto por fecha.
    */
-  const datosMovimientosPorDia = useMemo(() => {
-    const porFecha: Record<string, { entradas: number; salidas: number }> = {};
-    movimientosEnRango.forEach(m => {
-      const fecha = (m.fecha || '').slice(0, 10);
-      if (!fecha) return;
-      const serie = porFecha[fecha] ?? (porFecha[fecha] = { entradas: 0, salidas: 0 });
-      if (m.tipo === 'ingreso' || m.tipo === 'devolucion') serie.entradas += m.cantidad;
-      else if (m.tipo === 'salida' || m.tipo === 'merma') serie.salidas += m.cantidad;
-    });
-    const fechas = Object.keys(porFecha).sort();
-    const mismoMes = fechas.every(f => f.slice(0, 7) === fechas[0]?.slice(0, 7));
-    return fechas.map(fecha => ({
-      etiqueta: mismoMes ? `Dia ${Number(fecha.slice(8, 10))}` : formatFecha(fecha),
-      entradas: porFecha[fecha].entradas,
-      salidas: porFecha[fecha].salidas,
-    }));
-  }, [movimientosEnRango]);
-
-  /** Con rangos largos la etiqueta diaria se junta: se deja ~12 como maximo. */
-  const saltoEtiquetasMovimientos = datosMovimientosPorDia.length > 34
-    ? Math.ceil(datosMovimientosPorDia.length / 12)
-    : 0;
+  const serieMovimientos = useMemo(
+    () => agruparSerie(
+      movimientosEnRango,
+      { inicio: rangoMovimientos.fechaInicio, fin: rangoMovimientos.fechaFin },
+      m => m.fecha,
+      m => m.tipo === 'ingreso' || m.tipo === 'devolucion' ? { entradas: m.cantidad, salidas: 0 }
+        : m.tipo === 'salida' || m.tipo === 'merma' ? { entradas: 0, salidas: m.cantidad }
+          : { entradas: 0, salidas: 0 }
+    ),
+    [movimientosEnRango, rangoMovimientos.fechaInicio, rangoMovimientos.fechaFin]
+  );
 
   const etiquetaRangoMovimientos = etiquetaRangoPeriodo(
     periodoMovimientos === 'personalizado',
@@ -285,9 +282,9 @@ export default function ERPInventario() {
     });
     return inventario
       .filter(p => porProducto.has(p.id))
-      .map(p => ({ nombre: p.nombre, solicitudes: porProducto.get(p.id) ?? 0 }))
-      .filter(x => x.solicitudes > 0)
-      .sort((a, b) => b.solicitudes - a.solicitudes || a.nombre.localeCompare(b.nombre))
+      .map(p => ({ nombre: p.nombre, valor: porProducto.get(p.id) ?? 0 }))
+      .filter(x => x.valor > 0)
+      .sort((a, b) => b.valor - a.valor || a.nombre.localeCompare(b.nombre))
       .slice(0, 5);
   }, [ventas, inventario, rangoMovimientos]);
 
@@ -357,21 +354,18 @@ export default function ERPInventario() {
   // e inactivos, mientras que el selector de Ventas solo ofrece los que estan activos.
   // Los KPIs siguen el periodo elegido: el stock mostrado es el del cierre, no el de hoy.
   const totalProductos = inventario.filter(p => p.estado === 'activo').length;
-  const valorInventario = inventario.reduce((acc, p) => acc + (stockMostrado(p) * p.costo), 0);
-  const valorVenta = inventario.reduce((acc, p) => acc + (stockMostrado(p) * p.precio), 0);
+  const valorInventario = inventario.reduce((acc, p) => acc + (p.tipo === 'producto' ? stockMostrado(p) * costoDe(p) : 0), 0);
+  const valorVenta = inventario.reduce((acc, p) => acc + (p.tipo === 'producto' ? stockMostrado(p) * (presentacionesActivas(p).length ? precioDe(p) / (presentacionesActivas(p)[0].factor || 1) : precioDe(p)) : 0), 0);
   const productosBajoStock = inventario.filter(p => {
     const e = estadoStock(p, stockMostrado(p));
     return e === 'sin_stock' || e === 'bajo';
   }).length;
 
   // Solo se acumula la valorizacion a costo, que es lo que usa el pie chart.
-  const valorizacionPorCategoria = useMemo(() => {
-    const mapa: Record<string, number> = {};
-    inventario.filter(p => p.tipo === 'producto').forEach(p => {
-      mapa[p.categoria] = (mapa[p.categoria] ?? 0) + stockMostrado(p) * p.costo;
-    });
-    return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
-  }, [inventario, stockAlCierre]);
+  const valorizacionPorCategoria = useMemo(
+    () => totalesPor(inventario.filter(p => p.tipo === 'producto'), p => p.categoria, p => stockMostrado(p) * costoDe(p)),
+    [inventario, stockAlCierre]
+  );
 
   /**
    * Conteo de productos activos segun su estado de stock en el periodo: alimenta el
@@ -387,12 +381,12 @@ export default function ERPInventario() {
     return {
       total,
       datos: [
-        { key: 'sin_stock', name: 'Sin stock', value: conteo.sin_stock },
-        { key: 'bajo', name: 'Stock bajo', value: conteo.bajo },
-        { key: 'ok', name: 'En stock', value: conteo.ok }
+        { nombre: 'Sin stock', valor: conteo.sin_stock, color: paleta.critico },
+        { nombre: 'Stock bajo', valor: conteo.bajo, color: paleta.alerta },
+        { nombre: 'En stock', valor: conteo.ok, color: paleta.ok }
       ]
     };
-  }, [inventario, stockAlCierre]);
+  }, [inventario, stockAlCierre, paleta]);
 
   const inventarioFiltrado = useMemo(() =>
     inventario.filter(p => {
@@ -403,6 +397,8 @@ export default function ERPInventario() {
       return matchBusqueda && matchTipo;
     }), [inventario, busqueda, filtroTipo]
   );
+  // Paginación: con 10.061 productos la tabla completa congelaba la página (corrección #5).
+  const paginacionInventario = usePaginacion(inventarioFiltrado, 25, [busqueda, filtroTipo]);
 
   const handleEditClick = (producto: Producto) => {
     setEditingId(producto.id);
@@ -497,7 +493,13 @@ export default function ERPInventario() {
             ? (nuevoProducto.unidadMedida || 'pedido')
             : (nuevoProducto.unidadMedida || 'un'),
         estado: nuevoProducto.estado || 'activo',
-        proveedorId: nuevoProducto.proveedorId || ''
+        proveedorId: nuevoProducto.proveedorId || '',
+        ...(esServicio ? {} : {
+          unidadBase: nuevoProducto.unidadBase || 'unidad',
+          presentaciones: (nuevoProducto.presentaciones ?? []).filter(x => x.nombre.trim() && x.factor > 0),
+          controlEnvases: !!nuevoProducto.controlEnvases,
+          capacidadEnvase: nuevoProducto.controlEnvases ? Number(nuevoProducto.capacidadEnvase) || 0 : undefined,
+        }),
       };
 
       if (editingId) {
@@ -627,7 +629,7 @@ export default function ERPInventario() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20' },
-              { label: 'Valorización Costo', value: `$${valorInventario.toLocaleString('es-CL')}`, icon: 'payments', color: 'text-on-surface', bg: 'bg-surface-container-low', border: 'border-outline-variant/30' },
+              { label: 'Valorización Costo', value: formatCLP(valorInventario), icon: 'payments', color: 'text-on-surface', bg: 'bg-surface-container-low', border: 'border-outline-variant/30' },
               { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-on-success-container', bg: 'bg-success-container', border: 'border-success/30' },
               { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant', bg: productosBajoStock > 0 ? 'bg-error/5' : 'bg-surface-container-low', border: productosBajoStock > 0 ? 'border-error/20' : 'border-outline-variant/30' },
             ].map(k => (
@@ -643,151 +645,54 @@ export default function ERPInventario() {
             ))}
           </div>
 
-          {/* Graficos: los mismos tres perfiles que Ventas, con los campos del
-              inventario. Este bloque reemplaza al vacio que quedaba bajo los KPIs. */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
-              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">show_chart</span>
-                Movimientos por Dia
-              </h3>
-              <p className="text-[11px] text-outline font-medium mb-4">
-                Entradas y salidas del periodo · {etiquetaRangoMovimientos}
-              </p>
-              {datosMovimientosPorDia.length === 0 ? (
-                <div className="h-[260px] flex flex-col items-center justify-center text-center">
-                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">event_busy</span>
-                  <p className="text-on-surface-variant text-sm font-bold">Sin movimientos en el periodo</p>
-                </div>
-              ) : (
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={datosMovimientosPorDia}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                      <XAxis dataKey="etiqueta" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval={saltoEtiquetasMovimientos} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                      <RechartsTooltip
-                        contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value: number, name: string) => [`${value.toLocaleString('es-CL')} uds`, name === 'entradas' ? 'Entradas' : 'Salidas']}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '11px', color: c.onSurfaceVariant }} />
-                      <Line type="monotone" dataKey="entradas" stroke={c.success} strokeWidth={3} dot={{ r: 3, fill: c.success }} activeDot={{ r: 6 }} name="Entradas" />
-                      <Line type="monotone" dataKey="salidas" stroke={c.error} strokeWidth={3} dot={{ r: 3, fill: c.error }} activeDot={{ r: 6 }} name="Salidas" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+          {/* Gráficos: movimientos del periodo anchos + ranking; valorización (dona Top-6 + Otros) + salud del stock */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <TarjetaGrafico
+              className="lg:col-span-2"
+              icono="swap_vert"
+              titulo="Movimientos de stock"
+              subtitulo={`Entradas y salidas ${NOMBRE_GRANULARIDAD[serieMovimientos.granularidad]} · ${etiquetaRangoMovimientos}`}
+              extra={`${movimientosEnRango.length.toLocaleString('es-CL')} movimientos`}
+            >
+              <GraficoSerie
+                puntos={serieMovimientos.puntos}
+                tipo="barra"
+                series={[
+                  { clave: 'entradas', nombre: 'Entradas', color: paleta.ingresos },
+                  { clave: 'salidas', nombre: 'Salidas', color: paleta.egresos },
+                ]}
+                formato={formatoUds}
+                formatoEje={formatoEjeUds}
+                vacio="Sin movimientos en el periodo"
+              />
+            </TarjetaGrafico>
+            <TarjetaGrafico icono="trophy" titulo="Más solicitados" subtitulo="Unidades vendidas en el periodo">
+              <GraficoBarras items={topMasSolicitados} max={5} color={paleta.neto} formato={formatoUds} vacio="Sin solicitudes en el periodo" />
+            </TarjetaGrafico>
+            <TarjetaGrafico
+              className="lg:col-span-2"
+              icono="donut_large"
+              titulo="Valorización por categoría"
+              subtitulo={stockAlCierre ? `A costo, stock al cierre de ${etiquetaRangoMovimientos}` : 'A costo, stock actual'}
+            >
+              <GraficoDona items={valorizacionPorCategoria} etiquetaTotal="Valor a costo" vacio="Sin productos con stock valorizado" />
+            </TarjetaGrafico>
+            <TarjetaGrafico icono="query_stats" titulo="Salud del stock" subtitulo="Productos activos según su nivel de existencias">
+              <GraficoDona
+                items={stockPorEstado.datos}
+                etiquetaTotal="Productos"
+                formato={formatoProductos}
+                formatoCorto={formatoEjeUds}
+                vacio="Sin productos activos"
+              />
+              {stockPorEstado.total > 0 && (
+                <p className={cn('text-[11px] font-bold mt-3 text-center', productosBajoStock > 0 ? 'text-secondary' : 'text-success')}>
+                  {productosBajoStock > 0
+                    ? `${productosBajoStock} ${productosBajoStock === 1 ? 'producto requiere' : 'productos requieren'} atención`
+                    : 'Stock saludable en todos los productos'}
+                </p>
               )}
-            </div>
-
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
-              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">trophy</span>
-                Top 5 Mas Solicitados
-              </h3>
-              <p className="text-[11px] text-outline font-medium mb-4">
-                Productos y servicios con mas demanda en el periodo · {etiquetaRangoMovimientos}
-              </p>
-              {topMasSolicitados.length === 0 ? (
-                <div className="h-[260px] flex flex-col items-center justify-center text-center">
-                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">shopping_cart</span>
-                  <p className="text-on-surface-variant text-sm font-bold">Sin solicitudes en el periodo</p>
-                  <p className="text-outline text-xs mt-1">Aqui apareceran los productos y servicios mas pedidos.</p>
-                </div>
-              ) : (
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topMasSolicitados} layout="vertical" margin={{ left: 8, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.outlineVariant} />
-                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} allowDecimals={false} />
-                      <YAxis type="category" dataKey="nombre" axisLine={false} tickLine={false} width={110} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                      <RechartsTooltip
-                        contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value: number) => [`${value.toLocaleString('es-CL')} uds`, 'Solicitudes']}
-                      />
-                      <Bar dataKey="solicitudes" fill={c.tertiary} radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Pie Chart */}
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
-              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">pie_chart</span>
-                Distribución por Categoría
-              </h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={valorizacionPorCategoria.map(([cat, valor]) => ({ name: cat, value: valor }))}
-                      cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value"
-                    >
-                      {valorizacionPorCategoria.map((_entry, index) => (
-                        <Cell key={`cell-${index}`} fill={c[COLORES_CATEGORIA[index % COLORES_CATEGORIA.length]]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip
-                      contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                      formatter={(value: number) => `$${value.toLocaleString('es-CL')}`}
-                    />
-                    <Legend verticalAlign="middle" align="right" layout="vertical" wrapperStyle={{ color: c.onSurfaceVariant }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Salud del Stock */}
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm flex flex-col">
-              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">query_stats</span>
-                Salud del Stock
-              </h3>
-              <p className="text-[11px] text-outline font-medium mb-4">
-                Productos activos según su nivel de existencias
-              </p>
-              {stockPorEstado.total === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center min-h-[200px]">
-                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">inventory_2</span>
-                  <p className="text-on-surface-variant text-sm font-bold">Sin productos activos</p>
-                </div>
-              ) : (
-                <>
-                  <div className="h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={stockPorEstado.datos}
-                          cx="50%" cy="50%" innerRadius={48} outerRadius={80} paddingAngle={4} dataKey="value" nameKey="name" stroke="none"
-                        >
-                          {stockPorEstado.datos.map(item => (
-                            <Cell
-                              key={item.key}
-                              fill={item.key === 'sin_stock' ? c.error : item.key === 'bajo' ? c.secondary : c.success}
-                            />
-                          ))}
-                        </Pie>
-                        <RechartsTooltip
-                          contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                          formatter={(value: number, name: string) => [`${value.toLocaleString('es-CL')}`, name]}
-                        />
-                        <Legend layout="horizontal" verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: '11px', color: c.onSurfaceVariant }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {productosBajoStock > 0 ? (
-                    <p className="text-[11px] font-bold text-secondary mt-3 text-center">
-                      {productosBajoStock} {productosBajoStock === 1 ? 'producto requiere' : 'productos requieren'} atención
-                    </p>
-                  ) : (
-                    <p className="text-[11px] font-bold text-success mt-3 text-center">Stock saludable en todos los productos</p>
-                  )}
-                </>
-              )}
-            </div>
+            </TarjetaGrafico>
           </div>
 
           {/* Filtros */}
@@ -799,6 +704,16 @@ export default function ERPInventario() {
                 className="w-full pl-12 pr-4 py-3 bg-surface-container-low border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 outline-none font-medium text-on-surface" 
               />
             </div>
+            <label className="flex items-center gap-2 rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface-variant"
+              title="FIFO: cada venta usa el costo de la compra más antigua con stock. Promedio: usa el promedio ponderado de todo tu stock, recalculado en cada compra. LIFO no se acepta tributariamente en Chile. Cambia el método solo al inicio de un año (afecta reportes).">
+              Costeo
+              <select value={metodoCosteo} onChange={e => {
+                if (window.confirm('Cambiar el método de costeo afecta el costo de las próximas ventas y tus reportes. Se recomienda hacerlo solo al inicio de un año. ¿Continuar?')) setMetodoCosteo(e.target.value as 'fifo' | 'promedio');
+              }} className="bg-transparent font-black text-on-surface outline-none">
+                <option value="promedio">Promedio ponderado</option>
+                <option value="fifo">FIFO / PEPS</option>
+              </select>
+            </label>
             <SelectorDesplegable
               valor={filtroTipo}
               onChange={valor => setFiltroTipo(valor as any)}
@@ -830,9 +745,14 @@ export default function ERPInventario() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/20">
-                    {inventarioFiltrado.map((producto) => {
-                      const precioNeto = producto.incluyeIva ? Math.round(producto.precio / 1.19) : producto.precio;
-                      const margen = precioNeto > 0 ? ((precioNeto - producto.costo) / precioNeto) * 100 : 0;
+                    {paginacionInventario.visibles.map((producto) => {
+                      const pres = presentacionesActivas(producto);
+                      // Con presentaciones el margen se mide sobre la primera (precio por factor × costo base).
+                      const precioRef = pres[0]?.precio ?? precioDe(producto);
+                      const costoRef = costoDe(producto) * (pres[0]?.factor ?? 1);
+                      const precioNeto = producto.incluyeIva ? Math.round(precioRef / 1.19) : precioRef;
+                      const margen = precioNeto > 0 ? ((precioNeto - costoRef) / precioNeto) * 100 : 0;
+                      const envasesTexto = resumenEnvases(producto, envases);
                       const stockPeriodo = stockMostrado(producto);
                       const estado = estadoStock(producto, stockPeriodo);
 
@@ -847,6 +767,13 @@ export default function ERPInventario() {
                             <div className="flex flex-col">
                               <span className="font-bold text-on-surface">{producto.nombre}</span>
                               <span className="text-[10px] text-outline font-medium truncate max-w-[150px]">{producto.descripcion}</span>
+                              {pres.length > 0 && (
+                                <span className="mt-1 flex flex-wrap gap-1">
+                                  {pres.map(x => (
+                                    <span key={x.id} className="rounded-full bg-surface-container-high px-2 py-0.5 text-[10px] font-bold text-on-surface-variant">{x.nombre} · {formatCLP(x.precio)}</span>
+                                  ))}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -861,9 +788,10 @@ export default function ERPInventario() {
                                   "font-black text-base",
                                   estado === 'sin_stock' ? 'text-error' : estado === 'bajo' ? 'text-secondary' : 'text-on-surface'
                                 )}>
-                                  {stockPeriodo}
+                                  {Number(stockPeriodo).toLocaleString('es-CL')}
                                 </span>
-                                <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida}</span>
+                                <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadBase && producto.unidadBase !== 'unidad' ? producto.unidadBase : producto.unidadMedida}</span>
+                                {envasesTexto && <span className="text-[10px] font-medium text-on-surface-variant">{envasesTexto}</span>}
                                 {estado !== 'ok' && estado !== 'no_aplica' && (
                                   <span className={cn('text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full', ETIQUETA_STOCK[estado].clase)}>
                                     {ETIQUETA_STOCK[estado].texto}
@@ -883,11 +811,12 @@ export default function ERPInventario() {
                             )}
                           </td>
                           <td className="px-6 py-4 text-right font-bold text-on-surface-variant">
-                            ${producto.costo.toLocaleString('es-CL')}
+                            {formatCLP(costoDe(producto))}
+                            {producto.unidadBase && producto.unidadBase !== 'unidad' && <span className="block text-[9px] text-outline">por {producto.unidadBase}</span>}
                           </td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex flex-col items-end">
-                              <span className="font-black text-on-surface">${producto.precio.toLocaleString('es-CL')}</span>
+                              <span className="font-black text-on-surface">{formatCLP(precioRef)}</span>
                               <span className="text-[9px] text-outline font-bold uppercase">{producto.incluyeIva ? 'IVA inc.' : '+ IVA'}</span>
                             </div>
                           </td>
@@ -929,6 +858,7 @@ export default function ERPInventario() {
                   </tbody>
                 </table>
               </div>
+              <Paginacion {...paginacionInventario} />
             </div>
           )}
         </div>
@@ -1246,6 +1176,13 @@ export default function ERPInventario() {
                         />
                       </div>
                     </div>
+                  )}
+                  {(nuevoProducto.tipo ?? 'producto') === 'producto' && (
+                    <EditorFraccionamiento
+                      valor={nuevoProducto}
+                      onChange={cambios => setNuevoProducto(prev => ({ ...prev, ...cambios }))}
+                      insumos={inventario.filter(x => x.tipo === 'producto' && x.id !== editingId)}
+                    />
                   )}
                 </div>
               </div>

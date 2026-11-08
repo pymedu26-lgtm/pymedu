@@ -1,22 +1,25 @@
 import { useMemo } from 'react';
+import { formatCLP, formatFecha, periodoActual } from '../../lib/fechas';
+import Paginacion, { usePaginacion } from '../../components/Paginacion';
 import { useERP } from '../../1.-ERP/context/ERPContext';
 
 export default function ERPCaja() {
   const { movimientos, saldoActual, ventas, gastos } = useERP();
-  const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+  const fmt = (n: number) => formatCLP(Math.abs(n));
 
   const totalIngresos = movimientos.filter(m => m.tipo === 'Ingreso').reduce((a, m) => a + m.monto, 0);
   const totalEgresos = movimientos.filter(m => m.tipo === 'Egreso').reduce((a, m) => a + m.monto, 0);
 
   const { ingresosMes, egresosMes } = useMemo(() => {
-    const mes = new Date().toISOString().slice(0, 7);
+    const mes = periodoActual();
     return {
       ingresosMes: movimientos.filter(m => m.tipo === 'Ingreso' && m.fecha.slice(0, 7) === mes).reduce((a, m) => a + m.monto, 0),
       egresosMes: movimientos.filter(m => m.tipo === 'Egreso' && m.fecha.slice(0, 7) === mes).reduce((a, m) => a + m.monto, 0),
     };
   }, [movimientos]);
 
-  const ordenados = [...movimientos].sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const ordenados = useMemo(() => [...movimientos].sort((a, b) => b.fecha.localeCompare(a.fecha)), [movimientos]);
+  const paginacion = usePaginacion(ordenados, 30);
 
   return (
     <div className="p-8 space-y-8">
@@ -52,7 +55,7 @@ export default function ERPCaja() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['Fecha', 'Concepto', 'Tipo', 'Metodo', 'Monto'].map(h => (
+                {['Fecha', 'Concepto', 'Tipo', 'Método', 'Monto'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>
@@ -61,9 +64,9 @@ export default function ERPCaja() {
               {ordenados.length === 0 && (
                 <tr><td colSpan={5} className="p-8 text-center text-on-surface-variant">Aun no hay movimientos de caja.</td></tr>
               )}
-              {ordenados.map(m => (
+              {paginacion.visibles.map(m => (
                 <tr key={m.id} className="hover:bg-surface-container-low/50 transition-colors">
-                  <td className="p-4 text-on-surface-variant whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-CL')}</td>
+                  <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(m.fecha)}</td>
                   <td className="p-4 font-bold text-on-surface">{m.concepto}</td>
                   <td className="p-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${m.tipo === 'Ingreso' ? 'bg-success-container text-on-success-container' : 'bg-error/10 text-error'}`}>
@@ -85,6 +88,7 @@ export default function ERPCaja() {
             </tfoot>
           </table>
         </div>
+        <Paginacion {...paginacion} />
       </div>
     </div>
   );

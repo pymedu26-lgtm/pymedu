@@ -4,6 +4,7 @@ import { Proveedor } from '../context/ERPContext';
 import {
   descargarLibroPlantilla, extensionValida,
   formatPesos, mapearColumnas, normKey, parseNumero,
+  limpiarCelda,
 } from './cargaMasivaUtil';
 
 type ProveedorNuevo = Omit<Proveedor, 'id' | 'deuda'>;
@@ -136,7 +137,7 @@ export default function ModalCargaMasivaProveedores({
         const columnas = mapearColumnas(filas[indiceEncabezado], ALIAS);
         const celda = (fila: unknown[], campo: CampoClave) => {
           const i = columnas[campo];
-          return i >= 0 ? fila[i] ?? '' : '';
+          return i >= 0 ? limpiarCelda(fila[i]) : '';
         };
 
         const existentesRut = new Map(

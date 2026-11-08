@@ -1,5 +1,21 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { api, setToken } from '../lib/api';
+
+/**
+ * Permisos de pantalla (legado) → código del catálogo de roles dinámicos (cuentas.permiso).
+ * Así el menú y las acciones respetan los roles que cada organización arma, no una lista fija.
+ */
+const PERMISO_NUCLEO: Record<string, string> = {
+  crear_ventas: 'ventas.escribir', crear_gastos: 'gastos.escribir', ver_caja: 'caja.leer', ver_reportes: 'reportes.leer',
+  ver_remuneraciones: 'rrhh.leer', ver_documentos: 'rrhh.leer', ver_organigrama: 'rrhh.leer', ver_equipo: 'rrhh.leer',
+  ver_inventario: 'inventario.leer', ver_clientes: 'clientes.leer', ver_proveedores: 'proveedores.leer',
+  editar_mi_negocio: 'config.escribir', ver_mentorias: 'mentoria.leer', ver_academia: 'academia.leer',
+};
+/** Permisos que además dependen del plan contratado (flags del perfil). */
+const FLAGS_PLAN: Record<string, keyof Perfil> = {
+  crear_ventas: 'puede_crear_ventas', crear_gastos: 'puede_crear_gastos', ver_caja: 'puede_ver_caja',
+  ver_reportes: 'puede_ver_reportes', ver_remuneraciones: 'puede_ver_remuneraciones',
+};
+import { api, getToken, setToken } from '../lib/api';
 import { ROL_PUEDE_HACER, type Rol } from '../lib/roles';
 
 export type { Rol };
@@ -36,6 +52,8 @@ interface AuthContextType {
   register: (email: string, password: string, full_name: string, extra?: Record<string, unknown>) => Promise<Perfil>;
   signOut: () => Promise<void>;
   puedeHacer: (permiso: string) => boolean;
+  /** Permiso del catálogo de roles dinámicos (ej. 'inventario.escribir'). Reemplaza los `if rol === 'X'`. */
+  tienePermiso: (codigo: string) => boolean;
   recargarPerfil: () => Promise<void>;
   actualizarPerfil: (datos: Record<string, unknown>) => Promise<Perfil>;
 }
@@ -46,6 +64,7 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => { throw new Error('AuthContext no inicializado'); },
   signOut: async () => {},
   puedeHacer: () => false,
+  tienePermiso: () => false,
   recargarPerfil: async () => {},
   actualizarPerfil: async () => { throw new Error('AuthContext no inicializado'); },
 });
@@ -54,6 +73,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  /** Permisos efectivos del usuario según sus roles (null = aún no cargados → se usa la lógica anterior). */
+  const [permisosNucleo, setPermisosNucleo] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    if (!perfil?.id) { setPermisosNucleo(null); return; }
+    let activo = true;
+    api.rolesCatalogo()
+      .then(r => { if (activo) setPermisosNucleo(new Set(r.mios)); })
+      .catch(() => { if (activo) setPermisosNucleo(null); });
+    return () => { activo = false; };
+  }, [perfil?.id, perfil?.rol]);
 
   const aplicarPerfil = (p: Perfil) => {
     setPerfil(p);
@@ -63,6 +93,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Restaura la sesion desde el token guardado en localStorage
   useEffect(() => {
     let active = true;
+    // Sin token no hay sesión que restaurar: no se llama a /me (evita el 401 en la landing, corrección #8).
+    if (!getToken()) {
+      setIsLoading(false);
+      return () => { active = false; };
+    }
     (async () => {
       try {
         const { perfil: p } = await api.me();
@@ -121,11 +156,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return actualizado;
   };
 
+  const tienePermiso = (codigo: string): boolean => {
+    if (!perfil) return false;
+    if (perfil.rol === 'superadmin' || perfil.rol === 'demo') return true;
+    return permisosNucleo?.has(codigo) ?? false;
+  };
+
   const puedeHacer = (permiso: string): boolean => {
     if (!perfil) return false;
     if (perfil.rol === 'superadmin') return true;
     if (perfil.rol === 'admin_institucional') return true;
     if (perfil.rol === 'demo') return true;
+    if (permiso === 'ver_mi_perfil') return true;
+
+    // Roles dinámicos: si ya se cargaron y el permiso tiene equivalente en el catálogo, mandan ellos.
+    // El plan contratado sigue restringiendo (ej. plan Básico sin Caja ni Reportes).
+    const codigo = PERMISO_NUCLEO[permiso];
+    if (codigo && permisosNucleo) {
+      const flag = FLAGS_PLAN[permiso];
+      const bloqueadoPorPlan = !!flag && (perfil.rol === 'emprendedor' || perfil.rol === 'dueño') && perfil[flag] === false;
+      return permisosNucleo.has(codigo) && !bloqueadoPorPlan;
+    }
 
     const flags = {
       'crear_ventas': perfil.puede_crear_ventas ?? true,
@@ -144,7 +195,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, perfil, isLoading, signIn, register, signOut, puedeHacer, recargarPerfil, actualizarPerfil,
+      user, perfil, isLoading, signIn, register, signOut, puedeHacer, tienePermiso, recargarPerfil, actualizarPerfil,
     }}>
       {children}
     </AuthContext.Provider>

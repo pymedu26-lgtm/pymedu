@@ -114,19 +114,19 @@
   --color-violet-container: #4C1D95;
   --color-on-violet-container: #E9D5FF;
 
-  /* Categorical ramp — Dark */
-  --color-cat-1: #FFB4AB;  --color-cat-1-container: #93000A;  --color-on-cat-1-container: #FFDAD6;
-  --color-cat-2: #E8C77A;  --color-cat-2-container: #57420F;  --color-on-cat-2-container: #F7E3B8;
-  --color-cat-3: #C4B5FD;  --color-cat-3-container: #4C1D95;  --color-on-cat-3-container: #E9D5FF;
-  --color-cat-4: #93C5FD;  --color-cat-4-container: #1E3A8A;  --color-on-cat-4-container: #DBEAFE;
-  --color-cat-5: #5EEAD4;  --color-cat-5-container: #115E59;  --color-on-cat-5-container: #B8F5EC;
-  --color-cat-6: #86EFAC;  --color-cat-6-container: #14532D;  --color-on-cat-6-container: #DCFCE7;
-  --color-cat-7: #6EE7B7;  --color-cat-7-container: #064E3B;  --color-on-cat-7-container: #D1FAE5;
-  --color-cat-8: #FDBA74;  --color-cat-8-container: #7C2D12;  --color-on-cat-8-container: #FFEDD5;
-  --color-cat-9: #67E8F9;  --color-cat-9-container: #164E63;  --color-on-cat-9-container: #CFFAFE;
-  --color-cat-10: #F9A8D4; --color-cat-10-container: #831843; --color-on-cat-10-container: #FCE7F3;
+  /* Categorical ramp — Dark (tonos medios saturados: legibles en gráficos sobre fondo oscuro) */
+  --color-cat-1: #F87171;  --color-cat-1-container: #93000A;  --color-on-cat-1-container: #FFDAD6;
+  --color-cat-2: #FBBF24;  --color-cat-2-container: #57420F;  --color-on-cat-2-container: #F7E3B8;
+  --color-cat-3: #A78BFA;  --color-cat-3-container: #4C1D95;  --color-on-cat-3-container: #E9D5FF;
+  --color-cat-4: #60A5FA;  --color-cat-4-container: #1E3A8A;  --color-on-cat-4-container: #DBEAFE;
+  --color-cat-5: #2DD4BF;  --color-cat-5-container: #115E59;  --color-on-cat-5-container: #B8F5EC;
+  --color-cat-6: #4ADE80;  --color-cat-6-container: #14532D;  --color-on-cat-6-container: #DCFCE7;
+  --color-cat-7: #34D399;  --color-cat-7-container: #064E3B;  --color-on-cat-7-container: #D1FAE5;
+  --color-cat-8: #FB923C;  --color-cat-8-container: #7C2D12;  --color-on-cat-8-container: #FFEDD5;
+  --color-cat-9: #22D3EE;  --color-cat-9-container: #164E63;  --color-on-cat-9-container: #CFFAFE;
+  --color-cat-10: #F472B6; --color-cat-10-container: #831843; --color-on-cat-10-container: #FCE7F3;
   --color-cat-11: #94A3B8; --color-cat-11-container: #1E293B; --color-on-cat-11-container: #E2E8F0;
-  --color-cat-12: #A5B4FC; --color-cat-12-container: #312E81; --color-on-cat-12-container: #E0E7FF;
+  --color-cat-12: #818CF8; --color-cat-12-container: #312E81; --color-on-cat-12-container: #E0E7FF;
 
   /* Surface palette — Dark (deep backgrounds like Landing) */
   --color-surface: #0A0C10;

@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useMemo } from 'react';
 import { useERP } from '../1.-ERP/context/ERPContext';
+import { calcularAlertas, estadoStock, type TipoAlerta } from '../1.-ERP/services/alertas';
+import { formatCLP, formatFecha, hoyISO } from '../lib/fechas';
+import { planPorId } from '../lib/planes';
 
 type AlertaQuick = { icon: string; color: string; bg: string; titulo: string; desc: string; label: string; url: string };
 
@@ -8,15 +12,15 @@ export default function Dashboard() {
   const { perfil } = useAuth();
   const {
     ventas, gastos, inventario, movimientosInventario, movimientos,
-    documentosTributarios, pagosPOS,
-    getF29Preparador, getSaldoPendienteVenta, getSaldoPendienteGasto,
+    documentosTributarios, pagosPOS, promociones, saldos,
+    getF29Preparador,
   } = useERP();
 
   const hoy = new Date();
   const mesActual = hoy.getMonth();
   const anioActual = hoy.getFullYear();
   const diaDelMes = hoy.getDate();
-  const hoyIso = `${anioActual}-${String(mesActual + 1).padStart(2, '0')}-${String(diaDelMes).padStart(2, '0')}`;
+  const hoyIso = hoyISO();
   const mesIso = hoyIso.slice(0, 7);
   const esPremium = perfil?.membresia_nivel === 'pro' || perfil?.membresia_nivel === 'premium';
 
@@ -29,19 +33,25 @@ export default function Dashboard() {
   const totalGastosMes = gastosDelMes.reduce((acc, g) => acc + g.monto, 0);
   const metaVentas = Math.round(totalGastosMes * 1.35);
   const metaProgreso = metaVentas > 0 ? Math.min(100, Math.round((totalVentasMes / metaVentas) * 100)) : 0;
-  const metaCumplida = totalVentasMes >= metaVentas;
+  // Con meta $0 no hay nada que «cumplir» (corrección #9).
+  const sinMeta = metaVentas <= 0;
+  const metaCumplida = !sinMeta && totalVentasMes >= metaVentas;
 
   // Métricas HOY (movimientos reales de caja, no montos de documentos)
   const movimientosHoy = movimientos.filter(m => m.fecha.slice(0, 10) === hoyIso);
   const ingresosHoy = movimientosHoy.filter(m => m.tipo === 'Ingreso').reduce((acc, m) => acc + m.monto, 0);
   const egresosHoy = movimientosHoy.filter(m => m.tipo === 'Egreso').reduce((acc, m) => acc + m.monto, 0);
 
-  // Alertas
-  const productosStockBajo = inventario.filter(p => p.tipo === 'producto' && p.stock <= p.stockMinimo && p.estado === 'activo');
-  const ventasPendientes = ventas.filter(v => getSaldoPendienteVenta(v.id) > 0);
-  const gastosPorPagar = gastos.filter(g => getSaldoPendienteGasto(g.id) > 0);
-  const totalCxC = ventasPendientes.reduce((acc, v) => acc + getSaldoPendienteVenta(v.id), 0);
-  const totalCxP = gastosPorPagar.reduce((acc, g) => acc + getSaldoPendienteGasto(g.id), 0);
+  // Saldos y alertas desde la fuente única (correcciones #4 y #16)
+  const productosStockBajo = useMemo(() => inventario.filter(p => estadoStock(p) === 'bajo' || estadoStock(p) === 'sin_stock'), [inventario]);
+  const totalCxC = saldos.resumen.porCobrar;
+  const totalCxP = saldos.resumen.porPagar;
+  const ventasPendientes = { length: saldos.resumen.ventasPorCobrar };
+  const gastosPorPagar = { length: saldos.resumen.comprasPorPagar };
+  const alertas = useMemo(
+    () => calcularAlertas({ inventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos }),
+    [inventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos]
+  );
 
   const periodoActual = `${anioActual}-${String(mesActual + 1).padStart(2, '0')}`;
   const documentosMes = documentosTributarios.filter(d => d.periodoTributario === periodoActual);
@@ -49,45 +59,22 @@ export default function Dashboard() {
   const pagosPOSSinVenta = pagosPOS.filter(p => p.estadoConciliacion === 'sin_venta');
   const f29Actual = getF29Preparador(periodoActual);
 
-  const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+  const fmt = (n: number) => formatCLP(Math.abs(n));
   const nombreMes = hoy.toLocaleString('es-CL', { month: 'long' });
 
-  const alertasQuick: AlertaQuick[] = [];
-
-  if (negocioVacio) {
-    alertasQuick.push({
-      icon: 'flag', color: 'text-primary', bg: 'bg-primary/10',
-      titulo: 'Comienza a registrar tu actividad',
-      desc: 'Anota tu primera venta o gasto para que veas métricas reales de tu negocio.',
-      label: 'Anotar venta', url: '/erp/ventas',
-    });
-  } else {
-    if (diaDelMes <= 5) {
-      alertasQuick.push({ icon: 'badge', color: 'text-on-info-container', bg: 'bg-info-container', titulo: 'Paga sueldos antes del día 5', desc: 'Plazo legal del Código del Trabajo para pago de remuneraciones.', label: 'Ver CxP', url: '/erp/pagar' });
-    }
-    if (documentosPendientes.length > 0) {
-      alertasQuick.push({ icon: 'receipt_long', color: 'text-primary', bg: 'bg-primary/10', titulo: `${documentosPendientes.length} documento(s) por revisar`, desc: 'Antes de cerrar IVA conviene resolver documentos pendientes u observados.', label: 'Preparar F29', url: '/erp/iva-mensual' });
-    }
-    if (pagosPOSSinVenta.length > 0 && alertasQuick.length < 3) {
-      alertasQuick.push({ icon: 'point_of_sale', color: 'text-on-warning-container', bg: 'bg-warning-container', titulo: `${pagosPOSSinVenta.length} pago(s) POS sin venta`, desc: 'Concílialos para que caja, ventas e IVA cuadren.', label: 'Ir a Ventas', url: '/erp/ventas' });
-    }
-    if (productosStockBajo.length > 0) {
-      const p = productosStockBajo[0];
-      alertasQuick.push({ icon: 'inventory_2', color: 'text-on-error-container', bg: 'bg-error-container', titulo: `Stock bajo: "${p.nombre}"`, desc: `Solo quedan ${p.stock} unidades (mínimo: ${p.stockMinimo}).`, label: 'Ver Inventario', url: '/erp/inventario' });
-    }
-    if (diaDelMes >= 20) {
-      alertasQuick.push({ icon: 'account_balance', color: 'text-on-info-container', bg: 'bg-info-container', titulo: 'Cierre de mes SII próximo', desc: `El pago de IVA de ${nombreMes} vence el último día hábil del mes.`, label: 'Ver F29', url: '/erp/reportes' });
-    }
-    if (ventasPendientes.length > 0 && alertasQuick.length < 3) {
-      alertasQuick.push({ icon: 'request_quote', color: 'text-on-warning-container', bg: 'bg-warning-container', titulo: `${ventasPendientes.length} venta(s) sin cobrar`, desc: `Tienes ${fmt(totalCxC)} que aún no te han pagado.`, label: 'Ver CxC', url: '/erp/cobrar' });
-    }
-    if (gastosPorPagar.length > 0 && alertasQuick.length < 3) {
-      alertasQuick.push({ icon: 'payments', color: 'text-on-warning-container', bg: 'bg-warning-container', titulo: `Debes ${fmt(totalCxP)} a proveedores`, desc: `${gastosPorPagar.length} pago(s) pendientes. Evita atrasos.`, label: 'Ver CxP', url: '/erp/pagar' });
-    }
-    if (alertasQuick.length === 0) {
-      alertasQuick.push({ icon: 'check_circle', color: 'text-on-success-container', bg: 'bg-success-container', titulo: '¡Todo en orden!', desc: 'No tienes alertas pendientes. Tu negocio está funcionando bien.', label: 'Centro de Alertas', url: '/erp/alertas' });
-    }
-  }
+  const ESTILO_ALERTA: Record<TipoAlerta, { color: string; bg: string }> = {
+    critica: { color: 'text-on-error-container', bg: 'bg-error-container' },
+    tributaria: { color: 'text-on-info-container', bg: 'bg-info-container' },
+    advertencia: { color: 'text-on-warning-container', bg: 'bg-warning-container' },
+    info: { color: 'text-primary', bg: 'bg-primary/10' },
+    exito: { color: 'text-on-success-container', bg: 'bg-success-container' },
+  };
+  const alertasQuick: AlertaQuick[] = negocioVacio
+    ? [{ icon: 'flag', color: 'text-primary', bg: 'bg-primary/10', titulo: 'Comienza a registrar tu actividad', desc: 'Anota tu primera venta o gasto para que veas métricas reales de tu negocio.', label: 'Anotar venta', url: '/erp/ventas' }]
+    : alertas.length === 0
+      ? [{ icon: 'check_circle', ...ESTILO_ALERTA.exito, titulo: '¡Todo en orden!', desc: 'No tienes alertas pendientes.', label: 'Centro de alertas', url: '/erp/alertas' }]
+      : alertas.map(a => ({ icon: a.icono, ...ESTILO_ALERTA[a.tipo], titulo: a.titulo, desc: a.detalle, label: a.accion_label ?? 'Ver', url: a.accion_url ?? '/erp/alertas' }));
+  const criticas = alertas.filter(a => a.tipo === 'critica').length;
 
   const movimientosActuales = ventas.length + gastos.length + movimientosInventario.length;
   const limitePlan = 30;
@@ -107,7 +94,7 @@ export default function Dashboard() {
           <h2 className="text-3xl font-extrabold text-on-surface tracking-tight flex items-center gap-2">
             ¡Hola, {perfil?.nombre_completo?.split(' ')[0] || 'Emprendedor'}! <span className="text-3xl">👋</span>
           </h2>
-          <p className="text-on-surface-variant mt-1 font-medium capitalize">
+          <p className="text-on-surface-variant mt-1 font-medium first-letter:uppercase">
             {hoy.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })} · Resumen de tu negocio
           </p>
         </div>
@@ -138,7 +125,7 @@ export default function Dashboard() {
             </div>
             {perfil?.membresia_expira && (
               <span className="text-xs font-semibold text-success/80">
-                Vence el {new Date(perfil.membresia_expira).toLocaleDateString('es-CL')}
+                Vence el {formatFecha(perfil.membresia_expira)}
               </span>
             )}
           </div>
@@ -285,7 +272,14 @@ export default function Dashboard() {
           {/* Meta del mes */}
           <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-6">
             <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider mb-1">Meta del mes</h3>
-            <p className="text-xs text-on-surface-variant mb-3">Venta objetivo: {fmt(metaVentas)} ({fmt(totalGastosMes)} de gastos + 35%)</p>
+            {sinMeta ? (
+              <div className="mt-2 rounded-2xl bg-surface-container-low p-4">
+                <p className="text-sm font-bold text-on-surface">Define tu meta del mes</p>
+                <p className="mt-1 text-xs text-on-surface-variant">La meta se calcula con tus gastos del mes + 35 %. Registra tus gastos para obtenerla.</p>
+                <Link to="/erp/gastos" className="mt-3 inline-flex text-xs font-bold text-primary hover:underline">Registrar gastos →</Link>
+              </div>
+            ) : (<>
+            <p className="text-xs text-on-surface-variant mb-3">Venta objetivo: {fmt(metaVentas)} ({fmt(totalGastosMes)} de gastos + 35 %)</p>
             <div className="flex items-end justify-between mb-2">
               <p className="text-2xl font-black text-on-surface">{fmt(totalVentasMes)}</p>
               <span className={`text-xs font-black ${metaCumplida ? 'text-success' : 'text-secondary'}`}>{metaProgreso}%</span>
@@ -301,16 +295,19 @@ export default function Dashboard() {
                 <span className="material-symbols-outlined text-sm">check_circle</span> ¡Meta del mes cumplida!
               </p>
             )}
+            </>)}
           </div>
 
           {/* Calendario tributario */}
           <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-6">
-            <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider mb-4">Calendario tributario</h3>
+            <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider mb-1">Calendario tributario</h3>
+            <p className="mb-4 text-[11px] text-on-surface-variant">Fechas referenciales: valídalas con tu contador.</p>
             <div className="space-y-3">
               {[
-                { label: 'F29 — IVA mensual', fecha: `Último día hábil, ${nombreMes}`, urgente: diaDelMes >= 20 },
+                // Corrección #23: F29 el día 12 del mes siguiente (20 con facturación electrónica). Validar con el contador.
+                { label: 'F29 — IVA mensual', fecha: 'Día 20 del mes siguiente (12 sin factura electrónica)', urgente: diaDelMes >= 13 && diaDelMes <= 20 },
                 { label: 'Pago sueldos', fecha: 'Día 5 del mes siguiente', urgente: diaDelMes <= 5 },
-                { label: 'Cotizaciones AFP/Salud', fecha: '10 del mes siguiente', urgente: diaDelMes >= 7 && diaDelMes <= 10 },
+                { label: 'Cotizaciones AFP/Salud', fecha: 'Día 10 del mes siguiente (13 si pagas en línea)', urgente: diaDelMes >= 7 && diaDelMes <= 13 },
               ].map(t => (
                 <div key={t.label} className={`flex items-center justify-between p-3 rounded-xl ${t.urgente ? 'bg-warning/10 border border-warning/20 glow-amber' : 'bg-surface-container-low/50'}`}>
                   <div>
@@ -330,9 +327,9 @@ export default function Dashboard() {
                 <span className="material-symbols-outlined text-3xl">rocket_launch</span>
               </div>
               <h3 className="text-lg font-bold text-warning mb-2">Crece sin límites</h3>
-              <p className="text-sm text-on-surface-variant mb-5 font-medium">Reportes SII, equipo ilimitado y mentorías premium por solo $10.000/mes.</p>
+              <p className="text-sm text-on-surface-variant mb-5 font-medium">Reportes SII, caja y bancos y mentorías por solo {formatCLP(planPorId('pro').precio)}/mes.</p>
               <Link to="/erp/suscripcion" className="w-full inline-block bg-warning hover:bg-warning/90 text-surface font-bold py-3 px-4 rounded-2xl text-sm transition-all shadow-lg glow-amber">
-                Pásate a Premium
+                Pásate a Pro
               </Link>
             </div>
           )}

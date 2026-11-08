@@ -1,3 +1,4 @@
+import { formatFecha } from '../../lib/fechas';
 import { useRef, useState, ChangeEvent, DragEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { EstadoPago, Gasto, MetodoPago, TipoDocumento } from '../context/ERPContext';
@@ -5,6 +6,7 @@ import { DocumentType } from '../services/documentCompliance';
 import {
   ESTADOS, EXTENSIONES, METODOS_PAGO, descargarLibroPlantilla, elegirEnum, extensionValida,
   formatPesos, mapearColumnas, normKey, parseBooleano, parseFecha, parseNumero,
+  limpiarCelda,
 } from './cargaMasivaUtil';
 
 interface ModalCargaMasivaGastosProps {
@@ -44,14 +46,14 @@ const COLUMNAS: { campo: CampoClave; titulo: string; obligatorio: boolean; ayuda
   { campo: 'fecha', titulo: 'Fecha', obligatorio: true, ayuda: 'Formato aaaa-mm-dd o dd-mm-aaaa.' },
   { campo: 'proveedor', titulo: 'Proveedor', obligatorio: true, ayuda: 'Razón social de quien emitió el gasto. Si va vacío se usa el RUT.' },
   { campo: 'rut', titulo: 'RUT Proveedor', obligatorio: false, ayuda: 'Opcional. Identifica al proveedor y alimenta el crédito fiscal.' },
-  { campo: 'categoria', titulo: 'Categoria', obligatorio: false, ayuda: 'Insumos/Mercaderia, Servicios Basicos, Arriendo, Sueldos, Publicidad, Tecnologia, Transporte, Capacitacion, Mantencion, IVA/Impuestos u Otros.' },
+  { campo: 'categoria', titulo: 'Categoría', obligatorio: false, ayuda: 'Insumos/Mercaderia, Servicios Basicos, Arriendo, Sueldos, Publicidad, Tecnologia, Transporte, Capacitacion, Mantencion, IVA/Impuestos u Otros.' },
   { campo: 'tipoDocumento', titulo: 'Tipo Documento', obligatorio: false, ayuda: 'factura_electronica (33), boleta_electronica (39), factura_exenta (34) o boleta_exenta (41).' },
-  { campo: 'folio', titulo: 'Folio', obligatorio: false, ayuda: 'Numero del documento. Sirve para detectar duplicados en reimportaciones.' },
+  { campo: 'folio', titulo: 'Folio', obligatorio: false, ayuda: 'Número del documento. Sirve para detectar duplicados en reimportaciones.' },
   { campo: 'monto', titulo: 'Monto Total', obligatorio: false, ayuda: 'Total con IVA. Si informas Neto e IVA puedes dejarlo vacio.' },
   { campo: 'subtotal', titulo: 'Neto', obligatorio: false, ayuda: 'Monto sin IVA. Tiene prioridad sobre el cálculo automático.' },
   { campo: 'iva', titulo: 'IVA', obligatorio: false, ayuda: 'IVA de la operación. Si falta se calcula al 19% sobre el neto.' },
   { campo: 'estado', titulo: 'Estado', obligatorio: false, ayuda: 'Pagado (por defecto), Pendiente o Por Pagar (deja saldo pendiente).' },
-  { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, debito, credito, mixto o cheque.' },
+  { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, débito, crédito, mixto o cheque.' },
   { campo: 'fechaVencimiento', titulo: 'Vencimiento', obligatorio: false, ayuda: 'Solo para gastos Pendientes: fecha en que se debe pagar.' },
   { campo: 'recurrente', titulo: 'Recurrente', obligatorio: false, ayuda: 'Si/No. Marca el gasto como recurrente (mensual), igual que el formulario.' },
   { campo: 'nota', titulo: 'Nota', obligatorio: false, ayuda: 'Observación o glosa del gasto.' },
@@ -133,12 +135,12 @@ function descargarPlantilla() {
     ],
     COLUMNAS.map(c => ({ wch: Math.max(16, c.titulo.length + 4) })),
     [
-      ['Columna', 'Obligatorio', 'Descripcion'],
+      ['Columna', 'Obligatorio', 'Descripción'],
       ...COLUMNAS.map(c => [c.titulo, c.obligatorio ? 'Si' : 'No', c.ayuda]),
       [],
       ['Montos', '', 'Informa "Monto Total" con IVA, o bien "Neto" e "IVA". Con solo el total, el neto se calcula al 19%.'],
-      ['Categorias', '', CATEGORIAS.join(' · ')],
-      ['Documentos SII', '', 'Acepta los codigos del Registro de Compras: 33 factura, 39 boleta, 34/41 exentas, 61 nota de credito.'],
+      ['Categorías', '', CATEGORIAS.join(' · ')],
+      ['Documentos SII', '', 'Acepta los códigos del Registro de Compras: 33 factura, 39 boleta, 34/41 exentas, 61 nota de crédito.'],
       ['Duplicados', '', 'Una fila con el mismo Folio, Proveedor y Fecha que ya existe no se importa.'],
       ['Pendientes', '', 'Un gasto Pendiente con Vencimiento genera saldo pendiente por cobrar.'],
       ['Recurrente', '', 'Acepta Si/No, 1/0, X o vacío. Marca el gasto como recurrente mensual, igual que el formulario.'],
@@ -192,7 +194,7 @@ export default function ModalCargaMasivaGastos({
         const columnas = mapearColumnas(filas[indiceEncabezado], ALIAS);
         const celda = (fila: unknown[], campo: CampoClave) => {
           const i = columnas[campo];
-          return i >= 0 ? fila[i] : '';
+          return i >= 0 ? limpiarCelda(fila[i]) : '';
         };
 
         const hoy = new Date().toISOString().split('T')[0];
@@ -228,7 +230,7 @@ export default function ModalCargaMasivaGastos({
           if (!proveedor) errores.push('Falta el Proveedor o el RUT.');
           if (calculo.monto <= 0) errores.push('El monto debe ser mayor a 0.');
           if (textoCategoria && !normalizarCategoria(textoCategoria)) {
-            errores.push(`Categoria "${textoCategoria}" no existe. Usa: ${CATEGORIAS.join(', ')}.`);
+            errores.push(`Categoría "${textoCategoria}" no existe. Usa: ${CATEGORIAS.join(', ')}.`);
           }
 
           // El folio viaja en las notas, que es donde el gasto guarda su trazabilidad.
@@ -463,7 +465,7 @@ export default function ModalCargaMasivaGastos({
                               </td>
                               <td className="px-4 py-2 text-on-surface-variant font-medium">{p.fila}</td>
                               <td className="px-4 py-2 font-bold text-primary">{p.folio || '—'}</td>
-                              <td className="px-4 py-2 text-on-surface-variant whitespace-nowrap">{p.fecha}</td>
+                              <td className="px-4 py-2 text-on-surface-variant whitespace-nowrap">{formatFecha(p.fecha)}</td>
                               <td className="px-4 py-2 max-w-[180px] truncate font-medium" title={p.proveedor}>{p.proveedor}</td>
                               <td className="px-4 py-2 text-on-surface-variant text-xs">{p.categoria}</td>
                               <td className="px-4 py-2 text-center">

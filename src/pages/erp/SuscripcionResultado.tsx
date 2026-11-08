@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { formatCLP } from '../../lib/fechas';
+import { planPorId, WEBPAY_MODO_PRUEBA } from '../../lib/planes';
 
 interface PagoDetalle {
   buy_order: string;
@@ -11,8 +13,6 @@ interface PagoDetalle {
   codigo_autorizacion: string | null;
   tarjeta: string | null;
 }
-
-const fmt = (n: number) => `$${n.toLocaleString('es-CL')}`;
 
 const CONFIG_ESTADO: Record<string, { icon: string; color: string; bg: string; titulo: string; desc: string }> = {
   aprobado: {
@@ -55,7 +55,7 @@ export default function SuscripcionResultado() {
       if (!nivel || !user || perfil?.membresia_nivel === nivel) return;
 
       setActivando(true);
-      const expira = new Date(Date.now() + 30 * 86400000).toISOString();
+      const expira = new Date(Date.now() + (planPorId(nivel).duracionDias ?? 30) * 86400000).toISOString();
       // Activa SU PROPIA membresia en el Postgres de Railway.
       try {
         await api.activarMembresia(nivel, expira);
@@ -83,6 +83,11 @@ export default function SuscripcionResultado() {
         <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${config.bg}`}>
           <span className={`material-symbols-outlined text-4xl ${config.color}`}>{config.icon}</span>
         </div>
+        {WEBPAY_MODO_PRUEBA && (
+          <span className="inline-block mb-3 text-[10px] font-extrabold uppercase tracking-widest bg-warning/15 text-warning px-3 py-1 rounded-full">
+            Modo prueba · sin cobro real
+          </span>
+        )}
         <h2 className="text-2xl font-extrabold text-on-surface mb-2">{config.titulo}</h2>
         <p className="text-sm text-on-surface-variant font-medium leading-relaxed mb-6">{config.desc}</p>
 
@@ -95,8 +100,8 @@ export default function SuscripcionResultado() {
         {pago && (
           <div className="bg-surface-container-low rounded-2xl p-5 text-left space-y-2 mb-6">
             {[
-              ['Plan', pago.plan === 'pro' ? 'Pro' : 'Premium'],
-              ['Monto', fmt(pago.monto)],
+              ['Plan', planPorId(pago.plan).nombre],
+              ['Monto', formatCLP(pago.monto)],
               ['Orden de compra', pago.buy_order],
               ...(pago.tarjeta ? [['Tarjeta', pago.tarjeta] as const] : []),
               ...(pago.codigo_autorizacion ? [['Código de autorización', pago.codigo_autorizacion] as const] : []),

@@ -1,15 +1,18 @@
-import { useState, lazy, Suspense } from 'react';
-import { Proveedor, useERP } from '../../1.-ERP/context/ERPContext';
+import { useState, lazy, Suspense, useMemo } from 'react';
+import { Proveedor, useERP, normalizarNombre } from '../../1.-ERP/context/ERPContext';
+import { formatCLP } from '../../lib/fechas';
+import Paginacion, { usePaginacion } from '../../components/Paginacion';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
 import ModalHistorialProveedor from '../../1.-ERP/components/ModalHistorialProveedor';
 
 const ModalCargaMasivaProveedores = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaProveedores'));
 
-const CATEGORIAS = ['Insumos / Mercaderia', 'Servicios Basicos', 'Arriendo', 'Sueldos', 'Publicidad', 'Tecnologia', 'Transporte', 'Otros'];
+// «Sueldos» no es un proveedor: se registra como gasto de personal / RR.HH. (corrección #33).
+const CATEGORIAS = ['Insumos / Mercadería', 'Servicios básicos', 'Arriendo', 'Publicidad', 'Tecnología', 'Transporte', 'Otros'];
 
 export default function ERPProveedores() {
-  const { proveedores, addProveedor, updateProveedor, deleteProveedor, gastos, abonos } = useERP();
+  const { proveedores, addProveedor, updateProveedor, deleteProveedor, gastos, abonos, saldos } = useERP();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
@@ -19,14 +22,27 @@ export default function ERPProveedores() {
   const [historialProveedor, setHistorialProveedor] = useState<Proveedor | null>(null);
   const [nuevo, setNuevo] = useState({ nombre: '', categoria: CATEGORIAS[0], telefono: '', email: '', condicion_pago: '', rut: '' });
 
-  const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+  const fmt = (n: number) => formatCLP(Math.abs(n));
 
-  const proveedoresFiltrados = proveedores.filter(p =>
+  const proveedoresFiltrados = useMemo(() => proveedores.filter(p =>
     p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
     (p.categoria || '').toLowerCase().includes(busqueda.toLowerCase())
-  );
+  ), [proveedores, busqueda]);
+  const paginacion = usePaginacion(proveedoresFiltrados, 25, [busqueda]);
 
-  const totalDeuda = proveedores.reduce((a, p) => a + p.deuda, 0);
+  // Deuda real por proveedor desde la fuente única de saldos (corrección #4).
+  const deudaPorProveedor = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const g of gastos) {
+      const saldo = saldos.porGasto.get(g.id) ?? 0;
+      if (saldo <= 0) continue;
+      const clave = g.proveedor_id || `nom:${normalizarNombre(g.proveedor)}`;
+      mapa.set(clave, (mapa.get(clave) ?? 0) + saldo);
+    }
+    return mapa;
+  }, [gastos, saldos]);
+  const deudaDe = (p: Proveedor) => deudaPorProveedor.get(p.id) ?? deudaPorProveedor.get(`nom:${normalizarNombre(p.nombre)}`) ?? 0;
+  const totalDeuda = saldos.resumen.porPagar;
 
   const celdaCSV = (valor: unknown) => {
     const s = String(valor ?? '');
@@ -55,7 +71,7 @@ export default function ERPProveedores() {
       p.email || '',
       p.categoria || '',
       p.condicion_pago || '',
-      p.deuda || 0,
+      deudaDe(p),
     ]);
     descargarCSV(`proveedores_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
   };
@@ -161,7 +177,7 @@ export default function ERPProveedores() {
               {proveedoresFiltrados.length === 0 && (
                 <tr><td colSpan={6} className="p-8 text-center text-on-surface-variant">No se encontraron proveedores.</td></tr>
               )}
-              {proveedoresFiltrados.map(p => (
+              {paginacion.visibles.map(p => (
                 <tr key={p.id} className="hover:bg-surface-container-low/50 transition-colors">
                   <td className="p-4">
                     <p className="font-bold text-on-surface">{p.nombre}</p>
@@ -173,7 +189,7 @@ export default function ERPProveedores() {
                     <p>{p.telefono || '—'}</p>
                   </td>
                   <td className="p-4">
-                    <span className={cn('font-extrabold', p.deuda > 0 ? 'text-secondary' : 'text-success')}>{fmt(p.deuda)}</span>
+                    <span className={cn('font-extrabold', deudaDe(p) > 0 ? 'text-secondary' : 'text-success')}>{fmt(deudaDe(p))}</span>
                   </td>
                   <td className="p-4 text-on-surface-variant">{p.condicion_pago || '—'}</td>
                   <td className="p-4">
@@ -203,6 +219,7 @@ export default function ERPProveedores() {
             </tbody>
           </table>
         </div>
+        <Paginacion {...paginacion} />
       </div>
 
       {showModal && (

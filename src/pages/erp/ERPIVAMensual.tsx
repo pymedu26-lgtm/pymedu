@@ -1,14 +1,22 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { isoLocal, nombrePeriodo, periodoActual } from '../../lib/fechas';
 import { useERP } from '../../1.-ERP/context/ERPContext';
 
 export default function ERPIVAMensual() {
   const { getF29Preparador, documentosTributarios } = useERP();
-  const [periodo, setPeriodo] = useState(new Date().toISOString().slice(0, 7));
+  // El periodo seleccionado es exactamente el consultado (corrección #2): mes en curso local, no UTC.
+  const [periodo, setPeriodo] = useState(periodoActual());
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
   const f29 = getF29Preparador(periodo);
 
-  const periodosDisponibles = Array.from(new Set(documentosTributarios.map(d => d.periodoTributario))).sort().reverse().slice(0, 12);
+  // Siempre incluye el mes en curso y los últimos 24 meses, además de los meses con documentos.
+  const periodosDisponibles = useMemo(() => {
+    const base = new Date();
+    const ultimos = Array.from({ length: 24 }, (_, i) => isoLocal(new Date(base.getFullYear(), base.getMonth() - i, 1)).slice(0, 7));
+    return Array.from(new Set([...ultimos, ...documentosTributarios.map(d => d.periodoTributario).filter(Boolean)])).sort().reverse();
+  }, [documentosTributarios]);
+  const conDocumentos = useMemo(() => new Set(documentosTributarios.map(d => d.periodoTributario)), [documentosTributarios]);
 
   const documentos = documentosTributarios.filter(d => d.periodoTributario === periodo);
 
@@ -24,8 +32,7 @@ export default function ERPIVAMensual() {
         </div>
         <select value={periodo} onChange={e => setPeriodo(e.target.value)}
           className="px-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm font-bold text-on-surface outline-none focus:border-primary bg-surface-container-lowest">
-          {periodosDisponibles.length === 0 && <option value={periodo}>{periodo}</option>}
-          {periodosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+          {periodosDisponibles.map(p => <option key={p} value={p}>{nombrePeriodo(p)}{conDocumentos.has(p) ? '' : ' · sin documentos'}</option>)}
         </select>
       </div>
 

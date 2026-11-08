@@ -1,37 +1,11 @@
 import { useState } from 'react';
-
-const planes = [
-  {
-    id: 'basico', nombre: 'Básico', precio: 0, periodo: 'Gratis',
-    descripcion: 'Para organizaciones que están comenzando.',
-    color: 'border-outline-variant/30', badgeColor: 'bg-surface-container text-on-surface-variant',
-    modulos: ['Academia'],
-    limites: { usuarios: 50, emprendedores: 25, mentores: 5, coordinadores: 2 },
-    features: ['Acceso a cursos básicos', '1 coordinador', 'Soporte por email', 'Reportes básicos'],
-  },
-  {
-    id: 'profesional', nombre: 'Profesional', precio: 299000, periodo: '/mes',
-    descripcion: 'Para instituciones en crecimiento con necesidades avanzadas.',
-    color: 'border-info/30', badgeColor: 'bg-info-container text-on-info-container',
-    modulos: ['Academia', 'ERP', 'Mentoría'],
-    limites: { usuarios: 200, emprendedores: 100, mentores: 20, coordinadores: 5 },
-    features: ['Todo lo del plan Básico', 'ERP completo', 'Mentoría ilimitada', 'Soporte prioritario', 'Reportes avanzados', 'API básica'],
-    popular: true,
-  },
-  {
-    id: 'premium', nombre: 'Premium', precio: 599000, periodo: '/mes',
-    descripcion: 'Para grandes instituciones con acceso completo.',
-    color: 'border-info/30', badgeColor: 'bg-info-container text-on-info-container',
-    modulos: ['Academia', 'ERP', 'Mentoría', 'Comunidad', 'Laboratorio'],
-    limites: { usuarios: -1, emprendedores: -1, mentores: -1, coordinadores: -1 },
-    features: ['Todo lo del plan Profesional', 'Comunidad completa', 'Laboratorio de innovación', 'SSO / SAML', 'Soporte 24/7', 'API completa', 'Branding personalizado', 'SLA garantizado'],
-  },
-];
+import { formatCLP } from '../../../lib/fechas';
+import { PLANES, periodoPlan } from '../../../lib/planes';
 
 const modulosGlobales = [
-  { id: 'academia', nombre: 'Academia', icon: 'school', descripcion: 'Cursos, módulos y certificaciones', incluidoEn: ['Básico', 'Profesional', 'Premium'] },
-  { id: 'erp', nombre: 'ERP', icon: 'point_of_sale', descripcion: 'Ventas, gastos, inventario y contabilidad', incluidoEn: ['Profesional', 'Premium'] },
-  { id: 'mentoria', nombre: 'Mentoría', icon: 'groups', descripcion: 'Sesiones, seguimiento y acuerdos', incluidoEn: ['Profesional', 'Premium'] },
+  { id: 'academia', nombre: 'Academia', icon: 'school', descripcion: 'Cursos, módulos y certificaciones', incluidoEn: ['Básico', 'Pro', 'Premium'] },
+  { id: 'erp', nombre: 'ERP', icon: 'point_of_sale', descripcion: 'Ventas, gastos, inventario y contabilidad', incluidoEn: ['Básico', 'Pro', 'Premium'] },
+  { id: 'mentoria', nombre: 'Mentoría', icon: 'groups', descripcion: 'Sesiones, seguimiento y acuerdos', incluidoEn: ['Pro', 'Premium'] },
   { id: 'comunidad', nombre: 'Comunidad', icon: 'diversity_3', descripcion: 'Networking y eventos entre emprendedores', incluidoEn: ['Premium'] },
   { id: 'laboratorio', nombre: 'Laboratorio', icon: 'science', descripcion: 'Innovación, prototipos y testing', incluidoEn: ['Premium'] },
 ];
@@ -46,7 +20,7 @@ export default function SuperAdminPlanes() {
           <span className="material-symbols-outlined text-3xl text-warning">workspace_premium</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Planes y Módulos</h1>
-            <p className="text-on-surface-variant">Configura los planes de suscripción y módulos de la plataforma</p>
+            <p className="text-on-surface-variant">Planes de suscripción vigentes y módulos de la plataforma</p>
           </div>
         </div>
       </div>
@@ -68,62 +42,35 @@ export default function SuperAdminPlanes() {
 
       {tab === 'planes' && (
         <>
-          {/* Resumen */}
-          <div className="grid grid-cols-3 gap-4">
-            {planes.map((plan) => (
-              <div key={plan.id} className={`bg-surface-container-lowest rounded-2xl p-5 border-2 ${plan.color} relative`}>
-                {plan.popular && (
+          {/* Planes de emprendedor cobrados por Webpay: fuente única en lib/planes.ts (solo lectura) */}
+          <p className="text-xs text-on-surface-variant">
+            Solo lectura. Montos y duración los define el servidor de pagos (Webpay); para cambiarlos hay que actualizar el servidor y <code>src/lib/planes.ts</code>.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {PLANES.map((plan) => (
+              <div key={plan.id} className={`bg-surface-container-lowest rounded-2xl p-5 border-2 relative ${plan.destacado ? 'border-info/40' : 'border-outline-variant/30'}`}>
+                {plan.destacado && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-info text-inverse-on-surface">
                     POPULAR
                   </span>
                 )}
-                <div className="flex items-center justify-between mb-3">
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${plan.badgeColor}`}>{plan.nombre}</span>
-                  <button className="p-1 rounded-lg hover:bg-surface-container-high transition-colors">
-                    <span className="material-symbols-outlined text-on-surface-variant text-lg">edit</span>
-                  </button>
-                </div>
-                <div className="mb-3">
-                  <span className="text-3xl font-extrabold text-on-surface">
-                    {plan.precio === 0 ? 'Gratis' : `$${plan.precio.toLocaleString()}`}
-                  </span>
-                  {plan.precio > 0 && <span className="text-sm text-on-surface-variant">{plan.periodo}</span>}
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-on-surface-variant">{plan.nombre}</span>
+                <div className="my-3">
+                  <span className="text-3xl font-extrabold text-on-surface">{plan.precio === 0 ? 'Gratis' : formatCLP(plan.precio)}</span>
+                  <span className="text-sm text-on-surface-variant"> {periodoPlan(plan)}</span>
                 </div>
                 <p className="text-xs text-on-surface-variant mb-4">{plan.descripcion}</p>
-
-                {/* Módulos */}
-                <div className="mb-3">
-                  <p className="text-[10px] font-extrabold text-on-surface-variant uppercase tracking-wider mb-1">Módulos</p>
-                  <div className="flex flex-wrap gap-1">
-                    {plan.modulos.map(m => (
-                      <span key={m} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-container text-on-teal-container">{m}</span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Límites */}
-                <div className="mb-3">
-                  <p className="text-[10px] font-extrabold text-on-surface-variant uppercase tracking-wider mb-1">Límites</p>
-                  <div className="grid grid-cols-2 gap-1 text-xs text-on-surface-variant">
-                    <span>Usuarios: {plan.limites.usuarios === -1 ? 'Ilimitado' : plan.limites.usuarios}</span>
-                    <span>Emprendedores: {plan.limites.emprendedores === -1 ? 'Ilimitado' : plan.limites.emprendedores}</span>
-                    <span>Mentores: {plan.limites.mentores === -1 ? 'Ilimitado' : plan.limites.mentores}</span>
-                    <span>Coords: {plan.limites.coordinadores === -1 ? 'Ilimitado' : plan.limites.coordinadores}</span>
-                  </div>
-                </div>
-
-                {/* Features */}
-                <div>
-                  <p className="text-[10px] font-extrabold text-on-surface-variant uppercase tracking-wider mb-1">Incluye</p>
-                  <ul className="space-y-1">
-                    {plan.features.map((f, i) => (
-                      <li key={i} className="flex items-center gap-1.5 text-xs text-on-surface-variant">
-                        <span className="material-symbols-outlined text-success text-sm">check</span>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <p className="text-[10px] font-extrabold text-on-surface-variant uppercase tracking-wider mb-1">Incluye</p>
+                <ul className="space-y-1">
+                  {plan.features.map((f) => (
+                    <li key={f.texto} className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+                      <span className={`material-symbols-outlined text-sm ${f.estado === 'proximamente' ? 'text-warning' : 'text-success'}`}>
+                        {f.estado === 'proximamente' ? 'schedule' : 'check'}
+                      </span>
+                      {f.texto}{f.estado === 'proximamente' && ' (próximamente)'}
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>

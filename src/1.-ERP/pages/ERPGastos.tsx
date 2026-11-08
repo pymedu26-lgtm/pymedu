@@ -5,13 +5,15 @@ import TarjetasResumen from '../components/TarjetasResumen';
 import SelectorFecha from '../components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
-import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { etiquetaRangoPeriodo, rangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
-import { useColoresTema } from '@/lib/useColoresTema';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, LineChart, Line
-} from 'recharts';
+import { formatCLP, rangoMes as rangoMesLocal, rangoUltimosMeses } from '@/lib/fechas';
+import { agruparSerie, totalesPor, NOMBRE_GRANULARIDAD } from '@/lib/series';
+import GraficoSerie from '../../components/graficos/GraficoSerie';
+import GraficoDona from '../../components/graficos/GraficoDona';
+import GraficoBarras from '../../components/graficos/GraficoBarras';
+import { TarjetaGrafico } from '../../components/graficos/comunes';
+import { usePaletaGraficos } from '../../components/graficos/paleta';
 
 const ModalCargaMasivaGastos = lazy(() => import('../components/ModalCargaMasivaGastos'));
 
@@ -24,11 +26,9 @@ const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'cheque', label: 'Cheque' },
 ];
 
-const COLORES_GASTO = ['error', 'warning', 'tertiary', 'info', 'secondary', 'violet', 'teal'] as const;
-
 export default function ERPGastos() {
   const { gastos, ventas, addGasto, updateGasto, deleteGasto, getSaldoPendienteGasto } = useERP();
-  const c = useColoresTema();
+  const paleta = usePaletaGraficos();
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState('Todas');
   const [showModal, setShowModal] = useState(false);
@@ -55,26 +55,14 @@ export default function ERPGastos() {
     fechaFin: ''
   });
 
-  /** Rango de mes natural, en ISO 'YYYY-MM-DD', para reutilizar fuera del efecto. */
-  const rangoMes = (offset: number) => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  /** Rango de mes natural en fechas locales (toISOString() corría el día por UTC). */
+  const rangoMes = (offset: number) => rangoMesLocal(offset);
 
-  const rangoUltimos3Meses = () => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  const rangoUltimos3Meses = () => rangoUltimosMeses(3);
 
   useEffect(() => {
-    if (periodoSeleccionado === 'personalizado') return;
-
-    const { inicio, fin } = periodoSeleccionado === 'mes_anterior' ? rangoMes(-1) : rangoMes(0);
-    setFiltrosPeriodo({ fechaInicio: inicio, fechaFin: fin });
+    const rango = rangoPeriodo(periodoSeleccionado);
+    if (rango) setFiltrosPeriodo({ fechaInicio: rango.inicio, fechaFin: rango.fin });
   }, [periodoSeleccionado]);
 
   useEffect(() => {
@@ -149,63 +137,35 @@ export default function ERPGastos() {
       return matchFechaInicio && matchFechaFin;
     }), [gastos, filtrosPeriodo]);
 
-  const porCategoria = useMemo(() => {
-    const mapa: Record<string, number> = {};
-    gastosDelPeriodo.forEach(g => { mapa[g.categoria] = (mapa[g.categoria] || 0) + g.monto; });
-    return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
-  }, [gastosDelPeriodo]);
-
-  /** Base 100 del grafico: la suma de las categorias del periodo, no solo la mas alta. */
-  const totalPorCategoria = useMemo(
-    () => porCategoria.reduce((acc, [, monto]) => acc + monto, 0),
-    [porCategoria]
+  /* ══ Gráficos ══
+   * Tramos continuos sobre TODO el rango elegido (día / semana / mes según su largo):
+   * con varios meses ya no se dibuja un punto por fecha con datos. */
+  const serieGastos = useMemo(
+    () => agruparSerie(gastosDelPeriodo, { inicio: filtrosPeriodo.fechaInicio, fin: filtrosPeriodo.fechaFin }, g => g.fecha, g => ({ monto: g.monto })),
+    [gastosDelPeriodo, filtrosPeriodo.fechaInicio, filtrosPeriodo.fechaFin]
   );
 
-  /** Rango que abarcan las barras, para que el 100% quede ligado a un periodo concreto. */
-  const rangoDelGrafico = useMemo(() => {
-    const { fechaInicio, fechaFin } = filtrosPeriodo;
-    if (!fechaInicio && !fechaFin) return 'Sin rango de fechas';
-    return `${formatFecha(fechaInicio)} → ${formatFecha(fechaFin)}`;
-  }, [filtrosPeriodo]);
+  /** Base 100: la suma de todas las categorías del periodo, no solo la más alta. */
+  const porCategoria = useMemo(() => totalesPor(gastosDelPeriodo, g => g.categoria, g => g.monto), [gastosDelPeriodo]);
+  const totalGastosPeriodo = useMemo(() => porCategoria.reduce((acc, c) => acc + c.valor, 0), [porCategoria]);
+  const gastosPorProveedor = useMemo(
+    () => totalesPor(gastosDelPeriodo, g => g.proveedor, g => g.monto, 'Sin proveedor'),
+    [gastosDelPeriodo]
+  );
 
-  const gastosPorDia = useMemo(() => {
-    const porFecha: Record<string, number> = {};
-    gastosDelPeriodo.forEach(g => {
-      const fecha = (g.fecha || '').split('T')[0];
-      if (!fecha) return;
-      porFecha[fecha] = (porFecha[fecha] || 0) + g.monto;
-    });
-    const fechas = Object.keys(porFecha).sort();
-    const mismoMes = fechas.length > 0 && fechas.every(f => f.slice(0, 7) === fechas[0]?.slice(0, 7));
-    return fechas.map(fecha => ({
-      dia: mismoMes ? `Dia ${Number(fecha.slice(8, 10))}` : formatFecha(fecha),
-      monto: porFecha[fecha],
-    }));
-  }, [gastosDelPeriodo]);
-
-  const saltoEtiquetasGastos = gastosPorDia.length > 34 ? Math.ceil(gastosPorDia.length / 12) : 0;
-
-  const gastosPorProveedor = useMemo(() => {
-    const mapa: Record<string, number> = {};
-    gastosDelPeriodo.forEach(g => {
-      const key = g.proveedor?.trim() || 'Sin proveedor';
-      mapa[key] = (mapa[key] || 0) + g.monto;
-    });
-    return Object.entries(mapa)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([name, value]) => ({ name, value }));
-  }, [gastosDelPeriodo]);
-
-  const gastosPorMetodoPago = useMemo(() => {
-    const mapa: Record<string, number> = {};
-    gastosDelPeriodo.forEach(g => {
-      const met = g.metodo_pago || 'efectivo';
-      const label = met.charAt(0).toUpperCase() + met.slice(1);
-      mapa[label] = (mapa[label] || 0) + g.monto;
-    });
-    return Object.entries(mapa).map(([name, value]) => ({ name, value }));
-  }, [gastosDelPeriodo]);
+  /** Pagado vs. por pagar del monto del periodo, con el saldo a hoy (incluye abonos parciales). */
+  const estadoPago = useMemo(() => {
+    let porPagar = 0;
+    let total = 0;
+    for (const g of gastosDelPeriodo) {
+      total += g.monto;
+      porPagar += getSaldoPendienteGasto(g.id);
+    }
+    return [
+      { nombre: 'Pagado', valor: Math.max(0, total - porPagar), color: paleta.ok },
+      { nombre: 'Por pagar', valor: porPagar, color: paleta.alerta },
+    ];
+  }, [gastosDelPeriodo, getSaldoPendienteGasto, paleta]);
 
   const handleGuardar = () => {
     if (!nuevoGasto.monto || !nuevoGasto.fecha || !nuevoGasto.categoria) return;
@@ -347,84 +307,38 @@ export default function ERPGastos() {
         />
       </div>
 
+      {/* Gráficos: serie del periodo ancha + estado de pago; categorías (barras con %) + proveedores */}
       {gastosDelPeriodo.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
-              <h3 className="font-bold text-on-surface text-sm flex items-center gap-2">
-                <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
-                Categorías de Gasto
-              </h3>
-              <span className="text-xs text-on-surface-variant font-bold">
-                Total {fmt(totalPorCategoria)} · 100%
-              </span>
-            </div>
-            <p className="text-[11px] text-outline mb-3">{rangoDelGrafico}</p>
-            <div className="space-y-2.5">
-              {porCategoria.slice(0, 6).map(([cat, monto]) => {
-                const pct = totalPorCategoria > 0 ? (monto / totalPorCategoria) * 100 : 0;
-                const pctTexto = pct.toLocaleString('es-CL', { maximumFractionDigits: 1 });
-                const fueraDeFiltro = categoria !== 'Todas' && cat !== categoria;
-                return (
-                  <div key={cat} className={cn('flex items-center gap-2 sm:gap-3', fueraDeFiltro && 'opacity-40')}>
-                    <span className="text-xs text-on-surface-variant font-bold truncate min-w-0 flex-1 sm:flex-none sm:w-36" title={cat}>
-                      {cat}
-                    </span>
-                    <div className="flex-1 min-w-[2.5rem] h-2.5 bg-surface-container-high rounded-full overflow-hidden">
-                      <div className="h-full bg-error/60 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="text-xs font-extrabold text-on-surface w-12 sm:w-14 text-right tabular-nums shrink-0">
-                      {pctTexto}%
-                    </span>
-                    <span className="text-xs text-on-surface-variant tabular-nums shrink-0 sm:w-24 sm:text-right">
-                      {fmt(monto)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-              <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Top Proveedores</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={gastosPorProveedor.slice(0, 5)} layout="vertical" margin={{ left: 10, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.outlineVariant} />
-                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
-                    <YAxis type="category" dataKey="name" width={80} axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 9 }} />
-                    <RechartsTooltip
-                      contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }}
-                      formatter={(value: number) => [`$${Number(value).toLocaleString()}`, 'Gasto']}
-                    />
-                    <Bar dataKey="value" fill={c.error} radius={[0, 6, 6, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-              <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Estado de Pago</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={[
-                    { name: 'Pagado', value: gastosDelPeriodo.filter(g => g.estado === 'Pagado').reduce((a,g)=>a+g.monto,0) },
-                    { name: 'Por Pagar', value: gastosDelPeriodo.filter(g => g.estado === 'Por Pagar').reduce((a,g)=>a+g.monto,0) },
-                  ]}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                    <YAxis hide />
-                    <RechartsTooltip
-                      contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }}
-                      formatter={(value: number) => [`$${Number(value).toLocaleString()}`, 'Monto']}
-                    />
-                    <Bar dataKey="value" fill={c.tertiary} radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <TarjetaGrafico
+            className="lg:col-span-2"
+            icono="bar_chart"
+            titulo="Gastos por periodo"
+            subtitulo={`Monto gastado ${NOMBRE_GRANULARIDAD[serieGastos.granularidad]} · ${etiquetaRango}`}
+            extra={`${gastosDelPeriodo.length.toLocaleString('es-CL')} gastos · ${formatCLP(totalGastosPeriodo)}`}
+          >
+            <GraficoSerie
+              puntos={serieGastos.puntos}
+              tipo={serieGastos.granularidad === 'dia' ? 'area' : 'barra'}
+              series={[{ clave: 'monto', nombre: 'Gastos', color: paleta.egresos }]}
+              vacio="Sin gastos en el periodo"
+            />
+          </TarjetaGrafico>
+          <TarjetaGrafico icono="donut_large" titulo="Estado de pago" subtitulo="Monto del periodo según saldo a hoy">
+            <GraficoDona items={estadoPago} etiquetaTotal="Gastado" />
+          </TarjetaGrafico>
+          <TarjetaGrafico
+            className="lg:col-span-2"
+            icono="category"
+            titulo="Categorías de gasto"
+            subtitulo={`Participación sobre el total del periodo · ${etiquetaRango}`}
+            extra={`Total ${formatCLP(totalGastosPeriodo)} · 100%`}
+          >
+            <GraficoBarras items={porCategoria} max={8} mostrarPct destacado={categoria !== 'Todas' ? categoria : undefined} />
+          </TarjetaGrafico>
+          <TarjetaGrafico icono="storefront" titulo="Top proveedores" subtitulo="Mayor monto gastado en el periodo">
+            <GraficoBarras items={gastosPorProveedor} max={5} color={paleta.egresos} />
+          </TarjetaGrafico>
         </div>
       )}
 
@@ -532,7 +446,7 @@ export default function ERPGastos() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoria</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoría</label>
                       <SelectorDesplegable
                         className="w-full"
                         valor={nuevoGasto.categoria}
@@ -583,7 +497,7 @@ export default function ERPGastos() {
                     <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border-2 border-outline-variant/20 hover:border-primary/30 transition-colors">
                       <input type="checkbox" checked={nuevoGasto.esFactura} onChange={e => setNuevoGasto({ ...nuevoGasto, esFactura: e.target.checked })} className="w-5 h-5 rounded" />
                       <div>
-                        <p className="font-bold text-on-surface text-sm">Es una Factura (Credito Fiscal IVA)</p>
+                        <p className="font-bold text-on-surface text-sm">Es una factura (crédito fiscal IVA)</p>
                         <p className="text-xs text-on-surface-variant">El IVA de facturas se resta del IVA a pagar en el F29</p>
                       </div>
                     </label>

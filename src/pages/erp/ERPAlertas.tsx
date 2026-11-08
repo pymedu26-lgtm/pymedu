@@ -1,20 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useERP } from '../../1.-ERP/context/ERPContext';
-
-type AlertaTipo = 'critica' | 'advertencia' | 'tributaria' | 'info' | 'exito';
-type AlertaOrigen = 'sistema' | 'sii' | 'municipalidad' | 'mentor';
-
-interface Alerta {
-  id: string;
-  tipo: AlertaTipo;
-  origen: AlertaOrigen;
-  titulo: string;
-  detalle: string;
-  accion_label?: string;
-  accion_url?: string;
-  icono: string;
-}
+import { calcularAlertas, type TipoAlerta as AlertaTipo, type OrigenAlerta as AlertaOrigen } from '../../1.-ERP/services/alertas';
 
 const tipoEstilo: Record<AlertaTipo, { border: string; bg: string; icon_bg: string; icon_color: string; badge: string }> = {
   critica:     { border: 'border-error/40',      bg: 'bg-error/5',        icon_bg: 'bg-error/10',       icon_color: 'text-error',       badge: 'bg-error text-inverse-on-surface' },
@@ -27,183 +14,21 @@ const tipoEstilo: Record<AlertaTipo, { border: string; bg: string; icon_bg: stri
 const origenLabel: Record<AlertaOrigen, string> = {
   sistema: 'PymEdu',
   sii: 'SII',
-  municipalidad: 'Municipalidad',
-  mentor: 'Academia',
 };
 
-const pesoTipo: Record<AlertaTipo, number> = { critica: 0, tributaria: 1, advertencia: 2, info: 3, exito: 4 };
 
-const flt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
 export default function ERPAlertas() {
-  const {
-    inventario, ventas, gastos, movimientos,
-    documentosTributarios, pagosPOS, promociones,
-    getSaldoPendienteVenta, getSaldoPendienteGasto,
-  } = useERP();
+  const { inventario, movimientos, documentosTributarios, pagosPOS, promociones, saldos } = useERP();
   const [filtro, setFiltro] = useState<AlertaTipo | 'todas'>('todas');
   const [leidas, setLeidas] = useState<Set<string>>(() => new Set());
 
-  const hoy = new Date();
-  const diaDelMes = hoy.getDate();
-  const mes = hoy.getMonth();
-  const anio = hoy.getFullYear();
-  const hoyIso = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(diaDelMes).padStart(2, '0')}`;
 
-  const alertas = useMemo(() => {
-    const items: Alerta[] = [];
-
-    // 1. Stock bajo
-    inventario.filter(p => p.tipo === 'producto' && p.stock <= p.stockMinimo && p.estado === 'activo').forEach(p => {
-      items.push({
-        id: `stock-${p.id}`, tipo: p.stock === 0 ? 'critica' : 'advertencia', origen: 'sistema',
-        icono: p.stock === 0 ? 'inventory' : 'warning',
-        titulo: p.stock === 0 ? `Sin stock: "${p.nombre}"` : `Stock bajo: "${p.nombre}"`,
-        detalle: p.stock === 0
-          ? `Te has quedado sin "${p.nombre}". No puedes venderlo hasta reabastecerte.`
-          : `Solo te quedan ${p.stock} unidades de "${p.nombre}" (mínimo: ${p.stockMinimo}). Considera reabastecer.`,
-        accion_label: 'Ver inventario', accion_url: '/erp/inventario',
-      });
-    });
-
-    // 2. Cuentas por cobrar vencidas
-    ventas.filter(v => getSaldoPendienteVenta(v.id) > 0 && v.fecha_vencimiento && v.fecha_vencimiento <= hoyIso).forEach(v => {
-      const dias = Math.ceil((new Date(hoyIso).getTime() - new Date(v.fecha_vencimiento!).getTime()) / 86400000);
-      items.push({
-        id: `cxc-ven-${v.id}`, tipo: 'critica', origen: 'sistema', icono: 'event_busy',
-        titulo: `Cuenta por cobrar vencida: ${v.cliente}`,
-        detalle: `Saldo ${flt(getSaldoPendienteVenta(v.id))} · venció el ${new Date(v.fecha_vencimiento!).toLocaleDateString('es-CL')} (${dias} día(s) de atraso).`,
-        accion_label: 'Ver CxC', accion_url: '/erp/cobrar',
-      });
-    });
-
-    // 3. Cuentas por cobrar pendientes (no vencidas o sin fecha)
-    const cxcPendientes = ventas.filter(v => getSaldoPendienteVenta(v.id) > 0 && (!v.fecha_vencimiento || v.fecha_vencimiento > hoyIso));
-    const totalCxC = cxcPendientes.reduce((acc, v) => acc + getSaldoPendienteVenta(v.id), 0);
-    if (cxcPendientes.length > 0) {
-      items.push({
-        id: 'cxc-pendiente', tipo: 'advertencia', origen: 'sistema', icono: 'request_quote',
-        titulo: `${cxcPendientes.length} venta(s) por cobrar`,
-        detalle: `Tienes ${flt(totalCxC)} que aún no te han pagado. Revisa tus cuentas por cobrar.`,
-        accion_label: 'Ver cuentas por cobrar', accion_url: '/erp/cobrar',
-      });
-    }
-
-    // 4. Cuentas por pagar vencidas
-    gastos.filter(g => getSaldoPendienteGasto(g.id) > 0 && g.fecha_vencimiento && g.fecha_vencimiento <= hoyIso).forEach(g => {
-      const dias = Math.ceil((new Date(hoyIso).getTime() - new Date(g.fecha_vencimiento!).getTime()) / 86400000);
-      items.push({
-        id: `cxp-ven-${g.id}`, tipo: 'critica', origen: 'sistema', icono: 'payments',
-        titulo: `Cuenta por pagar vencida: ${g.proveedor}`,
-        detalle: `Saldo ${flt(getSaldoPendienteGasto(g.id))} · vencía el ${new Date(g.fecha_vencimiento!).toLocaleDateString('es-CL')} (${dias} día(s) de atraso).`,
-        accion_label: 'Ver CxP', accion_url: '/erp/pagar',
-      });
-    });
-
-    // 5. Cuentas por pagar pendientes
-    const cxpPendientes = gastos.filter(g => getSaldoPendienteGasto(g.id) > 0 && (!g.fecha_vencimiento || g.fecha_vencimiento > hoyIso));
-    const totalCxP = cxpPendientes.reduce((acc, g) => acc + getSaldoPendienteGasto(g.id), 0);
-    if (cxpPendientes.length > 0) {
-      items.push({
-        id: 'cxp-pendiente', tipo: 'advertencia', origen: 'sistema', icono: 'receipt_long',
-        titulo: `${cxpPendientes.length} pago(s) pendiente(s) a proveedores`,
-        detalle: `Debes ${flt(totalCxP)} a proveedores. No dejes que se atrase para evitar multas.`,
-        accion_label: 'Ver pagos pendientes', accion_url: '/erp/pagar',
-      });
-    }
-
-    // 6. Documentos tributarios rechazados u observados
-    documentosTributarios.filter(d => d.estado === 'rechazado_sii' || d.estado === 'observado').slice(0, 10).forEach(d => {
-      items.push({
-        id: `doc-${d.id}`, tipo: d.estado === 'rechazado_sii' ? 'critica' : 'advertencia', origen: 'sii',
-        icono: 'receipt_long',
-        titulo: `Documento ${d.estado === 'rechazado_sii' ? 'rechazado por el SII' : 'observado'}`,
-        detalle: `${d.tipoDocumento} folio ${d.folioInterno} · ${d.periodoTributario}. Revísalo antes de cerrar tu IVA.`,
-        accion_label: 'Preparar F29', accion_url: '/erp/iva-mensual',
-      });
-    });
-
-    // 7. Pagos POS sin venta asociada
-    pagosPOS.filter(p => p.estadoConciliacion === 'sin_venta').slice(0, 10).forEach(p => {
-      items.push({
-        id: `pos-${p.id}`, tipo: 'advertencia', origen: 'sistema', icono: 'point_of_sale',
-        titulo: 'Pago POS sin venta asociada',
-        detalle: `Pago de ${flt(p.monto)} sin conciliar. Concílialo para que caja, ventas e IVA cuadren.`,
-        accion_label: 'Ir a Ventas', accion_url: '/erp/ventas',
-      });
-    });
-
-    // 8. Cierre de mes SII (dentro de los últimos 10 días)
-    if (diaDelMes >= 20) {
-      const nombreMes = new Date(anio, mes, 1).toLocaleString('es-CL', { month: 'long' });
-      items.push({
-        id: 'iva-mensual', tipo: 'tributaria', origen: 'sii', icono: 'account_balance',
-        titulo: 'Cierre de mes SII próximo',
-        detalle: `El pago de IVA (F29) de ${nombreMes} vence el último día hábil del mes. Deja tus documentos listos.`,
-        accion_label: 'Ver IVA Mensual', accion_url: '/erp/iva-mensual',
-      });
-    }
-
-    // 9. Pago de sueldos (días 1-5)
-    if (diaDelMes <= 5) {
-      items.push({
-        id: 'sueldos-mes', tipo: 'critica', origen: 'sistema', icono: 'badge',
-        titulo: 'Recuerda pagar sueldos antes del día 5',
-        detalle: 'Según el Código del Trabajo, los sueldos deben pagarse hasta el día 5 del mes siguiente. Revisa tus pagos pendientes.',
-        accion_label: 'Ver CxP', accion_url: '/erp/pagar',
-      });
-    }
-
-    // 10. Flujo del mes positivo
-    const ingresosDelMes = movimientos.filter(m => {
-      const d = new Date(m.fecha);
-      return d.getMonth() === mes && d.getFullYear() === anio && m.tipo === 'Ingreso';
-    }).reduce((acc, m) => acc + m.monto, 0);
-    const egresosDelMes = movimientos.filter(m => {
-      const d = new Date(m.fecha);
-      return d.getMonth() === mes && d.getFullYear() === anio && m.tipo === 'Egreso';
-    }).reduce((acc, m) => acc + m.monto, 0);
-    if (ingresosDelMes > egresosDelMes && ingresosDelMes > 0) {
-      items.push({
-        id: 'flujo-positivo', tipo: 'exito', origen: 'sistema', icono: 'trending_up',
-        titulo: 'Tu flujo de caja este mes es positivo',
-        detalle: `Ingresaste ${flt(ingresosDelMes)} y gastaste ${flt(egresosDelMes)}. Tu negocio está generando ganancias.`,
-        accion_label: 'Ver Caja', accion_url: '/erp/caja',
-      });
-    }
-
-    // 11. Promociones por vencer
-    promociones.filter(p => p.estado === 'activa' && p.fechaFin && p.fechaFin >= hoyIso).forEach(p => {
-      const dias = Math.ceil((new Date(p.fechaFin + 'T23:59:59').getTime() - new Date(hoyIso + 'T00:00:00').getTime()) / 86400000);
-      if (dias <= 3) {
-        items.push({
-          id: `promo-${p.id}`, tipo: 'info', origen: 'sistema', icono: 'local_fire_department',
-          titulo: `Promoción "${p.nombre}" termina pronto`,
-          detalle: `Quedan ${dias} día(s) (${new Date(p.fechaFin).toLocaleDateString('es-CL')}).`,
-          accion_label: 'Ver promociones', accion_url: '/erp/promociones',
-        });
-      }
-    });
-
-    // 12. Novedad municipal
-    items.push({
-      id: 'muni-001', tipo: 'info', origen: 'municipalidad', icono: 'location_city',
-      titulo: 'Tu municipalidad publicó nuevas convocatorias',
-      detalle: 'Revisa los fondos concursables y beneficios disponibles para tu emprendimiento en el Portal Municipal.',
-      accion_label: 'Ver Portal Municipal', accion_url: '/erp/portal-municipal',
-    });
-
-    // 13. Novedad academia
-    items.push({
-      id: 'mentor-001', tipo: 'info', origen: 'mentor', icono: 'school',
-      titulo: 'Nuevos contenidos disponibles en la Academia',
-      detalle: 'Revisa los cursos recientes sobre finanzas, legal y emprendimiento para seguir creciendo.',
-      accion_label: 'Ir a Academia', accion_url: '/erp/academia',
-    });
-
-    return items.sort((a, b) => pesoTipo[a.tipo] - pesoTipo[b.tipo]);
-  }, [inventario, ventas, gastos, movimientos, documentosTributarios, pagosPOS, promociones,
-    getSaldoPendienteVenta, getSaldoPendienteGasto, hoyIso, diaDelMes, mes, anio]);
+  // Fuente única compartida con el Panel general (corrección #16).
+  const alertas = useMemo(
+    () => calcularAlertas({ inventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos }),
+    [inventario, saldos, documentosTributarios, pagosPOS, promociones, movimientos]
+  );
 
   const marcarLeida = (id: string) => {
     setLeidas(prev => new Set(prev).add(id));

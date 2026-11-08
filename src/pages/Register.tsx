@@ -81,6 +81,9 @@ export default function Register() {
         emprendedor: '/erp/inicio',
         dueño: '/erp/inicio',
         demo: '/demo/inicio',
+        admin_proveedor: '/mentorias/gestion',
+        instructor: '/mentorias/gestion',
+        curador: '/mentorias/revision',
       };
       navigate(rolRedirectMap[String(perfil.rol)] ?? '/erp/inicio', { replace: true });
     } catch (err) {
@@ -218,11 +221,11 @@ export default function Register() {
             <input
               type="password"
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full p-4 rounded-xl border-2 border-surface-container-high focus:border-primary/50 outline-none"
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
             />
           </div>
 

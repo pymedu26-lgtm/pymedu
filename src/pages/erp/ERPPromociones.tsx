@@ -136,7 +136,7 @@ export default function ERPPromociones() {
         <button onClick={abrirNuevo}
           className="flex items-center gap-2 px-5 py-3 bg-tertiary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-tertiary/20 hover:scale-105 transition-transform">
           <span className="material-symbols-outlined text-lg">add_circle</span>
-          Nueva Promocion
+          Nueva promoción
         </button>
       </div>
 
@@ -158,7 +158,7 @@ export default function ERPPromociones() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {promociones.length === 0 && (
-          <p className="col-span-full text-center text-on-surface-variant py-10">Aun no hay promociones. Crea la primera.</p>
+          <p className="col-span-full text-center text-on-surface-variant py-10">Aún no hay promociones. Crea la primera.</p>
         )}
         {promociones.map(p => {
           const producto = p.productoId ? inventario.find(i => i.id === p.productoId) : null;
@@ -212,7 +212,7 @@ export default function ERPPromociones() {
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-tertiary">{editandoId ? 'Editar Promocion' : 'Nueva Promocion'}</h3>
+              <h3 className="text-lg font-bold text-tertiary">{editandoId ? 'Editar promoción' : 'Nueva promoción'}</h3>
               <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -338,7 +338,7 @@ export default function ERPPromociones() {
         isOpen={deleteModalOpen}
         onClose={() => { setDeleteModalOpen(false); setItemToDelete(null); }}
         onConfirm={() => { if (itemToDelete) deletePromocion(itemToDelete); }}
-        title="Eliminar Promocion" />
+        title="Eliminar promoción" />
     </div>
   );
 }

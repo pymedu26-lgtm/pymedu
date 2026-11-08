@@ -1,3 +1,4 @@
+import { formatFecha } from '../../lib/fechas';
 import { useEffect, useRef, useState, ChangeEvent, DragEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { EstadoPago, MetodoPago, Producto, Venta, VentaProducto } from '../context/ERPContext';
@@ -5,6 +6,7 @@ import { DocumentType, IntegrationMode, isExemptDocument, normalizeDocumentType 
 import {
   ESTADOS, EXTENSIONES, METODOS_PAGO, descargarLibroPlantilla, elegirEnum, extensionValida,
   formatPesos, mapearColumnas, normKey, parseFecha, parseNumero,
+  limpiarCelda,
 } from './cargaMasivaUtil';
 
 interface ModalCargaMasivaVentasProps {
@@ -61,7 +63,7 @@ const COLUMNAS: { campo: CampoClave; titulo: string; obligatorio: boolean; ayuda
   { campo: 'precio', titulo: 'Precio Unitario', obligatorio: true, ayuda: 'Precio de cada unidad, IVA incluido.' },
   { campo: 'descuento', titulo: 'Descuento %', obligatorio: false, ayuda: 'Descuento sobre el bruto de la línea. Por defecto 0.' },
   { campo: 'estado', titulo: 'Estado', obligatorio: false, ayuda: 'Pagado (por defecto) o Pendiente.' },
-  { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, debito, credito, mixto o cheque.' },
+  { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, débito, crédito, mixto o cheque.' },
   { campo: 'nota', titulo: 'Nota', obligatorio: false, ayuda: 'Observación interna de la venta.' },
 ];
 
@@ -137,12 +139,12 @@ function descargarPlantilla() {
     ],
     COLUMNAS.map(c => ({ wch: Math.max(14, c.titulo.length + 4) })),
     [
-      ['Columna', 'Obligatorio', 'Descripcion'],
+      ['Columna', 'Obligatorio', 'Descripción'],
       ...COLUMNAS.map(c => [c.titulo, c.obligatorio ? 'Si' : 'No', c.ayuda]),
       [],
       ['Como agrupar', '', 'Repite el mismo Folio en varias filas para sumar esas lineas en una sola venta.'],
       ['Sin Folio', '', 'Cada fila se importa como una venta independiente.'],
-      ['Stock', '', 'Un Codigo Producto existente en Inventario descuenta stock; el resto se registra como texto libre.'],
+      ['Stock', '', 'Un Código Producto existente en Inventario descuenta stock; el resto se registra como texto libre.'],
       ['IVA', '', 'El Precio Unitario se interpreta con IVA incluido (19%), igual que el formulario de venta.'],
       ['Exentas', '', 'Los tipos *_exenta no generan IVA y se registran como monto exento.'],
     ],
@@ -208,7 +210,7 @@ export default function ModalCargaMasivaVentas({
         const columnas = mapearColumnas(filas[indiceEncabezado], ALIAS);
         const celda = (fila: unknown[], campo: CampoClave) => {
           const i = columnas[campo];
-          return i >= 0 ? fila[i] ?? '' : '';
+          return i >= 0 ? limpiarCelda(fila[i]) : '';
         };
 
         const hoy = new Date().toISOString().split('T')[0];
@@ -512,7 +514,7 @@ export default function ModalCargaMasivaVentas({
                                 />
                               </td>
                               <td className="px-4 py-2 font-bold text-primary">{p.folio || '—'}</td>
-                              <td className="px-4 py-2 text-on-surface-variant whitespace-nowrap">{p.fecha}</td>
+                              <td className="px-4 py-2 text-on-surface-variant whitespace-nowrap">{formatFecha(p.fecha)}</td>
                               <td className="px-4 py-2 max-w-[200px] truncate font-medium" title={p.cliente}>{p.cliente}</td>
                               <td className="px-4 py-2 text-center text-on-surface-variant">{p.items}</td>
                               <td className="px-4 py-2 text-right font-black text-on-surface whitespace-nowrap">{formatPesos(p.total)}</td>

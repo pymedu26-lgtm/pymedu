@@ -27,6 +27,30 @@ export function normKey(valor: unknown): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+// Pares de comillas: [apertura, cierre]. Las simétricas (" ') se balancean por paridad.
+const PARES_COMILLAS: [string, string][] = [['«', '»'], ['“', '”'], ['‘', '’'], ['"', '"'], ["'", "'"]];
+const contar = (s: string, c: string) => s.split(c).length - 1;
+
+/**
+ * Limpia un texto importado (corrección #30): recorta, colapsa espacios y quita comillas
+ * sueltas al inicio o al final («Registro de prueba → Registro de prueba). Las balanceadas se respetan.
+ */
+export function limpiarTexto(valor: unknown): string {
+  let s = String(valor ?? '').replace(/\s+/g, ' ').trim();
+  for (let cambio = true; cambio && s;) {
+    cambio = false;
+    for (const [abre, cierra] of PARES_COMILLAS) {
+      const desbalance = abre === cierra ? contar(s, abre) % 2 : contar(s, abre) - contar(s, cierra);
+      if (desbalance > 0 && s.startsWith(abre)) { s = s.slice(1).trim(); cambio = true; }
+      else if ((abre === cierra ? desbalance > 0 : desbalance < 0) && s.endsWith(cierra)) { s = s.slice(0, -1).trim(); cambio = true; }
+    }
+  }
+  return s;
+}
+
+/** Valor de celda listo para usar: los textos pasan por limpiarTexto; números y fechas quedan igual. */
+export const limpiarCelda = (valor: unknown) => (typeof valor === 'string' ? limpiarTexto(valor) : valor ?? '');
+
 /** Detecta si el archivo tiene extensión compatible con Excel/CSV. */
 export function extensionValida(nombre: string): boolean {
   const ext = nombre.slice(nombre.lastIndexOf('.')).toLowerCase();

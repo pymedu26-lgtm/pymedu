@@ -30,3 +30,6 @@ Thumbs.db
 *.swp
 *.swo
 .railway/
+
+# Base de datos local de prueba (PGlite)
+server/.data/

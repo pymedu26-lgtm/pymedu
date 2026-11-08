@@ -28,6 +28,14 @@ cd PymEdu
 npm install
 ```
 
+### Modo local de prueba (sin Railway)
+
+No necesitas base de datos ni `.env`: `npm run dev` levanta el frontend (3000) y la API (4000).
+Sin `DATABASE_URL` la API usa **PGlite** (PostgreSQL embebido, mismo SQL) en `server/.data/pglite`
+y carga datos demo: cursos de Mentorías y 6 meses de ventas/gastos para `emprendedor@pymedu.com`.
+Para empezar de cero borra `server/.data/` y reinicia. El índice de tablas está en
+[`server/sql/README.md`](server/sql/README.md).
+
 ### 3. Configurar variables de entorno
 ```bash
 cp .env.example .env
@@ -75,7 +83,7 @@ JWT_SECRET="un-secreto-largo-y-aleatorio"
 
 ### Esquema
 
-No hay archivos SQL que correr: `server/src/db.js` crea las tablas con `CREATE TABLE IF NOT EXISTS` al conectar, así que basta con apuntar `DATABASE_URL` a una base vacía. Las tablas son `instituciones`, `perfiles`, `programas`, `usuario_programas`, `pagos`, `solicitudes_vinculacion`, `codigos_invitacion` y `erp_datos`.
+No hay que correr nada a mano: al arrancar, `server/src/db.js` crea las tablas base (`instituciones`, `perfiles`, `programas`, `usuario_programas`, `pagos`, `solicitudes_vinculacion`, `codigos_invitacion`, `erp_datos`) y ejecuta los scripts de `server/sql/` (schemas `cuentas`, `erp`, `mentorias`, `academia`). Detalle de cada tabla y dónde se usa: [`server/sql/README.md`](server/sql/README.md).
 
 ### Datos demo
 
@@ -87,16 +95,18 @@ No hay proveedor externo. `POST /api/auth/login` valida el bcrypt contra la tabl
 
 ## Credenciales Demo
 
-| Rol | Email | Password |
-|-----|-------|----------|
-| Super Admin | supadmin@pymedu.com | `Demo#2026` |
-| Admin Institucional | admin@colegiosanjose.cl | `Demo#2026` |
-| Coordinador | coord@colegiosanjose.cl | `Demo#2026` |
-| Mentor | mentor@colegiosanjose.cl | `Demo#2026` |
-| Emprendedor | emprendedor@pymedu.com | `Demo#2026` |
-| Demo (todos los roles) | demo@pymedu.com | `Demo#2026` |
+| Rol | Email | Password | Qué probar |
+|-----|-------|----------|-----------|
+| Super Admin | supadmin@pymedu.com | `Demo#2026` | Panel global, organizaciones, usuarios, **Roles** (matriz editable), cola de revisión de Mentorías |
+| Admin Institucional (Instituto San José) | admin@colegiosanjose.cl | `Demo#2026` | Comunidad, cursos solo para su comunidad, aprobación de cursos de su institución, panel de rendición de cuentas |
+| Coordinador | coord@colegiosanjose.cl | `Demo#2026` | Grupos y avance de emprendedores, panel de Mentorías |
+| Mentor | mentor@colegiosanjose.cl | `Demo#2026` | Sus grupos, sesiones y asistencia en Mentorías |
+| Emprendedor (plan Pro, comunidad San José) | emprendedor@pymedu.com | `Demo#2026` | ERP completo con 6 meses de datos, inventario fraccionado (perfume/papas), Mentorías como alumno |
+| Demo (todos los roles) | demo@pymedu.com | `Demo#2026` | Recorrer los paneles de todos los roles |
+| Proveedor de contenido (Consultora Crece) | proveedor@pymedu.com | `Demo#2026` | Crear cursos y grupos, enviarlos a revisión, panel de proveedor |
+| Curador (Comité de contenido) | curador@pymedu.com | `Demo#2026` | Revisar y aprobar cursos públicos con la lista de chequeo |
 
-> La contraseña de todos los accesos demo es `Demo#2026`. Se insertan al arrancar la API con `SEED_DEMO=1`.
+> La contraseña de todos los accesos demo es `Demo#2026`. En modo local se crean solas al arrancar; en Railway solo con `SEED_DEMO=1`. **No usar en producción.**
 
 ## Estructura de Roles
 

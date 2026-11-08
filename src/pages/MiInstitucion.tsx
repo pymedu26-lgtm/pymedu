@@ -363,7 +363,7 @@ export default function MiInstitucion() {
                   <h3 className="text-base font-extrabold text-on-surface">Tengo un código de invitación</h3>
                 </div>
                 <p className="text-sm text-on-surface-variant mb-5">
-                  Si tu institución te entregó un código, cánjéalo aquí y tu cuenta quedará vinculada de inmediato.
+                  Si tu institución te entregó un código, canjéalo aquí y tu cuenta quedará vinculada de inmediato.
                 </p>
                 <form onSubmit={redimirCodigo} className="flex flex-col sm:flex-row gap-3">
                   <input

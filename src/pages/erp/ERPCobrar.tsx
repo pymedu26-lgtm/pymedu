@@ -3,6 +3,23 @@ import { useERP, MetodoPago } from '../../1.-ERP/context/ERPContext';
 import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
 import { cn, formatFecha } from '@/lib/utils';
+import { formatCLP, hoyISO } from '../../lib/fechas';
+import PestanasCuentas from '../../1.-ERP/components/PestanasCuentas';
+import Paginacion, { usePaginacion } from '../../components/Paginacion';
+
+/** Chip de vencimiento con días de atraso (corrección #15). */
+export function ChipVencimiento({ fecha, diasAtraso }: { fecha?: string; diasAtraso: number }) {
+  if (!fecha) return <span className="text-xs text-outline">Sin vencimiento</span>;
+  if (diasAtraso > 0) {
+    return (
+      <span className="inline-flex flex-col">
+        <span className="w-fit rounded-full bg-error-container px-2 py-0.5 text-[11px] font-bold text-on-error-container">Vencida · {diasAtraso} días</span>
+        <span className="mt-0.5 text-[11px] text-outline">{formatFecha(fecha)}</span>
+      </span>
+    );
+  }
+  return <span className="text-xs text-on-surface-variant">{formatFecha(fecha)}</span>;
+}
 
 const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'efectivo', label: 'Efectivo' },
@@ -13,17 +30,19 @@ const METODOS: { value: MetodoPago; label: string }[] = [
 ];
 
 export default function ERPCobrar() {
-  const { ventas, getSaldoPendienteVenta, getAbonosByReferencia, addAbono } = useERP();
+  const { ventas, saldos, getSaldoPendienteVenta, getAbonosByReferencia, addAbono } = useERP();
   const [abonoVentaId, setAbonoVentaId] = useState<string | null>(null);
-  const [form, setForm] = useState({ monto: '', metodo_pago: 'efectivo' as MetodoPago, fecha: new Date().toISOString().split('T')[0] });
+  const [form, setForm] = useState({ monto: '', metodo_pago: 'efectivo' as MetodoPago, fecha: hoyISO() });
+  const [soloVencidas, setSoloVencidas] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
 
-  const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+  const fmt = (n: number) => formatCLP(Math.abs(n));
 
-  const pendientes = ventas
-    .filter(v => getSaldoPendienteVenta(v.id) > 0)
-    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-
-  const totalPorCobrar = pendientes.reduce((a, v) => a + getSaldoPendienteVenta(v.id), 0);
+  // Fuente única de saldos: más atrasadas primero (corrección #4).
+  const pendientes = saldos.pendientesCobrar.filter(d =>
+    (!soloVencidas || d.diasAtraso > 0) &&
+    (!busqueda || `${d.contraparte} ${d.numero}`.toLowerCase().includes(busqueda.toLowerCase())));
+  const paginacion = usePaginacion(pendientes, 25, [soloVencidas, busqueda]);
 
   const registrarAbono = () => {
     if (!abonoVentaId || !form.monto || Number(form.monto) <= 0) return;
@@ -40,22 +59,20 @@ export default function ERPCobrar() {
       origen: 'manual',
     });
     setAbonoVentaId(null);
-    setForm({ monto: '', metodo_pago: 'efectivo', fecha: new Date().toISOString().split('T')[0] });
+    setForm({ monto: '', metodo_pago: 'efectivo', fecha: hoyISO() });
   };
 
   return (
     <div className="p-8 space-y-8">
-      <div>
-        <h2 className="text-3xl font-extrabold text-secondary flex items-center gap-3">
-          <span className="material-symbols-outlined text-4xl">payments</span>
-          Cuentas por Cobrar
-        </h2>
-        <p className="text-on-surface-variant mt-1 text-sm">Ventas con saldo pendiente y cobros registrados.</p>
-      </div>
+      <PestanasCuentas />
 
-      <div className="bg-secondary/10 p-6 rounded-2xl border border-secondary/20">
-        <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Total por cobrar</p>
-        <p className="text-3xl font-black text-secondary mt-1">{fmt(totalPorCobrar)}</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar cliente o documento…"
+          className="w-full max-w-xs rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary" />
+        <label className="flex items-center gap-2 text-sm font-semibold text-on-surface-variant">
+          <input type="checkbox" checked={soloVencidas} onChange={e => setSoloVencidas(e.target.checked)} className="accent-[var(--color-error)]" />
+          Solo vencidas ({saldos.resumen.ventasVencidas.toLocaleString('es-CL')} · {fmt(saldos.resumen.vencidoCobrar)})
+        </label>
       </div>
 
       <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
@@ -63,7 +80,7 @@ export default function ERPCobrar() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['ID', 'Fecha', 'Cliente', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
+                {['Documento', 'Fecha', 'Cliente', 'Total', 'Saldo', 'Vencimiento', 'Abonos', 'Acciones'].map(h => (
                   <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
                 ))}
               </tr>
@@ -72,17 +89,16 @@ export default function ERPCobrar() {
               {pendientes.length === 0 && (
                 <tr><td colSpan={8} className="p-8 text-center text-on-surface-variant">No hay cuentas por cobrar pendientes.</td></tr>
               )}
-              {pendientes.map(v => {
-                const saldo = getSaldoPendienteVenta(v.id);
+              {paginacion.visibles.map(v => {
                 const abonos = getAbonosByReferencia(v.id);
                 return (
-                  <tr key={v.id} className="hover:bg-surface-container-low/50 transition-colors">
-                    <td className="p-4 font-mono text-xs text-outline">{v.id}</td>
+                  <tr key={v.id} className={cn('hover:bg-surface-container-low/50 transition-colors', v.diasAtraso > 0 && 'bg-error/[0.03]')}>
+                    <td className="p-4 font-bold text-xs text-on-surface whitespace-nowrap">{v.numero}</td>
                     <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(v.fecha)}</td>
-                    <td className="p-4 font-bold text-on-surface">{v.cliente}</td>
+                    <td className="p-4 font-bold text-on-surface">{v.contraparte}</td>
                     <td className="p-4 font-bold text-on-surface">{fmt(v.monto)}</td>
-                    <td className="p-4 font-extrabold text-secondary">{fmt(saldo)}</td>
-                    <td className="p-4 text-on-surface-variant text-xs">{formatFecha(v.fecha_vencimiento)}</td>
+                    <td className="p-4 font-extrabold text-secondary">{fmt(v.saldo)}</td>
+                    <td className="p-4"><ChipVencimiento fecha={v.fechaVencimiento} diasAtraso={v.diasAtraso} /></td>
                     <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
                     <td className="p-4">
                       <button onClick={() => setAbonoVentaId(v.id)}
@@ -97,6 +113,7 @@ export default function ERPCobrar() {
             </tbody>
           </table>
         </div>
+        <Paginacion {...paginacion} />
       </div>
 
       {abonoVentaId && (() => {

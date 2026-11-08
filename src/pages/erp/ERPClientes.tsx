@@ -1,4 +1,8 @@
 import { useState, lazy, Suspense, useMemo } from 'react';
+import { useDeferredValue } from 'react';
+import { formatCLP, formatFecha } from '../../lib/fechas';
+import { normalizarNombre, normalizarRut } from '../../1.-ERP/context/ERPContext';
+import Paginacion, { usePaginacion } from '../../components/Paginacion';
 import { Cliente, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import CampoMoneda from '../../components/CampoMoneda';
@@ -35,7 +39,7 @@ const formatearRUT = (valor: string): string => {
 };
 
 export default function ERPClientes() {
-  const { clientes, addCliente, updateCliente, deleteCliente, getSaldoPendienteVenta, ventas, abonos } = useERP();
+  const { clientes, addCliente, updateCliente, deleteCliente, getSaldoPendienteVenta, ventas, abonos, saldos, fusionarClientesDuplicados } = useERP();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
@@ -46,16 +50,46 @@ export default function ERPClientes() {
   const [nuevo, setNuevo] = useState({ nombre: '', rut: '', telefono: '', email: '', direccion: '', comuna: '', notas: '', limite_credito: '' });
   const [rutError, setRutError] = useState('');
 
-  const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+  const fmt = (n: number) => formatCLP(Math.abs(n));
 
-  const clientesFiltrados = clientes.filter(c =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (c.rut || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.email.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.telefono.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const busquedaDiferida = useDeferredValue(busqueda);
+  const clientesFiltrados = useMemo(() => {
+    const q = busquedaDiferida.toLowerCase();
+    return q ? clientes.filter(c =>
+      c.nombre.toLowerCase().includes(q) || (c.rut || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) || (c.telefono || '').toLowerCase().includes(q)) : clientes;
+  }, [clientes, busquedaDiferida]);
+  const paginacion = usePaginacion(clientesFiltrados, 25, [busquedaDiferida]);
 
-  const totalDeuda = clientes.reduce((a, c) => a + c.deuda, 0);
+  // Deuda real por cliente desde la fuente única de saldos (corrección #4); c.deuda podía desfasarse.
+  const deudaPorCliente = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const v of ventas) {
+      const saldo = saldos.porVenta.get(v.id) ?? 0;
+      if (saldo <= 0) continue;
+      const clave = v.cliente_id || `nom:${normalizarNombre(v.cliente)}`;
+      mapa.set(clave, (mapa.get(clave) ?? 0) + saldo);
+    }
+    return mapa;
+  }, [ventas, saldos]);
+  const deudaDe = (c: Cliente) => deudaPorCliente.get(c.id) ?? deudaPorCliente.get(`nom:${normalizarNombre(c.nombre)}`) ?? 0;
+  const totalDeuda = saldos.resumen.porCobrar;
+
+  // Clientes repetidos por RUT o nombre (corrección #12).
+  const duplicados = useMemo(() => {
+    const vistos = new Set<string>();
+    let repetidos = 0;
+    for (const c of clientes) {
+      const clave = c.rut ? `rut:${normalizarRut(c.rut)}` : `nom:${normalizarNombre(c.nombre)}`;
+      if (vistos.has(clave)) repetidos++; else vistos.add(clave);
+    }
+    return repetidos;
+  }, [clientes]);
+  const fusionar = () => {
+    if (!window.confirm(`Se unirán ${duplicados} cliente(s) repetidos con su registro principal (mismo RUT o nombre). Las ventas quedarán asociadas al cliente unido. ¿Continuar?`)) return;
+    const n = fusionarClientesDuplicados();
+    window.alert(`${n} cliente(s) fusionados.`);
+  };
 
   const resumenVentas = useMemo(() => {
     const norm = (s: string) => (s || '').trim().toLowerCase();
@@ -82,12 +116,7 @@ export default function ERPClientes() {
     return { cantidad: c.ventas, total: 0, ultima: '' };
   };
 
-  const fechaCorta = (iso: string) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' });
-  };
+  const fechaCorta = (iso: string) => (iso ? formatFecha(iso) : '');
 
   const recenciaDe = (iso: string) => {
     if (!iso) return null;
@@ -195,7 +224,7 @@ export default function ERPClientes() {
         rv.total,
         ticket,
         rv.ultima ? rv.ultima.split('T')[0] : '',
-        c.deuda,
+        deudaDe(c),
         c.limite_credito ?? '',
         c.notas || '',
       ];
@@ -214,6 +243,13 @@ export default function ERPClientes() {
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus clientes y su deuda pendiente.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {duplicados > 0 && (
+            <button onClick={fusionar} title="Une clientes con el mismo RUT o nombre"
+              className="flex items-center gap-2 px-6 py-3 bg-warning-container text-on-warning-container rounded-full font-bold text-sm shadow-sm hover:opacity-90 transition-all">
+              <span className="material-symbols-outlined text-lg">merge</span>
+              Fusionar duplicados ({duplicados.toLocaleString('es-CL')})
+            </button>
+          )}
           <button onClick={() => setShowCargaMasiva(true)}
             className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
             <span className="material-symbols-outlined text-lg">upload_file</span>
@@ -235,17 +271,16 @@ export default function ERPClientes() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20">
           <p className="text-[10px] font-black uppercase tracking-widest text-primary">Total clientes</p>
-          <p className="text-3xl font-black text-primary mt-1">{clientes.length}</p>
+          <p className="text-3xl font-black text-primary mt-1">{clientes.length.toLocaleString('es-CL')}</p>
         </div>
         <div className="bg-secondary/10 p-5 rounded-2xl border border-secondary/20">
-          <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Deuda total</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Por cobrar (saldo a hoy)</p>
           <p className="text-3xl font-black text-secondary mt-1">{fmt(totalDeuda)}</p>
+          <p className="text-[11px] text-on-surface-variant mt-1">{saldos.resumen.ventasPorCobrar.toLocaleString('es-CL')} ventas sin cobrar</p>
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20">
-          <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Con saldo pendiente</p>
-          <p className="text-3xl font-black text-on-surface mt-1">
-            {clientes.filter(c => c.deuda > 0).length}
-          </p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Clientes con saldo pendiente</p>
+          <p className="text-3xl font-black text-on-surface mt-1">{saldos.resumen.clientesConDeuda.toLocaleString('es-CL')}</p>
         </div>
       </div>
 
@@ -270,8 +305,8 @@ export default function ERPClientes() {
               {clientesFiltrados.length === 0 && (
                 <tr><td colSpan={6} className="p-8 text-center text-on-surface-variant">No se encontraron clientes.</td></tr>
               )}
-              {clientesFiltrados.map(c => {
-                const saldoReal = c.deuda;
+              {paginacion.visibles.map(c => {
+                const saldoReal = deudaDe(c);
                 const rv = resumenDe(c);
                 const seg = segmentoDe(rv, 0);
                 return (
@@ -299,9 +334,9 @@ export default function ERPClientes() {
                       {c.limite_credito ? (
                         <div>
                           <p className="text-on-surface-variant">{fmt(c.limite_credito)}</p>
-                          {c.deuda >= c.limite_credito && c.limite_credito > 0 ? (
+                          {saldoReal >= c.limite_credito && c.limite_credito > 0 ? (
                             <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-error/10 px-2 py-0.5 text-[10px] font-black text-error uppercase tracking-wide">Límite alcanzado</span>
-                          ) : c.deuda >= c.limite_credito * 0.85 && c.limite_credito > 0 ? (
+                          ) : saldoReal >= c.limite_credito * 0.85 && c.limite_credito > 0 ? (
                             <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-black text-warning uppercase tracking-wide">Cerca del límite</span>
                           ) : null}
                         </div>
@@ -335,6 +370,7 @@ export default function ERPClientes() {
             </tbody>
           </table>
         </div>
+        <Paginacion {...paginacion} />
       </div>
 
       {showModal && (

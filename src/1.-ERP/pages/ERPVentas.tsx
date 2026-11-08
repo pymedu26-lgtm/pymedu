@@ -1,4 +1,5 @@
 ﻿import { useState, useMemo, useEffect, lazy, Suspense, useDeferredValue } from 'react';
+import { disponibilidad, presentacionesActivas } from '../services/costeo';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
@@ -6,16 +7,18 @@ import BuscadorCliente from '../components/BuscadorCliente';
 import SelectorFecha from '../components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
-import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { etiquetaRangoPeriodo, rangoPeriodo } from '../../components/SelectorDesplegable';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta, abrirPdfVentasLote } from '../services/pdfNotaVenta';
 import { cn, formatFecha } from '@/lib/utils';
-import { useColoresTema } from '@/lib/useColoresTema';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend, LineChart, Line 
-} from 'recharts';
+import { formatCLP, rangoMes as rangoMesLocal, rangoUltimosMeses } from '@/lib/fechas';
+import { agruparSerie, totalesPor, NOMBRE_GRANULARIDAD } from '@/lib/series';
+import GraficoSerie from '../../components/graficos/GraficoSerie';
+import GraficoDona from '../../components/graficos/GraficoDona';
+import GraficoBarras from '../../components/graficos/GraficoBarras';
+import { METODO_PAGO, TarjetaGrafico } from '../../components/graficos/comunes';
+import { usePaletaGraficos } from '../../components/graficos/paleta';
 
 /** El lector de Excel pesa ~400 KB: se descarga solo al abrir la carga masiva, no con la pagina. */
 const ModalCargaMasivaVentas = lazy(() => import('../components/ModalCargaMasivaVentas'));
@@ -61,9 +64,8 @@ function ChipsCategorias({ categorias }: { categorias: string[] }) {
 
 export default function ERPVentas() {
   const { user: userAuth, perfil } = useAuth();
-  const c = useColoresTema();
   const {
-    ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto
+    ventas, gastos, clientes, inventario, promociones, documentosTributarios, pagosPOS, configuracionCumplimiento, addVenta, updateVenta, deleteVenta, previewVentaImpacto, envases
   } = useERP();
   const [showModal, setShowModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
@@ -117,6 +119,8 @@ export default function ERPVentas() {
   const [productoActual, setProductoActual] = useState({
     esInventario: true,
     productoId: '',
+    /** Presentación elegida (decant, saco…); '' = venta por unidad base. */
+    presentacionId: '',
     nombre: '',
     categoria: '',
     cantidad: 1,
@@ -127,6 +131,10 @@ export default function ERPVentas() {
   });
 
   const productoSeleccionado = inventario.find(p => p.id === productoActual.productoId);
+  const presentacionesProducto = presentacionesActivas(productoSeleccionado);
+  const presentacionActual = presentacionesProducto.find(x => x.id === productoActual.presentacionId);
+  /** Unidades base que descuenta cada unidad vendida (decant 5 ml → 5). */
+  const factorActual = presentacionActual?.factor ?? 1;
   const tipoDocumentoNormalizado = normalizeDocumentType(nuevaVenta.tipo_documento);
   const documentosDelMes = documentosTributarios.filter(d => d.periodoTributario === (nuevaVenta.fecha ?? '').slice(0, 7));
   const documentosPendientes = documentosTributarios.filter(d => ['borrador', 'pendiente_emision', 'observado', 'rechazado_sii'].includes(d.estado)).length;
@@ -153,10 +161,11 @@ export default function ERPVentas() {
     }
   }, [promocionActiva, productoActual.descuentoTipo, productoActual.descuentoMotivo]);
 
+  /** Cantidad ya cargada en la venta, en unidad base (las presentaciones descuentan factor × cantidad). */
   const cantidadEnVenta = (productoId: string) =>
     (nuevaVenta.productos || [])
       .filter(p => p.productoId === productoId)
-      .reduce((acc, p) => acc + (p.cantidad || 0), 0);
+      .reduce((acc, p) => acc + (p.cantidadBase ?? p.cantidad ?? 0), 0);
 
   /** Datos del emisor que se imprimen en el PDF, tomados del perfil. */
   const datosEmisorPdf = {
@@ -203,7 +212,7 @@ const ventaEditada = editingId ? ventas.find(v => v.id === editingId) : undefine
 const stockYaReservado = useMemo(() => {
   const mapa: Record<string, number> = {};
   (ventaEditada?.productos ?? []).forEach(pp => {
-    mapa[pp.productoId] = (mapa[pp.productoId] || 0) + (pp.cantidad || 0);
+    mapa[pp.productoId] = (mapa[pp.productoId] || 0) + (pp.cantidadBase ?? pp.cantidad ?? 0);
   });
   return mapa;
 }, [ventaEditada?.id, ventaEditada?.productos]);
@@ -218,7 +227,7 @@ const stockDisponible = productoSeleccionado
 
 const stockInsuficiente = productoSeleccionado
   ? productoSeleccionado.tipo === 'producto'
-      && (cantidadEnVenta(productoActual.productoId) + (productoActual.cantidad || 0)) > stockDisponible
+      && (cantidadEnVenta(productoActual.productoId) + (productoActual.cantidad || 0) * factorActual) > stockDisponible
   : false;
 
   /** Calcula neto e IVA (impuestos Chile, 19%) de un ítem según si el precio incluye IVA. */
@@ -266,13 +275,16 @@ const stockInsuficiente = productoSeleccionado
       incluyeIva
     );
 
+    const pres = esInventario ? presentacionActual : undefined;
     return {
       productoId: esInventario ? productoSeleccionado!.id : `TEXTO-LIBRE-${crypto.randomUUID().slice(0, 8)}`,
-      productoNombre: nombre,
+      productoNombre: pres ? `${nombre} · ${pres.nombre}` : nombre,
       esInventariable: esInventario,
       cantidad,
       precioBase: precio,
-      costoUnitario: esInventario ? (productoSeleccionado?.costo ?? 0) : 0,
+      // Estimado para la vista previa; al guardar el contexto congela el costo real según el método de costeo.
+      costoUnitario: esInventario ? Math.round((productoSeleccionado?.costo ?? 0) * (pres?.factor ?? 1)) : 0,
+      ...(pres ? { presentacionId: pres.id, presentacionNombre: pres.nombre, cantidadBase: cantidad * pres.factor } : {}),
       descuentoTipo: aplicaDescuento ? productoActual.descuentoTipo : 'ninguno',
       descuentoValor: aplicaDescuento ? productoActual.descuentoValor : 0,
       /** Sin categoria informada queda 'Sin categoria', no cadena vacia. */
@@ -291,7 +303,7 @@ const stockInsuficiente = productoSeleccionado
       const prods = prev.productos || [];
       const idx = prods.findIndex(p =>
         (p.esInventariable ?? false) === (item.esInventariable ?? false) &&
-        p.productoId === item.productoId
+        p.productoId === item.productoId && (p.presentacionId ?? '') === (item.presentacionId ?? '')
       );
       if (idx >= 0) {
         const actual = prods[idx];
@@ -300,7 +312,7 @@ const stockInsuficiente = productoSeleccionado
         const tipoDesc = actual.descuentoTipo && actual.descuentoTipo !== 'ninguno' ? actual.descuentoTipo : 'ninguno';
         const totales = calcularTotalesItem(item.precioBase, cantidadTotal, tipoDesc, tipoDesc === 'ninguno' ? 0 : (actual.descuentoValor || 0), incluyeIva);
         const newProds = prods.slice();
-        newProds[idx] = { ...actual, cantidad: cantidadTotal, subtotal: totales.subtotal, iva: totales.iva, total: totales.total };
+        newProds[idx] = { ...actual, cantidad: cantidadTotal, cantidadBase: actual.cantidadBase !== undefined ? (actual.cantidadBase + (item.cantidadBase ?? 0)) : undefined, subtotal: totales.subtotal, iva: totales.iva, total: totales.total };
         return { ...prev, productos: newProds };
       }
       return { ...prev, productos: [...prods, item] };
@@ -309,6 +321,7 @@ const stockInsuficiente = productoSeleccionado
     setProductoActual({
       esInventario: true,
       productoId: '',
+      presentacionId: '',
       nombre: '',
       categoria: '',
       cantidad: 1,
@@ -378,27 +391,15 @@ const stockInsuficiente = productoSeleccionado
 
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState('este_mes');
 
-  /** Rango de mes natural, en ISO 'YYYY-MM-DD', para reutilizar fuera del efecto. */
-  const rangoMes = (offset: number) => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  /** Rango de mes natural en fechas locales (toISOString() corría el día por UTC). */
+  const rangoMes = (offset: number) => rangoMesLocal(offset);
 
   /** Últimos 3 meses: mes actual + 2 meses atrás */
-  const rangoUltimos3Meses = () => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  const rangoUltimos3Meses = () => rangoUltimosMeses(3);
 
   useEffect(() => {
-    if (periodoSeleccionado === 'personalizado') return;
-
-    const { inicio, fin } = periodoSeleccionado === 'mes_anterior' ? rangoMes(-1) : rangoMes(0);
-    setFiltros(prev => ({ ...prev, fechaInicio: inicio, fechaFin: fin }));
+    const rango = rangoPeriodo(periodoSeleccionado);
+    if (rango) setFiltros(prev => ({ ...prev, fechaInicio: rango.inicio, fechaFin: rango.fin }));
   }, [periodoSeleccionado]);
 
   /** Rango real de datos disponibles: acota hasta donde el usuario puede navegar. */
@@ -527,83 +528,25 @@ const stockInsuficiente = productoSeleccionado
   const enNumerosVerdes = totalVentas >= metaVenta;
   const porcentajeMeta = metaVenta > 0 ? Math.round((totalVentas / metaVenta) * 100) : 0;
 
-  /**
-   * Serie diaria del periodo: un punto por fecha. Si el rango cruza meses
-   * (Personalizado), la etiqueta lleva dia/mes/año para que no parezca un solo
-   * mes con montos mezclados; al agrupar solo por dia de mes, agosto y octubre
-   * se sumaban en la misma columna. Con un solo mes se mantiene "Dia N" y las
-   * fechas ISO ordenan cronologicamente.
-   */
-  const datosVentasPorDia = useMemo(() => {
-    const porFecha: Record<string, number> = {};
-    ventasFiltradas.forEach(v => {
-      const fecha = (v.fecha || '').split('T')[0];
-      if (!fecha) return;
-      porFecha[fecha] = (porFecha[fecha] || 0) + v.monto;
-    });
-    const fechas = Object.keys(porFecha).sort();
-    if (fechas.length === 0) return [];
+  /* ══ Gráficos ══
+   * La serie cubre TODO el rango elegido con tramos continuos (en cero si no hubo
+   * ventas) y elige día / semana / mes según el largo del rango, no según las fechas
+   * que tienen datos: con varios meses ya no se dibujan cientos de puntos. */
+  const paleta = usePaletaGraficos();
+  const serieVentas = useMemo(
+    () => agruparSerie(ventasFiltradas, { inicio: filtrosDeferred.fechaInicio, fin: filtrosDeferred.fechaFin }, v => v.fecha, v => ({ monto: v.monto })),
+    [ventasFiltradas, filtrosDeferred.fechaInicio, filtrosDeferred.fechaFin]
+  );
 
-    const rangoDias = fechas.length > 0
-      ? Math.ceil((new Date(fechas[fechas.length - 1]).getTime() - new Date(fechas[0]).getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
+  const datosVentasPorCategoria = useMemo(
+    () => totalesPor(ventasFiltradas.flatMap(v => v.productos), p => p.categoria || categoriaPorProducto[p.productoId], p => p.total),
+    [ventasFiltradas, categoriaPorProducto]
+  );
 
-    if (rangoDias > 62) {
-      const porMes: Record<string, { key: string; monto: number }> = {};
-      ventasFiltradas.forEach(v => {
-        const fecha = (v.fecha || '').split('T')[0];
-        if (!fecha) return;
-        const key = fecha.slice(0, 7);
-        if (!porMes[key]) {
-          const [year, month] = key.split('-');
-          porMes[key] = { key, monto: 0 };
-        }
-        porMes[key].monto += v.monto;
-      });
-      const meses = Object.keys(porMes).sort();
-      return meses.map(key => {
-        const [year, month] = key.split('-');
-        const label = new Date(Number(year), Number(month) - 1).toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
-        return { dia: label.charAt(0).toUpperCase() + label.slice(1), monto: porMes[key].monto };
-      });
-    }
-
-    const mismoMes = fechas.every(f => f.slice(0, 7) === fechas[0]?.slice(0, 7));
-    return fechas.map(fecha => ({
-      dia: mismoMes ? `Dia ${Number(fecha.slice(8, 10))}` : formatFecha(fecha),
-      monto: porFecha[fecha],
-    }));
-  }, [ventasFiltradas]);
-
-  /** Con rangos largos la etiqueta diaria se junta: se deja ~12 como maximo. */
-  const saltoEtiquetas = datosVentasPorDia.length > 34
-    ? Math.ceil(datosVentasPorDia.length / 12)
-    : 0;
-
-  /* ══ Categorias ══ */
-
-  const datosVentasPorCategoria = useMemo(() => {
-    const ventasPorCat: Record<string, number> = {};
-    ventasFiltradas.forEach(v => {
-      v.productos.forEach(p => {
-        const cat = p.categoria || categoriaPorProducto[p.productoId] || 'Sin categoria';
-        ventasPorCat[cat] = (ventasPorCat[cat] || 0) + p.total;
-      });
-    });
-    return Object.entries(ventasPorCat).map(([name, value]) => ({ name, value }));
-  }, [ventasFiltradas, categoriaPorProducto]);
-
-  const datosMetodosPago = useMemo(() => {
-    const metodos: Record<string, number> = {};
-    ventasFiltradas.forEach(v => {
-      const met = v.metodo_pago || 'efectivo';
-      const label = met.charAt(0).toUpperCase() + met.slice(1);
-      metodos[label] = (metodos[label] || 0) + v.monto;
-    });
-    return Object.entries(metodos).map(([name, value]) => ({ name, value }));
-  }, [ventasFiltradas]);
-
-  const COLORES_CATEGORIA = ['info', 'success', 'warning', 'error', 'violet', 'teal'] as const;
+  const datosMetodosPago = useMemo(
+    () => totalesPor(ventasFiltradas, v => METODO_PAGO[v.metodo_pago || 'efectivo'] ?? v.metodo_pago, v => v.monto),
+    [ventasFiltradas]
+  );
 
   const handleGuardar = () => {
     if (nuevaVenta.productos && nuevaVenta.productos.length > 0 && nuevaVenta.fecha) {
@@ -800,67 +743,28 @@ const stockInsuficiente = productoSeleccionado
         />
       </div>
 
-      {/* Charts Section */}
+      {/* Gráficos: la serie del periodo a todo el ancho; categorías y métodos de pago lado a lado */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Ventas por periodo</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={datosVentasPorDia}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval={saltoEtiquetas} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
-                <RechartsTooltip
-                  contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, 'Monto']}
-                />
-                <Line type="monotone" dataKey="monto" stroke={c.info} strokeWidth={3} dot={{ r: 4, fill: c.info }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-            <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Por Categoria</h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={datosVentasPorCategoria}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={70}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {datosVentasPorCategoria.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={c[COLORES_CATEGORIA[index % COLORES_CATEGORIA.length]]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }} formatter={(value: number) => `$${value.toLocaleString()}`} />
-                  <Legend wrapperStyle={{ fontSize: '10px', color: c.onSurfaceVariant }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-            <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Metodo de Pago</h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datosMetodosPago}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                  <YAxis hide />
-                  <RechartsTooltip contentStyle={{ borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface }} formatter={(value: number) => `$${value.toLocaleString()}`} />
-                  <Bar dataKey="value" fill={c.success} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
+        <TarjetaGrafico
+          className="lg:col-span-2"
+          icono="show_chart"
+          titulo="Ventas por periodo"
+          subtitulo={`Monto vendido ${NOMBRE_GRANULARIDAD[serieVentas.granularidad]} · ${etiquetaRango}`}
+          extra={`${ventasFiltradas.length.toLocaleString('es-CL')} ventas · ${formatCLP(totalVentas)}`}
+        >
+          <GraficoSerie
+            puntos={serieVentas.puntos}
+            tipo={serieVentas.granularidad === 'dia' ? 'area' : 'barra'}
+            series={[{ clave: 'monto', nombre: 'Ventas', color: paleta.ingresos }]}
+            vacio="Sin ventas en el periodo"
+          />
+        </TarjetaGrafico>
+        <TarjetaGrafico icono="donut_large" titulo="Por categoría" subtitulo="Monto vendido por categoría de producto">
+          <GraficoDona items={datosVentasPorCategoria} vacio="Sin ventas en el periodo" />
+        </TarjetaGrafico>
+        <TarjetaGrafico icono="payments" titulo="Método de pago" subtitulo="Monto cobrado y participación">
+          <GraficoBarras items={datosMetodosPago} color={paleta.ingresos} mostrarPct vacio="Sin ventas en el periodo" />
+        </TarjetaGrafico>
       </div>
 
       {/* Filters */}
@@ -888,7 +792,7 @@ const stockInsuficiente = productoSeleccionado
             />
           </div>
           <div>
-            <label className="block text-xs text-on-surface-variant mb-1">Categoria</label>
+            <label className="block text-xs text-on-surface-variant mb-1">Categoría</label>
             <SelectorDesplegable
               className="w-full"
               valor={filtros.categoria}
@@ -937,7 +841,7 @@ const stockInsuficiente = productoSeleccionado
                 <th className="px-6 py-4">Realizado por</th>
                 <th className="px-6 py-4">Productos</th>
                 <th className="px-6 py-4 text-right">Total</th>
-                <th className="px-6 py-4">Categoria</th>
+                <th className="px-6 py-4">Categoría</th>
                 <th className="px-6 py-4 text-center">Estado</th>
                 <th className="px-6 py-4 text-center">Acciones</th>
               </tr>
@@ -973,7 +877,7 @@ const stockInsuficiente = productoSeleccionado
                       {tipoBoletaOFactura(venta.tipo_documento)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-on-surface-variant">{venta.fecha}</td>
+                  <td className="px-6 py-4 text-on-surface-variant whitespace-nowrap">{formatFecha(venta.fecha)}</td>
                   <td className="px-6 py-4 font-semibold text-on-surface">
                     <span className="inline-flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-sm text-primary/70">person</span>
@@ -1130,7 +1034,7 @@ const stockInsuficiente = productoSeleccionado
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Metodo de pago</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Método de pago</label>
                   <SelectorDesplegable
                     className="w-full"
                     valor={nuevaVenta.metodo_pago}
@@ -1221,12 +1125,14 @@ const stockInsuficiente = productoSeleccionado
                       valor={productoActual.productoId}
                       onChange={valor => {
                         const sel = inventario.find(x => x.id === valor);
+                        const presInicial = presentacionesActivas(sel)[0];
                         setProductoActual(prev => ({
                           ...prev,
                           productoId: valor,
+                          presentacionId: presInicial?.id ?? '',
                           nombre: sel?.nombre ?? '',
                           categoria: sel?.categoria ?? '',
-                          precio: sel?.precio ?? 0,
+                          precio: presInicial?.precio ?? sel?.precio ?? 0,
                           cantidad: 1
                         }));
                       }}
@@ -1249,6 +1155,26 @@ const stockInsuficiente = productoSeleccionado
                   )}
                 </div>
 
+                {productoActual.esInventario && presentacionesProducto.length > 0 && productoSeleccionado && (
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Presentación</label>
+                    <div className="flex flex-wrap gap-2">
+                      {presentacionesProducto.map(pr => {
+                        const disp = disponibilidad(productoSeleccionado, envases, pr);
+                        const activa = pr.id === productoActual.presentacionId;
+                        return (
+                          <button key={pr.id} type="button" disabled={disp.unidades <= 0}
+                            onClick={() => setProductoActual(prev => ({ ...prev, presentacionId: pr.id, precio: pr.precio }))}
+                            className={`rounded-xl border px-3 py-2 text-left text-xs transition-colors disabled:opacity-40 ${activa ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/50 text-on-surface hover:bg-surface-container-low'}`}>
+                            <span className="block font-bold">{pr.nombre} · ${pr.precio.toLocaleString('es-CL')}</span>
+                            <span className="block text-[11px] opacity-80">{disp.texto}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad</label>
@@ -1261,7 +1187,8 @@ const stockInsuficiente = productoSeleccionado
                     />
                     {productoSeleccionado?.tipo === 'producto' && (
                       <p className={`text-xs mt-1 ${stockInsuficiente ? 'text-error font-bold' : 'text-on-surface-variant'}`}>
-                        Stock: {productoSeleccionado.stock} {productoSeleccionado.unidadMedida}
+                        Stock: {Number(productoSeleccionado.stock).toLocaleString('es-CL')} {productoSeleccionado.unidadBase && productoSeleccionado.unidadBase !== 'unidad' ? productoSeleccionado.unidadBase : productoSeleccionado.unidadMedida}
+                        {presentacionActual && ` · esta venta descuenta ${((productoActual.cantidad || 0) * factorActual).toLocaleString('es-CL')} ${productoSeleccionado.unidadBase ?? ''}`}
                       </p>
                     )}
                   </div>
@@ -1461,7 +1388,7 @@ const stockInsuficiente = productoSeleccionado
 
                   <div className="rounded-2xl bg-inverse-surface p-4 text-inverse-on-surface space-y-2 text-sm">
                     <div className="flex justify-between"><span className="text-inverse-on-surface/60">Neto documento</span><span className="font-bold">${impactoVenta.neto.toLocaleString('es-CL')}</span></div>
-                    <div className="flex justify-between"><span className="text-inverse-on-surface/60">IVA debito (Chile)</span><span className="font-bold">${impactoVenta.ivaDebito.toLocaleString('es-CL')}</span></div>
+                    <div className="flex justify-between"><span className="text-inverse-on-surface/60">IVA débito (Chile)</span><span className="font-bold">${impactoVenta.ivaDebito.toLocaleString('es-CL')}</span></div>
                     {impactoVenta.exento > 0 && (
                       <div className="flex justify-between"><span className="text-inverse-on-surface/60">Exento / no afecto</span><span className="font-bold">${impactoVenta.exento.toLocaleString('es-CL')}</span></div>
                     )}

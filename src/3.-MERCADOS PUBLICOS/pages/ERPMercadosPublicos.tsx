@@ -1,9 +1,10 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { mercadoPublicoService } from '../services/mercadoPublico';
+import { mercadoPublicoService, type DetalleLicitacionAPI, type LicitacionAPI } from '../services/mercadoPublico';
+import { formatCLP, formatFecha, hoyISO } from '@/lib/fechas';
 
-type EstadoOportunidad = 'Abierta' | 'Por cerrar' | 'En evaluacion';
+type EstadoOportunidad = 'Abierta' | 'Por cerrar' | 'En evaluación';
 type CalceOportunidad = 'Alto' | 'Medio' | 'Explorar';
 
 interface OportunidadPublica {
@@ -28,7 +29,7 @@ interface OportunidadPublica {
 interface DocumentoPostulacion {
   nombre: string;
   origen: string;
-  estado: 'Listo' | 'Pendiente' | 'En revision';
+  estado: 'Listo' | 'Pendiente' | 'En revisión';
   responsable: string;
 }
 
@@ -41,44 +42,85 @@ interface ResponsablePostulacion {
 
 const carpetaBasePostulacion: DocumentoPostulacion[] = [
   { nombre: 'Certificado de experiencia', origen: 'Documentos / Empresa', estado: 'Pendiente', responsable: 'Encargado postulaciones' },
-  { nombre: 'Propuesta tecnica', origen: 'Plantilla editable', estado: 'En revision', responsable: 'Mentor externo' },
-  { nombre: 'Declaracion jurada proveedor', origen: 'Carpeta legal', estado: 'Pendiente', responsable: 'Representante legal' },
+  { nombre: 'Propuesta técnica', origen: 'Plantilla editable', estado: 'En revisión', responsable: 'Mentor externo' },
+  { nombre: 'Declaración jurada proveedor', origen: 'Carpeta legal', estado: 'Pendiente', responsable: 'Representante legal' },
   { nombre: 'Respaldo tributario y bancario', origen: 'Reportes por periodo', estado: 'Listo', responsable: 'Contador externo' },
 ];
 
 const responsablesBasePostulacion: ResponsablePostulacion[] = [
-  { nombre: 'Dueno de la cuenta', rol: 'Aprobador final', permiso: 'Aprueba y descarga carpeta', estado: 'Activo' },
-  { nombre: 'Camila Torres', rol: 'Encargada postulaciones', permiso: 'Sube documentos y edita propuesta', estado: 'Invitado' },
+  { nombre: 'Dueño de la cuenta', rol: 'Aprobador final', permiso: 'Aprueba y descarga carpeta', estado: 'Activo' },
+  { nombre: 'Camila Torres', rol: 'Encargada de postulaciones', permiso: 'Sube documentos y edita propuesta', estado: 'Invitado' },
   { nombre: 'Contador externo', rol: 'Validador tributario', permiso: 'Solo reportes y respaldos', estado: 'Tercero' },
-  { nombre: 'Mentor licitaciones', rol: 'Revisor propuesta', permiso: 'Carga comentarios y version tecnica', estado: 'Tercero' },
+  { nombre: 'Mentor licitaciones', rol: 'Revisor propuesta', permiso: 'Carga comentarios y versión técnica', estado: 'Tercero' },
 ];
 
 const metodoPostulacion = [
   { paso: '1', titulo: 'Encontrar oportunidad', detalle: 'Traemos licitaciones activas por rubro, territorio, organismo y fecha de cierre.', icon: 'travel_explore' },
-  { paso: '2', titulo: 'Entender si conviene', detalle: 'El sistema explica calce, riesgo, documentos faltantes y proximo paso en lenguaje simple.', icon: 'psychology_alt' },
-  { paso: '3', titulo: 'Preparar respaldo', detalle: 'Conecta Equipo, Documentos, Reportes y Municipalidad para armar una postulacion seria.', icon: 'folder_shared' },
-  { paso: '4', titulo: 'Postular oficialmente', detalle: 'La postulacion final ocurre en Mercado Publico; PymEdu deja el expediente listo.', icon: 'verified' },
+  { paso: '2', titulo: 'Entender si conviene', detalle: 'El sistema explica calce, riesgo, documentos faltantes y próximo paso en lenguaje simple.', icon: 'psychology_alt' },
+  { paso: '3', titulo: 'Preparar respaldo', detalle: 'Conecta Equipo, Documentos, Reportes y Municipalidad para armar una postulación seria.', icon: 'folder_shared' },
+  { paso: '4', titulo: 'Postular oficialmente', detalle: 'La postulación final ocurre en Mercado Público; PymEdu deja el expediente listo.', icon: 'verified' },
 ];
 
 const conexionesERP = [
-  { titulo: 'RR.HH. y Equipo', detalle: 'Responsables de propuesta, permisos, contratos vigentes y certificados del equipo ejecutor.', path: '/erp/equipo', icon: 'groups' },
-  { titulo: 'Documentos laborales', detalle: 'Plantillas, declaraciones, anexos y archivo en nube para reutilizar en nuevas postulaciones.', path: '/erp/documentos', icon: 'description' },
+  { titulo: 'RR.HH. y Equipo (próximamente)', detalle: 'Responsables de propuesta, permisos, contratos vigentes y certificados del equipo ejecutor.', path: '/erp/equipo', icon: 'groups' },
+  { titulo: 'Documentos laborales (próximamente)', detalle: 'Plantillas, declaraciones, anexos y archivo en nube para reutilizar en nuevas postulaciones.', path: '/erp/documentos', icon: 'description' },
   { titulo: 'Reportes y banca', detalle: 'Periodo, caja, respaldo tributario y capacidad operativa explicada para terceros.', path: '/erp/reportes', icon: 'bar_chart' },
-  { titulo: 'Portal Municipal', detalle: 'Lectura territorial agregada para vender licencias sin exponer ganancias privadas.', path: '/erp/portal-municipal', icon: 'location_city' },
+  { titulo: 'Portal Municipal', detalle: 'Convocatorias y programas de apoyo de tu municipio.', path: '/erp/portal-municipal', icon: 'location_city' },
 ];
 
-const estados: Array<'Todos' | EstadoOportunidad> = ['Todos', 'Abierta', 'Por cerrar', 'En evaluacion'];
-const regiones = ['Todas', 'Metropolitana', 'Valparaiso', 'Biobio', 'Nacional'];
+const estados: Array<'Todos' | EstadoOportunidad> = ['Todos', 'Abierta', 'Por cerrar', 'En evaluación'];
+const regiones = ['Todas', 'Metropolitana', 'Valparaíso', 'Biobío', 'Nacional'];
 
-function formatCurrency(value: number) {
-  return value.toLocaleString('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
-}
+const DIA_MS = 1000 * 60 * 60 * 24;
+const estadoPorCierre = (cierre: string | undefined, base: EstadoOportunidad): EstadoOportunidad => {
+  if (!cierre) return base;
+  const dias = (new Date(cierre).getTime() - Date.now()) / DIA_MS;
+  return dias >= 0 && dias <= 5.5 ? 'Por cerrar' : base;
+};
+
+// Datos básicos del listado (siempre disponibles) y versión enriquecida con el detalle.
+const desdeListado = (item: LicitacionAPI): OportunidadPublica => ({
+  id: item.CodigoExterno,
+  codigo: item.CodigoExterno,
+  titulo: item.Nombre,
+  organismo: 'Organismo público',
+  region: 'Chile',
+  cierre: item.FechaCierre ? formatFecha(item.FechaCierre) : 'Consultar bases',
+  fechaCierreRaw: item.FechaCierre ? new Date(item.FechaCierre) : undefined,
+  montoEstimado: null,
+  rubro: 'Suministros y servicios',
+  estado: estadoPorCierre(item.FechaCierre, 'Abierta'),
+  calce: 'Explorar',
+  accion: 'Revisar las bases en el portal oficial.',
+  motivos: ['Información básica del listado de licitaciones activas.'],
+  documentosPendientes: ['Revisar en portal'],
+});
+
+const desdeDetalle = (detail: DetalleLicitacionAPI): OportunidadPublica => {
+  const estado = estadoPorCierre(detail.FechaCierre, detail.Estado === 'Publicada' ? 'Abierta' : 'En evaluación');
+  return {
+    id: detail.CodigoExterno,
+    codigo: detail.CodigoExterno,
+    titulo: detail.Nombre,
+    organismo: detail.Comprador?.NombreOrganismo || 'Organismo público',
+    region: detail.Comprador?.RegionUnidad || 'Nacional',
+    cierre: detail.FechaCierre ? formatFecha(detail.FechaCierre) : 'Consultar bases',
+    fechaCierreRaw: detail.FechaCierre ? new Date(detail.FechaCierre) : undefined,
+    montoEstimado: detail.MontoEstimado || null,
+    rubro: detail.Items?.Listado?.[0]?.NombreProducto || 'Suministros y servicios',
+    estado,
+    calce: !detail.MontoEstimado ? 'Explorar' : (estado !== 'En evaluación' ? 'Alto' : 'Medio'),
+    accion: 'Revisar bases y preparar propuesta técnica.',
+    motivos: ['Sincronizado vía API oficial', detail.Descripcion ? `${detail.Descripcion.slice(0, 100)}…` : 'Revisar en portal oficial.', 'Rubro compatible'],
+    documentosPendientes: ['Certificado experiencia', 'Propuesta técnica', 'Garantía seriedad'],
+  };
+};
 
 function StatusBadge({ value }: { value: EstadoOportunidad }) {
   const tone: Record<EstadoOportunidad, string> = {
     Abierta: 'bg-success-container text-on-success-container',
     'Por cerrar': 'bg-warning-container text-on-warning-container',
-    'En evaluacion': 'bg-surface-container text-on-surface-variant',
+    'En evaluación': 'bg-surface-container text-on-surface-variant',
   };
   return <span className={cn('rounded-full px-3 py-1 text-xs font-extrabold', tone[value])}>{value}</span>;
 }
@@ -105,98 +147,39 @@ export default function ERPMercadosPublicos() {
   const [paginaActual, setPaginaActual] = useState(1);
   const itemsPorPagina = 6;
 
-  const fetchLicitaciones = async () => {
+  const [error, setError] = useState<string | null>(null);
+  const generacion = useRef(0);
+
+  const fetchLicitaciones = async (forzar = false) => {
     if (loading) return;
+    const miGeneracion = ++generacion.current;
     setLoading(true);
+    setError(null);
     setPaginaActual(1);
+    let base: OportunidadPublica[] = [];
     try {
-      const listado = await mercadoPublicoService.getLicitacionesHoy();
-      if (!listado || listado.length === 0) {
-        setRealOportunidades([]);
-        setLoading(false);
-        return;
-      }
-
-      const targetCount = 30; // 5 pages of 6
-      const subListado = listado.slice(0, targetCount);
-      const results: OportunidadPublica[] = [];
-      const chunkSize = 5;
-
-      for (let i = 0; i < subListado.length; i += chunkSize) {
-        const chunk = subListado.slice(i, i + chunkSize);
-        const chunkDetails = await Promise.all(
-          chunk.map(async (item) => {
-            try {
-              const detail = await mercadoPublicoService.getDetalleLicitacion(item.CodigoExterno);
-              const hoy = new Date();
-              
-              if (detail) {
-                const fechaCierre = detail.FechaCierre ? new Date(detail.FechaCierre) : null;
-                let estadoCalculado: EstadoOportunidad = (detail.Estado === 'Publicada' ? 'Abierta' : 'En evaluacion') as EstadoOportunidad;
-
-                if (fechaCierre) {
-                  const diffDays = (fechaCierre.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24);
-                  if (diffDays >= 0 && diffDays <= 5.5) estadoCalculado = 'Por cerrar';
-                }
-
-                return {
-                  id: detail.CodigoExterno,
-                  codigo: detail.CodigoExterno,
-                  titulo: detail.Nombre,
-                  organismo: detail.Comprador?.NombreOrganismo || 'Organismo Público',
-                  region: detail.Comprador?.RegionUnidad || 'Nacional',
-                  cierre: fechaCierre ? fechaCierre.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Consultar bases',
-                  fechaCierreRaw: fechaCierre || undefined,
-                  montoEstimado: detail.MontoEstimado || null,
-                  rubro: detail.Items?.Listado?.[0]?.NombreProducto || 'Suministros y Servicios',
-                  estado: estadoCalculado,
-                  calce: !detail.MontoEstimado ? 'Explorar' : (estadoCalculado !== 'En evaluacion' ? 'Alto' : 'Medio'),
-                  accion: 'Revisar bases y preparar propuesta técnica.',
-                  motivos: ['Sincronizado vía API oficial', detail.Descripcion?.slice(0, 100).concat('...') || 'Revisar en portal oficial.', 'Rubro compatible'],
-                  documentosPendientes: ['Certificado experiencia', 'Propuesta técnica', 'Garantía seriedad'],
-                } as OportunidadPublica;
-              }
-
-              // Fallback
-              const fechaCierreFallback = item.FechaCierre ? new Date(item.FechaCierre) : null;
-              let estadoFallback: EstadoOportunidad = 'Abierta';
-              if (fechaCierreFallback) {
-                const diffDays = (fechaCierreFallback.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24);
-                if (diffDays >= 0 && diffDays <= 5.5) estadoFallback = 'Por cerrar';
-              }
-
-              return {
-                id: item.CodigoExterno,
-                codigo: item.CodigoExterno,
-                titulo: item.Nombre,
-                organismo: 'Organismo Público',
-                region: 'Chile',
-                cierre: fechaCierreFallback ? fechaCierreFallback.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }) : 'Varios',
-                fechaCierreRaw: fechaCierreFallback || undefined,
-                montoEstimado: null,
-                rubro: 'Suministros y Servicios',
-                estado: estadoFallback,
-                calce: 'Explorar',
-                accion: 'Acceder al portal oficial.',
-                motivos: ['Información sincronizada básica.'],
-                documentosPendientes: ['Revisar en portal'],
-              } as OportunidadPublica;
-            } catch (e) { return null; }
-          })
-        );
-        results.push(...chunkDetails.filter((item): item is OportunidadPublica => item !== null));
-      }
-      setRealOportunidades(results);
-      if (results.length > 0) setSelectedId(results[0].id);
+      base = (await mercadoPublicoService.getLicitacionesHoy(forzar)).slice(0, 30).map(desdeListado);
+      if (generacion.current !== miGeneracion) return;
+      setRealOportunidades(base);
+      setSelectedId(base[0]?.id ?? null);
       setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Error fetching data:', error);
+    } catch (e) {
+      if (generacion.current === miGeneracion) setError(e instanceof Error ? e.message : 'No se pudo conectar con Mercado Público.');
     } finally {
-      setLoading(false);
+      if (generacion.current === miGeneracion) setLoading(false);
+    }
+    // Detalle de a 2 para no gatillar el límite de la API; si todo un lote falla, se deja la info básica.
+    for (let i = 0; i < base.length && generacion.current === miGeneracion; i += 2) {
+      const detalles = await Promise.all(base.slice(i, i + 2).map(o => mercadoPublicoService.getDetalleLicitacion(o.codigo)));
+      if (generacion.current !== miGeneracion || detalles.every(d => !d)) break;
+      setRealOportunidades(prev => prev.map(o => {
+        const d = detalles.find(x => x?.CodigoExterno === o.codigo);
+        return d ? desdeDetalle(d) : o;
+      }));
     }
   };
 
-  useEffect(() => { fetchLicitaciones(); }, []);
+  useEffect(() => { fetchLicitaciones(); return () => { generacion.current++; }; }, []);
 
   const handlePageChange = (newPage: number) => {
     setPaginaActual(newPage);
@@ -208,7 +191,7 @@ export default function ERPMercadosPublicos() {
     return realOportunidades.filter(item => {
       const matchesQuery = !query || item.titulo.toLowerCase().includes(query) || item.organismo.toLowerCase().includes(query) || item.codigo.toLowerCase().includes(query) || item.rubro.toLowerCase().includes(query);
       const regionSearch = region.toLowerCase();
-      const matchesRegion = region === 'Todas' || item.region.toLowerCase().includes(regionSearch) || (region === 'Metropolitana' && item.region.toLowerCase().includes('santiago')) || (region === 'Valparaiso' && item.region.toLowerCase().includes('valpara')) || (region === 'Biobio' && (item.region.toLowerCase().includes('bio') || item.region.toLowerCase().includes('concep')));
+      const matchesRegion = region === 'Todas' || item.region.toLowerCase().includes(regionSearch) || (region === 'Metropolitana' && item.region.toLowerCase().includes('santiago')) || (region === 'Valparaíso' && item.region.toLowerCase().includes('valpara')) || (region === 'Biobío' && (item.region.toLowerCase().includes('bio') || item.region.toLowerCase().includes('concep')));
       const matchesEstado = estado === 'Todos' || item.estado === estado;
       return matchesQuery && matchesRegion && matchesEstado;
     });
@@ -234,8 +217,8 @@ export default function ERPMercadosPublicos() {
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-3xl font-black text-primary">Mercados Públicos</h1>
           <div className="flex items-center gap-3">
-            {lastUpdate && <span className="text-xs font-bold text-outline">Última actualización: {lastUpdate.toLocaleTimeString()}</span>}
-            <button onClick={fetchLicitaciones} disabled={loading} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-black text-inverse-on-surface shadow-lg shadow-primary/20 transition-all hover:bg-primary-container disabled:opacity-50">
+            {lastUpdate && <span className="text-xs font-bold text-outline">Última actualización: {lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>}
+            <button onClick={() => fetchLicitaciones(true)} disabled={loading} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-black text-inverse-on-surface shadow-lg shadow-primary/20 transition-all hover:bg-primary-container disabled:opacity-50">
               <span className={cn('material-symbols-outlined text-lg', loading && 'animate-spin')}>refresh</span>
               Refrescar Licitaciones
             </button>
@@ -246,8 +229,8 @@ export default function ERPMercadosPublicos() {
           {[
             { label: 'Oportunidades abiertas', value: abiertas.toString(), icon: 'campaign' },
             { label: 'Vencen pronto (5 días)', value: porCerrar.toString(), icon: 'schedule' },
-            { label: 'Potencial Adjudicación', value: formatCurrency(montoPotencial), icon: 'star' },
-            { label: 'Alto Calce (Cantidad)', value: altoCalceCount.toString(), icon: 'verified' },
+            { label: 'Potencial adjudicación', value: formatCLP(montoPotencial), icon: 'star' },
+            { label: 'Alto calce (cantidad)', value: altoCalceCount.toString(), icon: 'verified' },
           ].map(card => (
             <div key={card.label} className="rounded-[28px] border border-outline-variant/45 bg-surface-container-lowest p-5 shadow-sm dark-card">
               <div className="flex items-start justify-between gap-3">
@@ -270,12 +253,12 @@ export default function ERPMercadosPublicos() {
             <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[680px]">
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-outline">search</span>
-                <input value={busqueda} onChange={e => { setBusqueda(e.target.value); setPaginaActual(1); }} placeholder="Buscar codigo, organismo o rubro" className="w-full rounded-2xl border border-outline-variant/70 bg-surface-container-low py-3 pl-10 pr-4 text-sm font-semibold text-on-surface outline-none focus:border-primary" />
+                <input value={busqueda} onChange={e => { setBusqueda(e.target.value); setPaginaActual(1); }} placeholder="Buscar código, organismo o rubro" className="w-full rounded-2xl border border-outline-variant/70 bg-surface-container-low py-3 pl-10 pr-4 text-sm font-semibold text-on-surface outline-none focus:border-primary" />
               </div>
               <select value={region} onChange={e => { setRegion(e.target.value); setPaginaActual(1); }} className="rounded-2xl border border-outline-variant/70 bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface outline-none focus:border-primary">
                 {regiones.map(item => <option key={item}>{item}</option>)}
               </select>
-              <select value={estado} onChange={e => { setEstado(e.target.value as any); setPaginaActual(1); }} className="rounded-2xl border border-outline-variant/70 bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface outline-none focus:border-primary">
+              <select value={estado} onChange={e => { setEstado(e.target.value as 'Todos' | EstadoOportunidad); setPaginaActual(1); }} className="rounded-2xl border border-outline-variant/70 bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface outline-none focus:border-primary">
                 {estados.map(item => <option key={item}>{item}</option>)}
               </select>
             </div>
@@ -288,8 +271,23 @@ export default function ERPMercadosPublicos() {
               {loading && (
                 <div className="flex flex-col items-center justify-center rounded-[26px] border border-dashed border-primary/30 bg-primary/5 p-12 text-center">
                   <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                  <h3 className="mt-4 text-lg font-black text-primary">Conectando con API de Mercado Público...</h3>
-                  <p className="mt-2 text-sm text-on-surface-variant">Obteniendo licitaciones activas del día.</p>
+                  <h3 className="mt-4 text-lg font-black text-primary">Conectando con Mercado Público…</h3>
+                  <p className="mt-2 text-sm text-on-surface-variant">Obteniendo licitaciones activas. Si la API está saturada reintentamos automáticamente (hasta 3 veces).</p>
+                </div>
+              )}
+              {!loading && error && (
+                <div className="flex flex-col items-center justify-center rounded-[26px] border border-dashed border-error/40 bg-error/5 p-10 text-center">
+                  <span className="material-symbols-outlined text-4xl text-error">cloud_off</span>
+                  <h3 className="mt-3 text-lg font-black text-on-surface">No pudimos cargar las licitaciones</h3>
+                  <p className="mt-2 max-w-md text-sm text-on-surface-variant">{error} Espera unos minutos y vuelve a intentarlo, o búscalas directamente en mercadopublico.cl.</p>
+                  <div className="mt-5 flex flex-wrap justify-center gap-3">
+                    <button onClick={() => fetchLicitaciones(true)} className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-black text-inverse-on-surface">
+                      <span className="material-symbols-outlined text-lg">refresh</span> Reintentar
+                    </button>
+                    <a href="https://www.mercadopublico.cl" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border border-outline-variant px-5 py-2.5 text-sm font-black text-on-surface-variant hover:border-primary hover:text-primary">
+                      Abrir mercadopublico.cl <span className="material-symbols-outlined text-lg">open_in_new</span>
+                    </a>
+                  </div>
                 </div>
               )}
               {!loading && oportunidades.map(item => {
@@ -310,7 +308,7 @@ export default function ERPMercadosPublicos() {
                       <div className="flex flex-row items-start gap-4 md:flex-col md:items-end">
                         <div className="md:text-right">
                           <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-outline">Monto estimado</p>
-                          <p className="mt-1 text-xl font-black text-primary">{item.montoEstimado ? formatCurrency(item.montoEstimado) : 'Consultar bases'}</p>
+                          <p className="mt-1 text-xl font-black text-primary">{item.montoEstimado ? formatCLP(item.montoEstimado) : 'Consultar bases'}</p>
                         </div>
                         <a href={`https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idLicitacion=${item.codigo}`} target="_blank" rel="noreferrer" className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-inverse-on-surface"><span className="material-symbols-outlined text-lg">open_in_new</span></a>
                       </div>
@@ -331,10 +329,18 @@ export default function ERPMercadosPublicos() {
                   <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-outline/60">Mostrando {(paginaActual - 1) * itemsPorPagina + 1} - {Math.min(paginaActual * itemsPorPagina, oportunidadesFiltradas.length)} de {oportunidadesFiltradas.length} licitaciones</p>
                 </div>
               )}
-              {!loading && oportunidadesFiltradas.length === 0 && (
+              {!loading && !error && oportunidadesFiltradas.length === 0 && (
                 <div className="rounded-[26px] border border-dashed border-outline-variant bg-surface-container-lowest p-8 text-center dark-card">
                   <span className="material-symbols-outlined text-4xl text-outline">search_off</span>
                   <h3 className="mt-3 text-lg font-black text-primary">Sin resultados</h3>
+                  <p className="mt-2 text-sm text-on-surface-variant">
+                    {realOportunidades.length === 0 ? 'Mercado Público no devolvió licitaciones activas.' : 'Ninguna licitación coincide con los filtros.'}
+                  </p>
+                  {realOportunidades.length === 0 && (
+                    <button onClick={() => fetchLicitaciones(true)} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-black text-inverse-on-surface">
+                      <span className="material-symbols-outlined text-lg">refresh</span> Reintentar
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -354,7 +360,7 @@ export default function ERPMercadosPublicos() {
                       {carpetasCreadas[selectedOpportunity.id] && (
                         <div className="mt-3 flex items-center gap-2 rounded-2xl bg-success-container px-3 py-2 text-xs font-black text-on-success-container">
                           <span className="material-symbols-outlined text-base">folder_special</span>
-                          Carpeta creada el {new Date(carpetasCreadas[selectedOpportunity.id]).toLocaleDateString('es-CL')}
+                          Carpeta creada el {formatFecha(carpetasCreadas[selectedOpportunity.id])}
                         </div>
                       )}
                       <div className="mt-4 space-y-2">{carpetaPostulacion.map(doc => <div key={doc.nombre} className="rounded-2xl border border-outline-variant/30 bg-surface-container-low p-3"><div className="flex justify-between"><div><p className="text-sm font-black text-primary">{doc.nombre}</p><p className="text-xs text-on-surface-variant">{doc.responsable}</p></div><span className="text-[10px] font-black">{doc.estado}</span></div></div>)}</div>
@@ -364,7 +370,7 @@ export default function ERPMercadosPublicos() {
                         <span className="material-symbols-outlined text-base align-middle">check_circle</span> Carpeta lista para postular
                       </button>
                     ) : (
-                      <button onClick={() => setCarpetasCreadas(prev => ({ ...prev, [selectedOpportunity.id]: new Date().toISOString() }))} className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-black text-inverse-on-surface shadow-lg shadow-primary/20 hover:bg-primary-container transition-colors">
+                      <button onClick={() => setCarpetasCreadas(prev => ({ ...prev, [selectedOpportunity.id]: hoyISO() }))} className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-black text-inverse-on-surface shadow-lg shadow-primary/20 hover:bg-primary-container transition-colors">
                         Crear carpeta
                       </button>
                     )}

@@ -1,17 +1,17 @@
 import { useState } from 'react';
 
 const integraciones = [
-  { id: 'sso', nombre: 'SSO / SAML', descripcion: 'Inicio de sesion unico con proveedores corporativos', icon: 'key', estado: 'activo' as const, proveedor: 'Okta', ultimaSync: 'Hace 5 min' },
+  { id: 'sso', nombre: 'SSO / SAML', descripcion: 'Inicio de sesión único con proveedores corporativos', icon: 'key', estado: 'activo' as const, proveedor: 'Okta', ultimaSync: 'Hace 5 min' },
   { id: 'stripe', nombre: 'Pasarela de Pagos', descripcion: 'Cobros y suscripciones de planes', icon: 'payments', estado: 'activo' as const, proveedor: 'Stripe', ultimaSync: 'Hace 12 min' },
-  { id: 'sendgrid', nombre: 'Email Transaccional', descripcion: 'Envio de correos, notificaciones y alertas', icon: 'mail', estado: 'activo' as const, proveedor: 'SendGrid', ultimaSync: 'Hace 1 hora' },
+  { id: 'sendgrid', nombre: 'Email Transaccional', descripcion: 'Envío de correos, notificaciones y alertas', icon: 'mail', estado: 'activo' as const, proveedor: 'SendGrid', ultimaSync: 'Hace 1 hora' },
   { id: 'postgres', nombre: 'Base de Datos', descripcion: 'PostgreSQL alojado en Railway', estado: 'activo' as const, proveedor: 'Railway', ultimaSync: 'Tiempo real' },
   { id: 'analytics', nombre: 'Analytics', descripcion: 'Metricas de uso y comportamiento', icon: 'analytics', estado: 'inactivo' as const, proveedor: 'No configurado', ultimaSync: '—' },
   { id: 'webhooks', nombre: 'Webhooks', descripcion: 'Endpoints para integraciones externas', icon: 'webhook', estado: 'activo' as const, proveedor: '3 endpoints activos', ultimaSync: 'Hace 30 min' },
 ];
 
 const apis = [
-  { id: 'api1', nombre: 'API Publica v2', endpoint: 'https://api.pymedu.cl/v2', estado: 'activa' as const, llamadas: '12.4k/dia', rateLimit: '1000 req/min' },
-  { id: 'api2', nombre: 'Webhook接收', endpoint: 'https://api.pymedu.cl/webhooks', estado: 'activa' as const, llamadas: '340/dia', rateLimit: '200 req/min' },
+  { id: 'api1', nombre: 'API Pública v2', endpoint: 'https://api.pymedu.cl/v2', estado: 'activa' as const, llamadas: '12.4k/día', rateLimit: '1000 req/min' },
+  { id: 'api2', nombre: 'Webhook接收', endpoint: 'https://api.pymedu.cl/webhooks', estado: 'activa' as const, llamadas: '340/día', rateLimit: '200 req/min' },
 ];
 
 export default function SuperAdminConfig() {
@@ -29,7 +29,7 @@ export default function SuperAdminConfig() {
       <div className="flex items-center gap-3">
         <span className="material-symbols-outlined text-3xl text-on-surface-variant">settings</span>
         <div>
-          <h1 className="text-2xl font-extrabold text-on-surface">Configuracion Global</h1>
+          <h1 className="text-2xl font-extrabold text-on-surface">Configuración global</h1>
           <p className="text-on-surface-variant">Integraciones, branding, APIs y plantillas de la plataforma</p>
         </div>
       </div>
@@ -61,7 +61,7 @@ export default function SuperAdminConfig() {
                 <h2 className="font-extrabold text-on-surface">Integraciones Activas</h2>
                 <button className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-primary/30 text-sm font-bold text-primary hover:bg-primary/5 transition-colors">
                   <span className="material-symbols-outlined text-lg">add</span>
-                  Nueva Integracion
+                  Nueva integración
                 </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -127,11 +127,11 @@ export default function SuperAdminConfig() {
                 ))}
               </div>
               <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-5">
-                <h3 className="font-extrabold text-on-surface mb-3">Documentacion API</h3>
-                <p className="text-sm text-on-surface-variant mb-3">Accede a la documentacion completa de la API de PymEdu para desarrolladores.</p>
+                <h3 className="font-extrabold text-on-surface mb-3">Documentación API</h3>
+                <p className="text-sm text-on-surface-variant mb-3">Accede a la documentación completa de la API de PymEdu para desarrolladores.</p>
                 <div className="flex items-center gap-3">
                   <button className="px-4 py-2 rounded-xl text-sm font-bold border-2 border-surface-container-high hover:border-primary/30 transition-colors">
-                    Ver documentacion
+                    Ver documentación
                   </button>
                   <button className="px-4 py-2 rounded-xl text-sm font-bold border-2 border-surface-container-high hover:border-primary/30 transition-colors">
                     Descargar OpenAPI spec
@@ -190,11 +190,11 @@ export default function SuperAdminConfig() {
               <h2 className="font-extrabold text-on-surface">Plantillas Globales</h2>
               {[
                 { nombre: 'Email de bienvenida', tipo: 'email', icon: 'mail', activa: true },
-                { nombre: 'Invitacion a mentor', tipo: 'email', icon: 'mail', activa: true },
+                { nombre: 'Invitación a mentor', tipo: 'email', icon: 'mail', activa: true },
                 { nombre: 'Alerta de riesgo', tipo: 'notificacion', icon: 'notifications', activa: true },
                 { nombre: 'Reporte mensual', tipo: 'email', icon: 'mail', activa: true },
                 { nombre: 'Cierre de cohorte', tipo: 'email', icon: 'mail', activa: false },
-                { nombre: 'Certificado de completacion', tipo: 'documento', icon: 'description', activa: true },
+                { nombre: 'Certificado de finalización', tipo: 'documento', icon: 'description', activa: true },
               ].map((plantilla, i) => (
                 <div key={i} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 flex items-center justify-between hover:border-primary/20 transition-colors">
                   <div className="flex items-center gap-4">

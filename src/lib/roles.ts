@@ -10,11 +10,15 @@ export type Rol =
   | 'encargado_rrhh'
   | 'empleado'
   | 'contador_externo'
-  | 'demo';
+  | 'demo'
+  // Roles nuevos (Mentorías): proveedor de contenido, su instructor y el Comité de contenido.
+  | 'admin_proveedor'
+  | 'instructor'
+  | 'curador';
 
 export type NivelPermiso = 'rwd' | 'rw' | 'r' | 'none';
 
-export type GrupoRolId = 'reservado' | 'institucional' | 'pyme';
+export type GrupoRolId = 'reservado' | 'institucional' | 'pyme' | 'contenido';
 
 export type RolOrigen = 'sistema' | 'inst_admin' | 'pyme_admin';
 
@@ -321,6 +325,47 @@ export const ROLES: RolDefinicion[] = [
       clientes: 'r', proveedores: 'r', inventario: 'r',
     }),
   },
+  // ── Mentorías (documento de arquitectura). Los permisos efectivos viven en la base
+  //    (cuentas.rol / cuentas.rol_permiso); esto es solo la ficha visual del rol.
+  {
+    id: 'admin_proveedor',
+    label: 'Admin Proveedor',
+    color: 'bg-cat-8',
+    badge: 'bg-cat-8-container text-on-cat-8-container',
+    icon: 'storefront',
+    nivel: 2,
+    grupo: 'contenido',
+    definidoPor: 'sistema',
+    descripcion: 'Administra una organización proveedora de contenido: crea y vende cursos y mentorías grupales, gestiona instructores y ve liquidaciones.',
+    permisosApp: ['ver_academia'],
+    matriz: T({ mentoria: 'rwd', comunidad: 'r', roles: 'rw' }),
+  },
+  {
+    id: 'instructor',
+    label: 'Instructor',
+    color: 'bg-cat-9',
+    badge: 'bg-cat-9-container text-on-cat-9-container',
+    icon: 'co_present',
+    nivel: 3,
+    grupo: 'contenido',
+    definidoPor: 'sistema',
+    descripcion: 'Dicta los cursos de un proveedor: corrige tareas y sigue la asistencia. No ve pagos.',
+    permisosApp: ['ver_academia'],
+    matriz: T({ mentoria: 'rw' }),
+  },
+  {
+    id: 'curador',
+    label: 'Curador',
+    color: 'bg-cat-12',
+    badge: 'bg-cat-12-container text-on-cat-12-container',
+    icon: 'verified',
+    nivel: 1,
+    grupo: 'contenido',
+    definidoPor: 'sistema',
+    descripcion: 'Integrante del Comité de contenido: revisa y aprueba cursos públicos con la lista de chequeo.',
+    permisosApp: [],
+    matriz: T({ mentoria: 'r' }),
+  },
 ];
 
 export const GRUPOS_ROL: GrupoRolDefinicion[] = [
@@ -344,6 +389,13 @@ export const GRUPOS_ROL: GrupoRolDefinicion[] = [
     icon: 'storefront',
     descripcion: 'Roles operativos de cada negocio. El Administrador de la PYME (Dueño o Emprendedor) los crea y asigna: corresponden a los tipos VAR1, VAR2 y VAR3 de la guía (ej: Vendedor, Cajero, Gestor, RRHH, Empleado, Contador externo).',
     roles: ['dueño', 'vendedor', 'gestor', 'encargado_rrhh', 'empleado', 'contador_externo'],
+  },
+  {
+    id: 'contenido',
+    label: 'Mentorías y contenido',
+    icon: 'cast_for_education',
+    descripcion: 'Proveedores de contenido (consultoras, capacitadores), sus instructores y el Comité de contenido que aprueba los cursos públicos.',
+    roles: ['admin_proveedor', 'instructor', 'curador'],
   },
 ];
 

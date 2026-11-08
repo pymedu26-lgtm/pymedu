@@ -15,7 +15,7 @@ export function setToken(token: string | null) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -32,7 +32,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(body.error || `Error ${res.status}`);
+      throw Object.assign(new Error(body.error || `Error ${res.status}`), { status: res.status, detalle: body.detalle });
     }
 
     return res.json();
@@ -47,6 +47,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 const json = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
+
+export interface PermisoApi { codigo: string; app: string; modulo: string; accion: string; descripcion: string }
+export interface RolApi {
+  id: string; codigo: string | null; nombre: string; descripcion: string | null;
+  ambito: 'plataforma' | 'institucion' | 'negocio' | 'proveedor';
+  organizacion_id: string | null; organizacion_nombre?: string | null; rol_padre_id: string | null;
+  es_sistema: boolean; es_plantilla: boolean; activo: boolean; usuarios: number; permisos: string[];
+}
 
 export const api = {
   // ── Auth ──────────────────────────────────────────────
@@ -163,6 +171,18 @@ export const api = {
 
   deleteErp: (coleccion: string, ids: string[]) =>
     request<{ ok: boolean }>('/api/erp/delete', json({ coleccion, ids })),
+
+  // ── Roles dinámicos (núcleo Cuentas: server/src/cuentas/rutas.js) ──
+  rolesCatalogo: () =>
+    request<{ data: PermisoApi[]; modulos: Record<string, { label: string; icon: string }>; mios: string[] }>('/api/roles/permisos'),
+  roles: () => request<{ data: RolApi[]; organizacion: { id: string; nombre: string; tipo: string } | null }>('/api/roles'),
+  crearRol: (datos: { nombre: string; descripcion?: string; ambito: RolApi['ambito']; rol_padre_id?: string | null; permisos: string[]; plantilla?: boolean }) =>
+    request<{ data: RolApi }>('/api/roles', json(datos)),
+  actualizarRol: (id: string, datos: Partial<Pick<RolApi, 'nombre' | 'descripcion' | 'permisos' | 'activo'>>) =>
+    request<{ data: RolApi }>(`/api/roles/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(datos) }),
+  desactivarRol: (id: string) => request<{ ok: boolean }>(`/api/roles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  auditoriaRol: (id: string) =>
+    request<{ data: { id: number; accion: string; usuario: string | null; creado_en: string; antes: unknown; despues: unknown }[] }>(`/api/roles/${encodeURIComponent(id)}/auditoria`),
 
   // ── Pagos Webpay ──────────────────────────────────────
   crearPagoWebpay: (plan: string, usuario_id: string, email: string) =>

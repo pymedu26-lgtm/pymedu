@@ -25,7 +25,7 @@ const categoriaConfig: Record<string, { color: string; label: string }> = {
   bug: { color: 'bg-error-container text-on-error-container', label: 'Bug' },
   feature: { color: 'bg-info-container text-on-info-container', label: 'Feature' },
   rendimiento: { color: 'bg-warning-container text-on-warning-container', label: 'Rendimiento' },
-  configuracion: { color: 'bg-info-container text-on-info-container', label: 'Configuracion' },
+  configuracion: { color: 'bg-info-container text-on-info-container', label: 'Configuración' },
 };
 
 export default function SuperAdminSoporte() {
@@ -53,7 +53,7 @@ export default function SuperAdminSoporte() {
           <span className="material-symbols-outlined text-3xl text-warning">support_agent</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Soporte y Tickets</h1>
-            <p className="text-on-surface-variant">Gestion de incidencias, SLA y soporte tecnico avanzado</p>
+            <p className="text-on-surface-variant">Gestión de incidencias, SLA y soporte técnico avanzado</p>
           </div>
         </div>
         <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
@@ -187,7 +187,7 @@ export default function SuperAdminSoporte() {
                     <p className="font-bold">{ticket.prioridad}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-on-surface-variant">Categoria</p>
+                    <p className="text-xs font-bold text-on-surface-variant">Categoría</p>
                     <p className="font-bold">{ticket.categoria}</p>
                   </div>
                   <div>

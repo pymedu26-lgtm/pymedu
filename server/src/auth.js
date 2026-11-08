@@ -8,6 +8,8 @@ import { registrarVinculacionTrasRegistro } from './vinculacionServicio.js';
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'pymedu-secret-key-change-in-production';
 const JWT_EXPIRA = '24h';
+/** Largo mínimo de contraseña (corrección #7). */
+export const MIN_CONTRASENA = 8;
 
 function sanitizarPerfil(p) {
   return {
@@ -109,6 +111,9 @@ router.post('/register', async (req, res) => {
     if (!email || !password || !full_name) {
       return res.status(400).json({ error: 'Email, contrasena y nombre son requeridos' });
     }
+    if (String(password).length < MIN_CONTRASENA) {
+      return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres` });
+    }
 
     const existente = await db.prepare('SELECT id FROM perfiles WHERE email = ?').get(email);
     if (existente) {
@@ -176,8 +181,8 @@ router.post('/reset-password', async (req, res) => {
     if (!token || !password) {
       return res.status(400).json({ error: 'Token y contraseña requeridos' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    if (password.length < MIN_CONTRASENA) {
+      return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres` });
     }
 
     let decoded;
@@ -240,12 +245,16 @@ router.put('/mi', requireAuth, async (req, res) => {
       parametros.push(body[campo] ? 1 : 0);
     }
 
-    // Cambio de contrasena opcional
+    // Cambio de contraseña opcional: exige la contraseña actual (corrección #7).
     if (body.nueva_contrasena !== undefined || body.confirmar_contrasena !== undefined) {
       const nueva = body.nueva_contrasena ?? '';
       const confirmar = body.confirmar_contrasena ?? '';
-      if (nueva.length < 6) return res.status(400).json({ error: 'La contrasena debe tener al menos 6 caracteres' });
-      if (nueva !== confirmar) return res.status(400).json({ error: 'Las contrasenas no coinciden' });
+      if (!body.contrasena_actual || !bcrypt.compareSync(String(body.contrasena_actual), req.perfil.password_hash)) {
+        return res.status(400).json({ error: 'La contraseña actual no es correcta' });
+      }
+      if (nueva.length < MIN_CONTRASENA) return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres` });
+      if (nueva !== confirmar) return res.status(400).json({ error: 'Las contraseñas no coinciden' });
+      if (nueva === body.contrasena_actual) return res.status(400).json({ error: 'La nueva contraseña debe ser distinta de la actual' });
       asignaciones.push('password_hash = ?');
       parametros.push(bcrypt.hashSync(nueva, 10));
     }

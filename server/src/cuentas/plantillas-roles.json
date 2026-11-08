@@ -1,0 +1,318 @@
+{
+ "modulos": {
+  "dashboard": {
+   "label": "Panel",
+   "icon": "dashboard"
+  },
+  "organizaciones": {
+   "label": "Organizaciones",
+   "icon": "apartment"
+  },
+  "programas": {
+   "label": "Programas",
+   "icon": "school"
+  },
+  "usuarios": {
+   "label": "Usuarios",
+   "icon": "group"
+  },
+  "comunidad": {
+   "label": "Comunidad",
+   "icon": "diversity_3"
+  },
+  "mentoria": {
+   "label": "Mentoría",
+   "icon": "groups"
+  },
+  "academia": {
+   "label": "Academia",
+   "icon": "auto_stories"
+  },
+  "ventas": {
+   "label": "Ventas",
+   "icon": "point_of_sale"
+  },
+  "gastos": {
+   "label": "Compras y gastos",
+   "icon": "receipt_long"
+  },
+  "inventario": {
+   "label": "Inventario",
+   "icon": "inventory_2"
+  },
+  "promociones": {
+   "label": "Promociones",
+   "icon": "loyalty"
+  },
+  "clientes": {
+   "label": "Clientes",
+   "icon": "groups"
+  },
+  "proveedores": {
+   "label": "Proveedores",
+   "icon": "local_shipping"
+  },
+  "caja": {
+   "label": "Caja y bancos",
+   "icon": "account_balance"
+  },
+  "reportes": {
+   "label": "Reportes y tributos",
+   "icon": "bar_chart"
+  },
+  "rrhh": {
+   "label": "RRHH",
+   "icon": "badge"
+  },
+  "config": {
+   "label": "Configuración",
+   "icon": "settings"
+  },
+  "planes": {
+   "label": "Planes",
+   "icon": "workspace_premium"
+  },
+  "roles": {
+   "label": "Roles",
+   "icon": "admin_panel_settings"
+  },
+  "auditoria": {
+   "label": "Auditoría",
+   "icon": "fact_check"
+  },
+  "soporte": {
+   "label": "Soporte",
+   "icon": "support_agent"
+  }
+ },
+ "roles": [
+  {
+   "codigo": "superadmin",
+   "nombre": "Super Admin",
+   "grupo": "reservado",
+   "descripcion": "Acceso total a la plataforma. Configuración global, auditoría, planes y soporte. Segmenta la información por institución.",
+   "matriz": {
+    "dashboard": "rwd",
+    "organizaciones": "rwd",
+    "programas": "rwd",
+    "usuarios": "rwd",
+    "comunidad": "rwd",
+    "mentoria": "rwd",
+    "academia": "rwd",
+    "ventas": "rwd",
+    "gastos": "rwd",
+    "inventario": "rwd",
+    "promociones": "rwd",
+    "clientes": "rwd",
+    "proveedores": "rwd",
+    "caja": "rwd",
+    "reportes": "rwd",
+    "rrhh": "rwd",
+    "config": "rwd",
+    "planes": "rwd",
+    "roles": "rwd",
+    "auditoria": "rwd",
+    "soporte": "rwd"
+   }
+  },
+  {
+   "codigo": "demo",
+   "nombre": "Demo (todos)",
+   "grupo": "reservado",
+   "descripcion": "Cuenta de demostración con acceso a todos los roles del sistema. Solo para entornos de prueba.",
+   "matriz": {
+    "dashboard": "rwd",
+    "organizaciones": "rwd",
+    "programas": "rwd",
+    "usuarios": "rwd",
+    "comunidad": "rwd",
+    "mentoria": "rwd",
+    "academia": "rwd",
+    "ventas": "rwd",
+    "gastos": "rwd",
+    "inventario": "rwd",
+    "promociones": "rwd",
+    "clientes": "rwd",
+    "proveedores": "rwd",
+    "caja": "rwd",
+    "reportes": "rwd",
+    "rrhh": "rwd",
+    "config": "rwd",
+    "planes": "rwd",
+    "roles": "rwd",
+    "auditoria": "rwd",
+    "soporte": "rwd"
+   }
+  },
+  {
+   "codigo": "admin_institucional",
+   "nombre": "Admin Institucional",
+   "grupo": "institucional",
+   "descripcion": "Administra su institución: usuarios, programas, comunidad, reportes y configuración. Ve la información de su institución.",
+   "matriz": {
+    "dashboard": "rw",
+    "organizaciones": "r",
+    "programas": "rw",
+    "usuarios": "rw",
+    "comunidad": "rw",
+    "mentoria": "r",
+    "academia": "r",
+    "ventas": "r",
+    "gastos": "r",
+    "inventario": "r",
+    "promociones": "r",
+    "clientes": "r",
+    "proveedores": "r",
+    "caja": "r",
+    "reportes": "rw",
+    "rrhh": "r",
+    "config": "rw",
+    "planes": "r",
+    "roles": "r",
+    "auditoria": "r",
+    "soporte": "rw"
+   }
+  },
+  {
+   "codigo": "coordinador",
+   "nombre": "Coordinador",
+   "grupo": "institucional",
+   "descripcion": "Gestiona programas: asigna mentores, monitorea emprendedores y da seguimiento al avance.",
+   "matriz": {
+    "dashboard": "r",
+    "programas": "rw",
+    "usuarios": "r",
+    "comunidad": "r",
+    "mentoria": "rw",
+    "academia": "r"
+   }
+  },
+  {
+   "codigo": "mentor",
+   "nombre": "Mentor",
+   "grupo": "institucional",
+   "descripcion": "Acompaña a sus emprendedores asignados: sesiones, tareas y seguimiento. Accede a la Academia.",
+   "matriz": {
+    "dashboard": "r",
+    "programas": "r",
+    "usuarios": "r",
+    "comunidad": "r",
+    "mentoria": "rw",
+    "academia": "r",
+    "ventas": "r",
+    "gastos": "r",
+    "clientes": "r"
+   }
+  },
+  {
+   "codigo": "emprendedor",
+   "nombre": "Emprendedor",
+   "grupo": "institucional",
+   "descripcion": "Titular de su propio negocio. Accede al ERP, la Academia y la mentoría asignada. Puede crear el equipo de su PYME.",
+   "matriz": {
+    "dashboard": "r",
+    "comunidad": "r",
+    "mentoria": "r",
+    "academia": "rw",
+    "ventas": "rw",
+    "gastos": "rw",
+    "inventario": "rwd",
+    "promociones": "r",
+    "clientes": "r",
+    "proveedores": "r",
+    "caja": "r",
+    "reportes": "r",
+    "rrhh": "r",
+    "config": "rw"
+   }
+  },
+  {
+   "codigo": "dueño",
+   "nombre": "Dueño / Admin PYME",
+   "grupo": "pyme",
+   "descripcion": "Administrador de la PYME. Gestiona el negocio completo y define los tipos de rol de su equipo (ej: Vendedor, Cajero).",
+   "matriz": {
+    "dashboard": "rw",
+    "comunidad": "r",
+    "mentoria": "r",
+    "academia": "rw",
+    "ventas": "rwd",
+    "gastos": "rwd",
+    "inventario": "rwd",
+    "promociones": "rwd",
+    "clientes": "rwd",
+    "proveedores": "rwd",
+    "caja": "rwd",
+    "reportes": "rwd",
+    "rrhh": "rwd",
+    "config": "rwd"
+   }
+  },
+  {
+   "codigo": "vendedor",
+   "nombre": "Vendedor / Cajero",
+   "grupo": "pyme",
+   "descripcion": "Rol comercial de la PYME: registra ventas, atiende clientes y gestiona su perfil. Lo asigna el Administrador de la PYME.",
+   "matriz": {
+    "dashboard": "r",
+    "ventas": "rw",
+    "clientes": "rw"
+   }
+  },
+  {
+   "codigo": "gestor",
+   "nombre": "Gestor",
+   "grupo": "pyme",
+   "descripcion": "Operaciones de la PYME: inventario, caja, promociones, clientes, proveedores y reportes. Lo asigna el Administrador de la PYME.",
+   "matriz": {
+    "dashboard": "r",
+    "academia": "r",
+    "ventas": "r",
+    "gastos": "rw",
+    "inventario": "rw",
+    "promociones": "rw",
+    "clientes": "rw",
+    "proveedores": "rw",
+    "caja": "r",
+    "reportes": "r"
+   }
+  },
+  {
+   "codigo": "encargado_rrhh",
+   "nombre": "Enc. RRHH",
+   "grupo": "pyme",
+   "descripcion": "Administra las remuneraciones y el equipo de la PYME: nómina, organigrama y documentos laborales. Lo asigna el Administrador de la PYME.",
+   "matriz": {
+    "dashboard": "r",
+    "academia": "r",
+    "rrhh": "rw",
+    "config": "r"
+   }
+  },
+  {
+   "codigo": "empleado",
+   "nombre": "Empleado",
+   "grupo": "pyme",
+   "descripcion": "Miembro del equipo de la PYME: acceso a su perfil, sus remuneraciones y la Academia. Lo asigna el Administrador de la PYME.",
+   "matriz": {
+    "dashboard": "r",
+    "academia": "r",
+    "rrhh": "r"
+   }
+  },
+  {
+   "codigo": "contador_externo",
+   "nombre": "Contador externo",
+   "grupo": "pyme",
+   "descripcion": "Profesional externo que revisa caja, reportes, contabilidad, clientes, proveedores e inventario de la PYME. Lo asigna el Administrador de la PYME.",
+   "matriz": {
+    "dashboard": "r",
+    "inventario": "r",
+    "clientes": "r",
+    "proveedores": "r",
+    "caja": "r",
+    "reportes": "rw"
+   }
+  }
+ ]
+}

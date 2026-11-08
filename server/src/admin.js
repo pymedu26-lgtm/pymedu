@@ -11,6 +11,7 @@ router.use(requireAuth);
 const ROLES_CREABLES = [
   'admin_institucional', 'coordinador', 'mentor', 'emprendedor', 'dueño',
   'vendedor', 'gestor', 'encargado_rrhh', 'empleado', 'contador_externo',
+  'admin_proveedor', 'instructor', 'curador',
 ];
 
 function flagsPorMembresia(nivel) {
@@ -50,8 +51,8 @@ router.post('/crear-usuario', soloSuperadmin, async (req, res) => {
     if (!email || !password || !nombre_completo) {
       return res.status(400).json({ error: 'Email, contraseña y nombre son obligatorios.' });
     }
-    if (String(password).length < 6) {
-      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
     }
     if (!ROLES_CREABLES.includes(rol) && rol !== 'superadmin') {
       return res.status(400).json({ error: `El rol no puede ser creado por un superadmin directo: ${rol}` });
@@ -172,8 +173,8 @@ router.put('/perfiles/:id', soloSuperadmin, async (req, res) => {
     }
 
     if (body.password !== undefined && body.password !== '') {
-      if (String(body.password).length < 6) {
-        return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
+      if (String(body.password).length < 8) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
       }
       asignaciones.push('password_hash = ?');
       parametros.push(bcrypt.hashSync(String(body.password), 10));

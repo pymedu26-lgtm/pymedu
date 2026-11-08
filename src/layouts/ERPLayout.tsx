@@ -3,7 +3,7 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useERP } from '../1.-ERP/context/ERPContext';
-import { useState, useRef, useCallback, useLayoutEffect } from 'react';
+import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 
 interface NavItem {
   name: string;
@@ -25,7 +25,7 @@ interface NavGroup {
 
 export default function ERPLayout() {
   const { perfil, signOut, puedeHacer } = useAuth();
-  const { ventas, gastos } = useERP();
+  const { saldos } = useERP();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,7 +33,14 @@ export default function ERPLayout() {
   const [openGroups, setOpenGroups] = useState<Set<string>>(
     () => new Set()
   );
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Bajo 1024 px el menú parte colapsado y se colapsa solo al achicar la ventana (corrección #26).
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1024);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const alCambiar = (e: MediaQueryListEvent) => setSidebarOpen(e.matches);
+    mq.addEventListener('change', alCambiar);
+    return () => mq.removeEventListener('change', alCambiar);
+  }, []);
   const [avatarError, setAvatarError] = useState(false);
   const [flyoutTop, setFlyoutTop] = useState(8);
   const flyoutRef = useRef<HTMLDivElement>(null);
@@ -41,10 +48,10 @@ export default function ERPLayout() {
 
   const esPremium = perfil?.membresia_nivel === 'pro' || perfil?.membresia_nivel === 'premium';
 
-  const cxcCount = ventas.filter(v => v.estado === 'Pendiente').length;
-  const cxpCount = gastos.filter(g => g.estado === 'Por Pagar').length;
-  const cxcUrgente = ventas.some(v => v.estado === 'Pendiente' && v.saldo_pendiente > v.monto * 0.5);
-  const cxpUrgente = gastos.some(g => g.estado === 'Por Pagar' && g.saldo_pendiente > g.monto * 0.5);
+  // Contadores desde la fuente única de saldos; cada documento se cuenta UNA vez (corrección #17).
+  const { ventasPorCobrar: cxcCount, comprasPorPagar: cxpCount, ventasVencidas, comprasVencidas } = saldos.resumen;
+  const pendientesTotal = cxcCount + cxpCount;
+  const hayVencidos = ventasVencidas + comprasVencidas > 0;
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -142,22 +149,14 @@ name: 'Mi institución',
           permiso: 'ver_proveedores',
         },
         {
-          name: 'Cuentas por cobrar',
+          // Un solo módulo con dos pestañas (Por cobrar / Por pagar), corrección #17.
+          name: 'Cuentas por cobrar y pagar',
           path: '/erp/cobrar',
           icon: 'payments',
           tag: 'CC',
-          hint: 'Facturas pendientes, vencimientos y seguimiento.',
+          hint: 'Lo que te deben y lo que debes, con vencimientos.',
           permiso: 'ver_caja',
-          badge: () => (cxcCount > 0 ? `${cxcCount}` : null),
-        },
-        {
-          name: 'Cuentas por pagar y cobrar',
-          path: '/erp/pagar',
-          icon: 'account_balance_wallet',
-          tag: 'CP',
-          hint: 'Deudas con proveedores y lo que los clientes deben.',
-          permiso: 'crear_gastos',
-          badge: () => ((cxcCount + cxpCount) > 0 ? `${cxcCount + cxpCount}` : null),
+          badge: () => (pendientesTotal > 0 ? `${pendientesTotal}` : null),
         },
         {
           name: 'Reportes',
@@ -206,13 +205,12 @@ name: 'Mi institución',
           lock: true,
         },
 {
-          name: 'Equipo',
+          name: 'Roles del equipo',
           path: '/erp/equipo',
           icon: 'group',
           tag: 'EQ',
-          hint: 'Altas, roles y gestión del personal.',
-          permiso: 'ver_equipo',
-          lock: true,
+          hint: 'Roles y subroles de tu negocio (las invitaciones llegan pronto).',
+          permiso: 'editar_mi_negocio',
         },
         {
           name: 'Organigrama',
@@ -252,7 +250,7 @@ name: 'Mi institución',
           path: '/erp/portal-municipal',
           icon: 'location_city',
           tag: 'PM',
-          hint: 'Relacion con municipios y programas de apoyo.',
+          hint: 'Convocatorias y programas de apoyo de tu municipio.',
           permiso: 'ver_mercados_publicos',
         },
       ],
@@ -264,7 +262,7 @@ name: 'Mi institución',
       items: [
 {
           name: 'Mentorías',
-          path: '/erp/mentorias',
+          path: '/mentorias',
           icon: 'school',
           tag: 'ME',
           hint: 'Acompañamiento experto para crecer mejor.',
@@ -321,7 +319,7 @@ name: 'Mi institución',
   }, [reposicionarFlyout, sidebarOpen]);
 
   const membresiaConfig = {
-    free: { label: 'Gratuito', cls: 'bg-on-primary-container/15 text-on-primary-container' },
+    free: { label: 'Básico', cls: 'bg-on-primary-container/15 text-on-primary-container' },
     pro: { label: 'Pro', cls: 'bg-on-primary-container/25 text-on-primary-container' },
     premium: { label: 'Premium', cls: 'bg-on-primary-container/15 text-on-primary-container' },
   }[perfil?.membresia_nivel ?? 'free'];
@@ -331,14 +329,14 @@ name: 'Mi institución',
     [perfil?.negocio_rubro, perfil?.negocio_comuna].filter(Boolean).join(' | ') ||
     'ERP listo para operar';
   const avatarFallback = perfil?.nombre_completo?.[0]?.toUpperCase() ?? '?';
-  const perfilAvatarUrl = !avatarError
-    ? (perfil?.avatar_url?.trim() || `https://i.pravatar.cc/120?u=${encodeURIComponent(perfil?.email ?? perfil?.id ?? 'demo-user')}`)
-    : null;
+  // Sin foto se muestran las iniciales (antes se enviaba el email a un servicio externo de avatares).
+  const perfilAvatarUrl = !avatarError ? (perfil?.avatar_url?.trim() || null) : null;
 
   const handleLogout = async () => {
     await signOut();
-    navigate('/');
+    navigate('/login', { replace: true });
   };
+  const isActivePath = (path: string) => isActive(path) || (path === '/erp/cobrar' && location.pathname === '/erp/pagar');
 
   return (
     <div className="flex min-h-screen bg-surface text-on-surface">
@@ -483,7 +481,7 @@ name: 'Mi institución',
                       )}
                       {visibleItems.map(item => {
                         const badge = item.badge?.();
-                        const active = isActive(item.path);
+                        const active = isActivePath(item.path);
 
                         return (
                           <Link
@@ -526,11 +524,7 @@ name: 'Mi institución',
                                   <span
                                     className={cn(
                                       'min-w-[20px] rounded-full px-2 py-0.5 text-center text-[10px] font-extrabold',
-                                      item.path.includes('cobrar') && cxcUrgente
-                                        ? 'bg-error text-inverse-on-surface'
-                                        : item.path.includes('pagar') && cxpUrgente
-                                          ? 'bg-warning text-inverse-on-surface'
-                                          : 'bg-white/20 text-white'
+                                      hayVencidos ? 'bg-error text-inverse-on-surface' : 'bg-white/20 text-white'
                                     )}
                                   >
                                     {badge}
@@ -551,13 +545,28 @@ name: 'Mi institución',
             );
           })}
         </nav>
+
+        {/* Cerrar sesión siempre visible en el lateral (corrección #24) */}
+        <div className={cn('shrink-0 border-t border-white/10 py-3', sidebarOpen ? 'px-2.5' : 'px-2')}>
+          <button
+            onClick={handleLogout}
+            title={sidebarOpen ? undefined : 'Cerrar sesión'}
+            className={cn(
+              'flex w-full items-center gap-2.5 rounded-xl py-2.5 text-[13px] font-bold text-on-primary-container/70 transition-colors hover:bg-white/10 hover:text-white',
+              sidebarOpen ? 'px-3' : 'justify-center px-0'
+            )}
+          >
+            <span className="material-symbols-outlined text-lg">logout</span>
+            {sidebarOpen && <span>Cerrar sesión</span>}
+          </button>
+        </div>
       </aside>
 
       {/* ── Main content area ── */}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-outline-variant/60 bg-surface-container-lowest/95 px-6 shadow-sm backdrop-blur-md">
+        <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-3 border-b border-outline-variant/60 bg-surface-container-lowest/95 px-4 shadow-sm backdrop-blur-md sm:px-6">
           {location.pathname !== '/erp/inicio' && (
-            <div className="flex max-w-md flex-1 items-center">
+            <div className="hidden max-w-md flex-1 items-center md:flex">
               <div className="group relative w-full">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-outline transition-colors group-focus-within:text-primary">
                   search
@@ -572,11 +581,15 @@ name: 'Mi institución',
           )}
 
           <div className="ml-auto flex items-center gap-3">
-            {(cxcCount + cxpCount) > 0 && (
-              <div className="flex items-center gap-1.5 rounded-full border border-error/30 bg-error-container px-3 py-1.5 text-xs font-bold text-on-error-container cursor-default">
+            {pendientesTotal > 0 && (
+              <Link
+                to="/erp/cobrar"
+                title={`${cxcCount} ventas sin cobrar · ${cxpCount} compras por pagar`}
+                className="hidden items-center gap-1.5 rounded-full border border-error/30 bg-error-container px-3 py-1.5 text-xs font-bold text-on-error-container lg:flex"
+              >
                 <span className="material-symbols-outlined text-sm">payments</span>
-                {cxcCount + cxpCount} pendientes
-              </div>
+                {pendientesTotal.toLocaleString('es-CL')} pendientes
+              </Link>
             )}
 
             <button
@@ -589,10 +602,10 @@ name: 'Mi institución',
               </span>
             </button>
 
-            <div className="relative rounded-full p-2 transition-colors hover:bg-surface-container cursor-default">
+            <Link to="/erp/alertas" title="Centro de alertas" className="relative rounded-full p-2 transition-colors hover:bg-surface-container">
               <span className="material-symbols-outlined text-xl text-on-surface-variant">notifications</span>
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface-container-lowest bg-error" />
-            </div>
+              {hayVencidos && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface-container-lowest bg-error" />}
+            </Link>
 
             <div className="h-7 w-px bg-outline-variant" />
 
@@ -613,7 +626,7 @@ name: 'Mi institución',
                     avatarFallback
                   )}
                 </div>
-                <span className="hidden text-sm font-bold text-on-surface sm:block">
+                <span className="hidden max-w-[10rem] truncate text-sm font-bold text-on-surface sm:block">
                   {perfil?.nombre_completo ?? 'Mi cuenta'}
                 </span>
                 <span className="material-symbols-outlined text-lg text-outline">
@@ -624,10 +637,10 @@ name: 'Mi institución',
               {showUserMenu && (
                 <>
                   <div
-                    className="fixed inset-0 z-10"
+                    className="fixed inset-0 z-[60]"
                     onClick={() => setShowUserMenu(false)}
                   />
-                  <div className="absolute right-0 z-20 mt-2 w-56 origin-top-right rounded-2xl bg-surface-container-lowest p-2 shadow-xl ring-1 ring-black/5">
+                  <div className="absolute right-0 z-[70] mt-2 w-56 origin-top-right rounded-2xl bg-surface-container-lowest p-2 shadow-xl ring-1 ring-black/5">
                     <div className="px-3 py-2 mb-1">
                       <p className="text-xs font-extrabold uppercase tracking-widest text-outline">Mi Cuenta</p>
                     </div>

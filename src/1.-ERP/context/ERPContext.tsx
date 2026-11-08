@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import {
@@ -21,6 +21,9 @@ import {
   calculateSaleDocumentAmounts,
   periodoTributarioFromDate,
 } from '../services/documentCompliance';
+import { calcularSaldos, type Saldos } from '../services/saldos';
+import { redondearCLP, hoyISO } from '../../lib/fechas';
+import { consumirLotes, consumirEnvases, crearEnvases, costoPromedio, presentacionesActivas } from '../services/costeo';
 
 export type {
   DocumentStatus,
@@ -49,6 +52,12 @@ export interface VentaProducto {
   descuentoValor?: number;
   /** Categoria del item al momento de la venta; si no se informo queda 'Sin categoria'. */
   categoria?: string;
+  /** Presentación vendida (decant, saco…) y lo que realmente descontó en unidad base. */
+  presentacionId?: string;
+  presentacionNombre?: string;
+  cantidadBase?: number;
+  /** Costo de venta congelado al vender según el método de costeo (no se recalcula después). */
+  costoVenta?: number;
   subtotal: number;
   iva: number;
   total: number;
@@ -191,6 +200,60 @@ export interface Producto {
   estado: 'activo' | 'inactivo'
   proveedorId?: string
   esInventariable?: boolean
+  // ── Fraccionamiento (doc. «Inventario: fraccionamiento y método de costeo») ──
+  /** Unidad más chica en que se mide el stock. stock y stockMinimo van SIEMPRE en esta unidad. */
+  unidadBase?: UnidadBase
+  /** Formas de venderlo (decant 5 ml, saco 25 kg…). Sin presentaciones = se vende por unidad base. */
+  presentaciones?: Presentacion[]
+  /** Unidades de compra (1 frasco = 100 ml): solo informativas para registrar ingresos. */
+  unidadesCompra?: { id: string; nombre: string; factor: number }[]
+  /** Control por envases (frascos/sacos con saldo propio). Recomendado para no perecibles. */
+  controlEnvases?: boolean
+  /** Capacidad de cada envase en unidad base (ej. 100 ml por frasco). */
+  capacidadEnvase?: number
+}
+
+export type UnidadBase = 'unidad' | 'ml' | 'l' | 'g' | 'kg';
+export type MetodoCosteo = 'fifo' | 'promedio';
+
+export interface Presentacion {
+  id: string;
+  nombre: string;
+  /** Unidades base que descuenta cada venta de esta presentación. */
+  factor: number;
+  /** Precio con IVA. */
+  precio: number;
+  sku?: string;
+  /** De dónde sale: granel, un envase cerrado completo o el envase abierto. */
+  origen?: 'granel' | 'envase_cerrado' | 'envase_abierto';
+  activa: boolean;
+  /** Insumos que también se descuentan (ej. 1 atomizador por decant). */
+  receta?: { productoId: string; cantidad: number }[];
+}
+
+/** Cada compra crea un lote con su costo (tabla destino: erp.lote). */
+export interface Lote {
+  id: string;
+  productoId: string;
+  fecha: string;
+  cantidadInicial: number;
+  cantidadRestante: number;
+  /** Costo por unidad base. */
+  costoUnitario: number;
+  compraId?: string;
+  vencimiento?: string;
+}
+
+/** Envase con saldo propio (tabla destino: erp.envase). */
+export interface Envase {
+  id: string;
+  productoId: string;
+  loteId?: string;
+  codigo: string;
+  capacidad: number;
+  restante: number;
+  estado: 'cerrado' | 'abierto' | 'agotado' | 'vendido';
+  abiertoEn?: string;
 }
 
 export interface MovimientoInventario {
@@ -229,6 +292,23 @@ function safeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 100000)}`;
 }
 
+/** Nombre comparable: sin tildes, minúsculas y espacios simples. */
+export const normalizarNombre = (s?: string) =>
+  (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+export const normalizarRut = (s?: string) => (s ?? '').replace(/[^0-9kK]/g, '').toUpperCase();
+
+function buscarCliente(lista: Cliente[], id?: string, nombre?: string): Cliente | undefined {
+  if (id) {
+    const porId = lista.find(c => c.id === id);
+    if (porId) return porId;
+  }
+  const nom = normalizarNombre(nombre);
+  return nom ? lista.find(c => normalizarNombre(c.nombre) === nom) : undefined;
+}
+
+/** Sueldos, honorarios y planilla van a gasto de personal / RR.HH., no a proveedores. */
+const esCategoriaPersonal = (categoria?: string) => /sueldo|remuneraci|honorario|planilla/i.test(categoria ?? '');
+
 const DEMO_CONFIG: ConfiguracionCumplimiento = {
   modoIntegracion: 'sandbox',
   ambiente: 'sandbox',
@@ -255,6 +335,15 @@ interface ERPContextType {
   pagosPOS: PagoPOS[];
   configuracionCumplimiento: ConfiguracionCumplimiento;
   saldoActual: number;
+  /** Lotes de compra (costeo FIFO / promedio) y envases con saldo propio. */
+  lotes: Lote[];
+  envases: Envase[];
+  metodoCosteo: MetodoCosteo;
+  setMetodoCosteo: (metodo: MetodoCosteo) => void;
+  /** Saldos por cobrar/pagar calculados en un solo lugar (corrección #4). */
+  saldos: Saldos;
+  /** Une clientes repetidos por RUT o nombre (corrección #12). Devuelve cuántos se fusionaron. */
+  fusionarClientesDuplicados: () => number;
   addVenta: (venta: Omit<Venta, 'id'>) => void;
   updateVenta: (id: string, venta: Partial<Venta>) => void;
   deleteVenta: (id: string) => void;
@@ -303,10 +392,13 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   const [documentosTributarios, setDocumentosTributarios] = useState<DocumentoTributario[]>([]);
   const [integracionEventos, setIntegracionEventos] = useState<IntegracionEvento[]>([]);
   const [pagosPOS, setPagosPOS] = useState<PagoPOS[]>([]);
+  const [lotes, setLotes] = useState<Lote[]>([]);
+  const [envases, setEnvases] = useState<Envase[]>([]);
   const [configuracionCumplimiento, setConfiguracionCumplimiento] = useState<ConfiguracionCumplimiento>(DEMO_CONFIG);
 
   const [hydrated, setHydrated] = useState(false);
-  const dbIdsRef = useRef<Record<string, Set<string>>>({});
+  /** Última versión guardada de cada objeto, por colección (null = aún no hay línea base). */
+  const guardadoRef = useRef<Record<string, Map<string, object>> | null>(null);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const saldoActual = movimientos.reduce((acc, m) => m.tipo === 'Ingreso' ? acc + m.monto : acc - m.monto, 0);
@@ -315,6 +407,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     setHydrated(false);
+    guardadoRef.current = null;
 
     if (!user) return () => { active = false; };
 
@@ -326,11 +419,6 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
         const grouped = (data ?? []).reduce<Record<string, unknown[]>>((acc, r) => {
           (acc[r.coleccion] ??= []).push(r.data);
-          return acc;
-        }, {});
-
-        dbIdsRef.current = (data ?? []).reduce<Record<string, Set<string>>>((acc, r) => {
-          (acc[r.coleccion] ??= new Set()).add(r.id);
           return acc;
         }, {});
 
@@ -380,6 +468,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         setDocumentosTributarios((grouped.documentosTributarios ?? []) as DocumentoTributario[]);
         setIntegracionEventos((grouped.integracionEventos ?? []) as IntegracionEvento[]);
         setPagosPOS((grouped.pagosPOS ?? []) as PagoPOS[]);
+        setLotes((grouped.lotes ?? []) as Lote[]);
+        setEnvases((grouped.envases ?? []) as Envase[]);
         const cfg = grouped.config?.[0] as ConfiguracionCumplimiento | undefined;
         if (cfg) setConfiguracionCumplimiento({ ...DEMO_CONFIG, ...cfg });
       } catch (err) {
@@ -392,49 +482,49 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     return () => { active = false; };
   }, [user?.id]);
 
-  // ══ Guardado en Railway (debounced) ════════════
+  // ══ Guardado incremental (corrección #1) ════════
+  // Antes se reenviaba TODA la base en cada render (incluso al solo abrir una página).
+  // Ahora se compara cada objeto con la última versión guardada (por referencia: el
+  // estado es inmutable) y solo viajan los que cambiaron o se borraron.
+  const configFila = useMemo(() => ({ id: 'config', ...configuracionCumplimiento }), [configuracionCumplimiento]);
+
   useEffect(() => {
     if (!hydrated || !user) return;
 
     const snapshot: Record<string, { id: string }[]> = {
-      ventas,
-      gastos,
-      clientes,
-      proveedores,
-      movimientos,
-      inventario,
-      movimientosInventario,
-      promociones,
-      abonos,
-      documentosTributarios,
-      integracionEventos,
-      pagosPOS,
-      config: [{ id: 'config', ...configuracionCumplimiento }],
+      ventas, gastos, clientes, proveedores, movimientos, inventario,
+      movimientosInventario, promociones, abonos, documentosTributarios,
+      integracionEventos, pagosPOS, lotes, envases, config: [configFila],
     };
+
+    // Primera pasada tras cargar: se toma como línea base y NO se guarda nada.
+    if (!guardadoRef.current) {
+      guardadoRef.current = Object.fromEntries(
+        Object.entries(snapshot).map(([col, items]) => [col, new Map(items.map(i => [i.id, i as object]))])
+      );
+      return;
+    }
 
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(async () => {
+      const base = guardadoRef.current!;
       try {
         for (const [coleccion, items] of Object.entries(snapshot)) {
-          const rows = items.map((it) => ({
-            usuario_id: user.id,
-            coleccion,
-            id: it.id,
-            data: it as unknown as Record<string, unknown>,
-          }));
-          if (rows.length > 0) {
-            await api.upsertErp(rows);
+          const previo = base[coleccion] ?? new Map<string, object>();
+          const cambiados = items.filter(it => previo.get(it.id) !== it);
+          const vivos = new Set(items.map(i => i.id));
+          const borrados = [...previo.keys()].filter(id => !vivos.has(id));
+          if (cambiados.length === 0 && borrados.length === 0) continue;
+
+          // Lotes de 500 para no mandar cuerpos gigantes en cargas masivas.
+          for (let i = 0; i < cambiados.length; i += 500) {
+            await api.upsertErp(cambiados.slice(i, i + 500).map(it => ({ coleccion, id: it.id, data: it })));
           }
-          const known = dbIdsRef.current[coleccion] ?? new Set<string>();
-          const live = new Set(items.map((i) => i.id));
-          const toDelete = [...known].filter((id) => !live.has(id));
-          if (toDelete.length > 0) {
-            await api.deleteErp(coleccion, toDelete);
-          }
-          dbIdsRef.current[coleccion] = live;
+          if (borrados.length > 0) await api.deleteErp(coleccion, borrados);
+          base[coleccion] = new Map(items.map(i => [i.id, i as object]));
         }
       } catch (err) {
-        console.error('No se pudo guardar el ERP en Railway:', err);
+        console.error('No se pudo guardar el ERP:', err);
       }
     }, 600);
 
@@ -444,28 +534,87 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   }, [hydrated, user,
     ventas, gastos, clientes, proveedores, movimientos, inventario,
     movimientosInventario, promociones, abonos, documentosTributarios,
-    integracionEventos, pagosPOS, configuracionCumplimiento]);
+    integracionEventos, pagosPOS, lotes, envases, configFila]);
+
+  // ══ Saldos: fuente única (corrección #4) ═══════════
+  const saldos = useMemo(() => {
+    const folios = new Map<string, string | number>();
+    documentosTributarios.forEach(d => { if (d.folioInterno) folios.set(d.id, d.folioInterno); });
+    return calcularSaldos(ventas, gastos, abonos, folios);
+  }, [ventas, gastos, abonos, documentosTributarios]);
+
+  // Referencias vivas para resolver cliente/proveedor dentro de bucles (cargas masivas).
+  const clientesRef = useRef<Cliente[]>(clientes);
+  const proveedoresRef = useRef<Proveedor[]>(proveedores);
+  useEffect(() => { clientesRef.current = clientes; }, [clientes]);
+  useEffect(() => { proveedoresRef.current = proveedores; }, [proveedores]);
+  const lotesRef = useRef<Lote[]>(lotes);
+  const envasesRef = useRef<Envase[]>(envases);
+  useEffect(() => { lotesRef.current = lotes; }, [lotes]);
+  useEffect(() => { envasesRef.current = envases; }, [envases]);
+
+  const metodoCosteo: MetodoCosteo = configuracionCumplimiento.metodoCosteo ?? 'promedio';
+  const setMetodoCosteo = (metodo: MetodoCosteo) => setConfiguracionCumplimiento(prev => ({ ...prev, metodoCosteo: metodo }));
+
+  /** Ingreso a inventario: crea el lote (y los envases si el producto los controla). */
+  const registrarLote = (producto: Producto, cantidadBase: number, costoUnitario: number, fecha = hoyISO(), compraId?: string) => {
+    if (!(cantidadBase > 0)) return;
+    const lote: Lote = { id: safeId('LOT'), productoId: producto.id, fecha, cantidadInicial: cantidadBase, cantidadRestante: cantidadBase, costoUnitario, compraId };
+    lotesRef.current = [...lotesRef.current, lote];
+    setLotes(lotesRef.current);
+    const nuevos = crearEnvases(producto, envasesRef.current, cantidadBase, lote.id);
+    if (nuevos.length) {
+      envasesRef.current = [...envasesRef.current, ...nuevos];
+      setEnvases(envasesRef.current);
+    }
+  };
+
+  /** Consume lotes según el método; devuelve el costo total de lo consumido. */
+  const consumir = (producto: Producto, cantidadBase: number) => {
+    const r = consumirLotes(lotesRef.current, producto.id, cantidadBase, metodoCosteo, Number(producto.costo) || 0);
+    if (r.lotes !== lotesRef.current) { lotesRef.current = r.lotes; setLotes(r.lotes); }
+    return r;
+  };
+
+  const fusionarClientesDuplicados = (): number => {
+    const grupos = new Map<string, Cliente[]>();
+    clientes.forEach(c => {
+      const clave = c.rut ? `rut:${normalizarRut(c.rut)}` : `nom:${normalizarNombre(c.nombre)}`;
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave)!.push(c);
+    });
+    const reemplazo = new Map<string, Cliente>();
+    const resultado: Cliente[] = [];
+    let fusionados = 0;
+    grupos.forEach(lista => {
+      const [principal, ...resto] = lista;
+      const unido: Cliente = resto.reduce((acc, c) => ({
+        ...acc,
+        rut: acc.rut || c.rut, telefono: acc.telefono || c.telefono, email: acc.email || c.email,
+        direccion: acc.direccion || c.direccion, comuna: acc.comuna || c.comuna,
+        ventas: acc.ventas + c.ventas, deuda: acc.deuda + c.deuda,
+      }), principal);
+      resto.forEach(c => reemplazo.set(c.id, unido));
+      fusionados += resto.length;
+      resultado.push(unido);
+    });
+    if (fusionados === 0) return 0;
+    setClientes(resultado);
+    setVentas(prev => prev.map(v => {
+      const destino = v.cliente_id ? reemplazo.get(v.cliente_id) : undefined;
+      return destino ? { ...v, cliente_id: destino.id, cliente: destino.nombre } : v;
+    }));
+    return fusionados;
+  };
 
   // ══ Helpers ══════════════════════════════════════
 
   const getAbonosByReferencia = (referenciaId: string) =>
     abonos.filter(a => a.referencia_id === referenciaId);
 
-  const getSaldoPendienteVenta = (ventaId: string): number => {
-    const venta = ventas.find(v => v.id === ventaId);
-    if (!venta) return 0;
-    const montoAbonado = abonos.filter(a => a.referencia_id === ventaId && a.tipo === 'cobro').reduce((acc, a) => acc + a.monto_abono, 0);
-    const saldoInicial = venta.saldo_base ?? venta.saldo_pendiente ?? (venta.estado === 'Pendiente' ? venta.monto : 0);
-    return Math.max(0, saldoInicial - montoAbonado);
-  };
-
-  const getSaldoPendienteGasto = (gastoId: string): number => {
-    const gasto = gastos.find(g => g.id === gastoId);
-    if (!gasto) return 0;
-    const totalPagado = abonos.filter(a => a.referencia_id === gastoId && a.tipo === 'pago').reduce((acc, a) => acc + a.monto_abono, 0);
-    const saldoInicial = gasto.saldo_base ?? gasto.saldo_pendiente ?? (gasto.estado === 'Por Pagar' ? gasto.monto : 0);
-    return Math.max(0, saldoInicial - totalPagado);
-  };
+  // O(1): leen del cálculo único de saldos (antes filtraban todos los abonos por documento).
+  const getSaldoPendienteVenta = (ventaId: string): number => saldos.porVenta.get(ventaId) ?? 0;
+  const getSaldoPendienteGasto = (gastoId: string): number => saldos.porGasto.get(gastoId) ?? 0;
 
   const getDocumentosByPeriodo = (periodo: string) =>
     documentosTributarios.filter(d => d.periodoTributario === periodo);
@@ -541,11 +690,15 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
   const addVenta = (venta: Omit<Venta, 'id'>) => {
     const newId = safeId('VT');
-    const saldoPendiente = venta.estado === 'Pendiente' ? (venta.saldo_pendiente ?? venta.monto) : 0;
-    const clienteExistente = venta.cliente_id
-      ? clientes.find(c => c.id === venta.cliente_id)
-      : clientes.find(c => c.nombre.toLowerCase() === venta.cliente.toLowerCase());
+    venta = { ...venta, monto: redondearCLP(venta.monto), subtotal: redondearCLP(venta.subtotal), iva: redondearCLP(venta.iva) };
+    const saldoPendiente = venta.estado === 'Pendiente' ? redondearCLP(venta.saldo_pendiente ?? venta.monto) : 0;
+    // Se busca en la referencia viva (no en el `clientes` del render): en cargas masivas
+    // addVenta se llama en bucle y el closure viejo creaba un cliente nuevo por venta.
+    const clienteExistente = buscarCliente(clientesRef.current, venta.cliente_id, venta.cliente);
     const clienteId = clienteExistente?.id ?? crypto.randomUUID();
+    if (!clienteExistente && venta.cliente) {
+      clientesRef.current = [{ id: clienteId, nombre: venta.cliente, telefono: '', email: '', ventas: 0, deuda: 0 }, ...clientesRef.current];
+    }
     const documento = createDocumentFromSale({
       saleId: newId,
       fecha: venta.fecha,
@@ -572,8 +725,36 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         estado: documento.estado,
       },
     });
+    // ── Inventario: unidad base, presentaciones, receta, envases y costo congelado ──
+    // Cada línea descuenta cantidad × factor de su presentación (decant 5 ml = 5 ml) más
+    // los insumos de la receta, consume lotes con el método elegido y guarda su costo.
+    const pedidoPorProducto = new Map<string, number>();
+    const productosConCosto = (venta.productos ?? []).map(vp => {
+      if (vp.esInventariable === false) return vp;
+      const producto = inventario.find(p => p.id === vp.productoId);
+      if (!producto || producto.tipo !== 'producto' || !(vp.cantidad > 0)) return vp;
+      const pres = presentacionesActivas(producto).find(x => x.id === vp.presentacionId);
+      const cantidadBase = vp.cantidadBase ?? vp.cantidad * (pres?.factor ?? 1);
+      pedidoPorProducto.set(producto.id, (pedidoPorProducto.get(producto.id) ?? 0) + cantidadBase);
+      let costo = consumir(producto, cantidadBase).costoTotal;
+      if (pres && producto.controlEnvases) {
+        const r = consumirEnvases(producto, envasesRef.current, pres, vp.cantidad);
+        if (r.error) console.warn(`[inventario] ${producto.nombre}: ${r.error}`);
+        else { envasesRef.current = r.envases; setEnvases(r.envases); }
+      }
+      for (const insumo of pres?.receta ?? []) {
+        const pi = inventario.find(p => p.id === insumo.productoId);
+        if (!pi) continue;
+        const cant = insumo.cantidad * vp.cantidad;
+        pedidoPorProducto.set(pi.id, (pedidoPorProducto.get(pi.id) ?? 0) + cant);
+        costo += consumir(pi, cant).costoTotal;
+      }
+      return { ...vp, cantidadBase, costoVenta: costo, costoUnitario: Math.round(costo / vp.cantidad) };
+    });
+
     const newVenta: Venta = {
       ...venta,
+      productos: productosConCosto,
       id: newId,
       cliente_id: clienteId,
       documento_id: documento.id,
@@ -594,18 +775,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     setDocumentosTributarios(prev => [documento, ...prev]);
     setIntegracionEventos(prev => [evento, ...prev]);
 
-    // Se agrupa por producto antes de descontar. Antes cada linea se restaba contra el
-    // mismo snapshot de stock, asi que dos lineas del mismo producto en una venta
-    // descartaban ambas contra el mismo saldo y se perdian unidades.
-    const pedidoPorProducto = new Map<string, number>();
-    venta.productos?.forEach(vp => {
-      // Venta con texto libre (no inventariable): no toca stock ni inventario.
-      if (vp.esInventariable === false) return;
-      if ((vp.cantidad || 0) > 0) {
-        pedidoPorProducto.set(vp.productoId, (pedidoPorProducto.get(vp.productoId) ?? 0) + (vp.cantidad || 0));
-      }
-    });
-
+    // El stock se descuenta agrupado por producto (en unidad base) para que dos líneas
+    // del mismo producto no se resten contra el mismo saldo.
     pedidoPorProducto.forEach((pedido, productoId) => {
       const producto = inventario.find(p => p.id === productoId);
       if (!producto || producto.tipo !== 'producto') return;
@@ -632,7 +803,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
     if (venta.cliente) {
       setClientes(prev => {
-        const existing = prev.find(c => c.id === clienteId);
+        const existing = prev.find(c => c.id === clienteId) ?? buscarCliente(prev, undefined, venta.cliente);
         if (existing) {
           return prev.map(c => c.id === existing.id ? { ...c, ventas: c.ventas + 1, deuda: c.deuda + saldoPendiente } : c);
         }
@@ -674,6 +845,10 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       setInventario(prev => prev.map(p => (
         p.id === productoId && p.tipo === 'producto' ? { ...p, stock: p.stock + devolver } : p
       )));
+      const producto = inventario.find(p => p.id === productoId);
+      const linea = venta.productos.find(x => x.productoId === productoId);
+      const costoBase = linea?.costoVenta && linea.cantidadBase ? linea.costoVenta / linea.cantidadBase : Number(producto?.costo) || 0;
+      if (producto) registrarLote(producto, devolver, costoBase, hoyISO(), `devolucion-${id}`);
     });
 
     // 2) Quitar movimientos de caja vinculados (ingreso de la venta + cobros)
@@ -716,23 +891,40 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     const totalNuevo = p.monto ?? anterior.monto;
     const baseNueva = p.saldo_base ?? p.saldo_pendiente ?? (anterior.saldo_base ?? anterior.saldo_pendiente ?? 0);
 
-    // 1) Stock: restaurar la version anterior y descontar la nueva (delta por producto)
+    // 1) Stock en UNIDAD BASE (una línea de 4 decants de 5 ml descuenta 20 ml, no 4).
+    const base = (pp: VentaProducto) => pp.cantidadBase ?? pp.cantidad ?? 0;
+    const inventariable = (pp: VentaProducto) => pp.esInventariable !== false && inventario.some(x => x.id === pp.productoId && x.tipo === 'producto');
     const idsProducto = new Set([...productosViejos.map(x => x.productoId), ...productosNuevos.map(x => x.productoId)]);
     setInventario(prev => prev.map(prod => {
       if (prod.tipo !== 'producto' || !idsProducto.has(prod.id)) return prod;
-      const viejo = productosViejos.filter(pp => pp.productoId === prod.id).reduce((a, pp) => a + (pp.cantidad || 0), 0);
-      const nuevo = productosNuevos.filter(pp => pp.productoId === prod.id).reduce((a, pp) => a + (pp.cantidad || 0), 0);
+      const viejo = productosViejos.filter(pp => pp.productoId === prod.id).reduce((a, pp) => a + base(pp), 0);
+      const nuevo = productosNuevos.filter(pp => pp.productoId === prod.id).reduce((a, pp) => a + base(pp), 0);
       return { ...prod, stock: Math.max(0, prod.stock - (nuevo - viejo)) };
     }));
+
+    // 1b) Costeo: lo vendido antes vuelve como lote a su costo y se consume lo nuevo con el
+    // método vigente; cada línea queda con su costo recalculado (los envases no se reabren).
+    productosViejos.filter(inventariable).forEach(pp => {
+      const prod = inventario.find(x => x.id === pp.productoId)!;
+      const costoBase = pp.costoVenta && base(pp) ? pp.costoVenta / base(pp) : Number(prod.costo) || 0;
+      registrarLote(prod, base(pp), costoBase, hoyISO(), `edicion-${id}`);
+    });
+    const productosRecosteados = productosNuevos.map(pp => {
+      if (!inventariable(pp) || !(pp.cantidad > 0)) return pp;
+      const prod = inventario.find(x => x.id === pp.productoId)!;
+      const costo = consumir(prod, base(pp)).costoTotal;
+      return { ...pp, cantidadBase: base(pp), costoVenta: costo, costoUnitario: Math.round(costo / pp.cantidad) };
+    });
 
     // 2) Movimientos de inventario: reemplazar las salidas de la venta
     setMovimientosInventario(prev => {
       const sinViejos = prev.filter(m => !(m.origenTipo === 'venta' && m.origenId === id));
-      const nuevasSalidas = productosNuevos.map(pp => ({
+      const nuevasSalidas = productosRecosteados.filter(inventariable).map(pp => ({
         id: safeId('MI'),
         productoId: pp.productoId,
         tipo: 'salida' as const,
-        cantidad: pp.cantidad,
+        cantidad: base(pp),
+        costoUnitario: pp.costoVenta && base(pp) ? Math.round(pp.costoVenta / base(pp)) : undefined,
         fecha: new Date().toISOString(),
         motivo: `Venta #${id.split('-')[0]}`,
         origenTipo: 'venta' as const,
@@ -804,6 +996,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     setVentas(prev => prev.map(v => v.id === id ? {
       ...v,
       ...p,
+      productos: productosRecosteados,
       saldo_pendiente: baseNueva,
       subtotal: p.subtotal ?? anterior.subtotal,
       iva: p.iva ?? anterior.iva,
@@ -818,11 +1011,17 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
   const addGasto = (gasto: Omit<Gasto, 'id'>) => {
     const newId = safeId('GAS');
-    const saldoPendiente = gasto.estado === 'Por Pagar' ? (gasto.saldo_pendiente ?? gasto.monto) : 0;
-    const proveedorExistente = gasto.proveedor_id
-      ? proveedores.find(p => p.id === gasto.proveedor_id)
-      : proveedores.find(p => p.nombre.toLowerCase() === gasto.proveedor.toLowerCase());
+    gasto = { ...gasto, monto: redondearCLP(gasto.monto), subtotal: redondearCLP(gasto.subtotal), iva: redondearCLP(gasto.iva) };
+    const saldoPendiente = gasto.estado === 'Por Pagar' ? redondearCLP(gasto.saldo_pendiente ?? gasto.monto) : 0;
+    // Sueldos y honorarios son gasto de personal, no un proveedor (corrección #33).
+    const esGastoPersonal = esCategoriaPersonal(gasto.categoria);
+    const proveedorExistente = esGastoPersonal ? undefined : (gasto.proveedor_id
+      ? proveedoresRef.current.find(p => p.id === gasto.proveedor_id)
+      : proveedoresRef.current.find(p => normalizarNombre(p.nombre) === normalizarNombre(gasto.proveedor)));
     const proveedorId = proveedorExistente?.id ?? crypto.randomUUID();
+    if (!proveedorExistente && gasto.proveedor && !esGastoPersonal) {
+      proveedoresRef.current = [{ id: proveedorId, nombre: gasto.proveedor, categoria: gasto.categoria, telefono: '', deuda: 0 }, ...proveedoresRef.current];
+    }
     const documento = createDocumentFromPurchase({
       gastoId: newId,
       fecha: gasto.fecha,
@@ -856,9 +1055,9 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     setDocumentosTributarios(prev => [documento, ...prev]);
     setIntegracionEventos(prev => [evento, ...prev]);
 
-    if (gasto.proveedor) {
+    if (gasto.proveedor && !esGastoPersonal) {
       setProveedores(prev => {
-        const existing = prev.find(p => p.id === proveedorId);
+        const existing = prev.find(p => p.id === proveedorId) ?? prev.find(p => normalizarNombre(p.nombre) === normalizarNombre(gasto.proveedor));
         if (existing) return prev.map(p => p.id === existing.id ? { ...p, deuda: p.deuda + saldoPendiente } : p);
         return [{ id: proveedorId, nombre: gasto.proveedor, categoria: gasto.categoria, telefono: '', deuda: saldoPendiente }, ...prev];
       });
@@ -975,6 +1174,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     const newId = crypto.randomUUID();
     setInventario(prev => [{ ...producto, id: newId }, ...prev]);
     if (producto.tipo === 'producto' && producto.stock > 0) {
+      registrarLote({ ...producto, id: newId } as Producto, Number(producto.stock), Number(producto.costo) || 0);
       setMovimientosInventario(prev => [{
         id: crypto.randomUUID(), productoId: newId, tipo: 'ingreso',
         cantidad: producto.stock, costoUnitario: producto.costo,
@@ -993,7 +1193,18 @@ export function ERPProvider({ children }: { children: ReactNode }) {
 
   const addMovimientoInventario = (m: Omit<MovimientoInventario, 'id'>) => {
     const newId = crypto.randomUUID();
-    setMovimientosInventario(prev => [{ ...m, id: newId }, ...prev]);
+    const producto = inventario.find(p => p.id === m.productoId);
+    let costoMovimiento = m.costoUnitario;
+    if (producto && producto.tipo === 'producto') {
+      const fecha = (m.fecha || '').slice(0, 10) || hoyISO();
+      if (m.tipo === 'ingreso' || m.tipo === 'devolucion' || (m.tipo === 'ajuste' && m.cantidad > 0)) {
+        registrarLote(producto, m.cantidad, m.costoUnitario && m.costoUnitario > 0 ? m.costoUnitario : costoPromedio(lotesRef.current, producto.id, Number(producto.costo) || 0), fecha);
+      } else if (m.tipo === 'salida' || m.tipo === 'merma' || (m.tipo === 'ajuste' && m.cantidad < 0)) {
+        const cantidad = Math.abs(m.cantidad);
+        costoMovimiento = cantidad > 0 ? Math.round(consumir(producto, cantidad).costoTotal / cantidad) : 0;
+      }
+    }
+    setMovimientosInventario(prev => [{ ...m, costoUnitario: costoMovimiento, id: newId }, ...prev]);
     // El saldo se calcula DENTRO del actualizador funcional: si se calculara antes
     // (leyendo `inventario` del render), varios movimientos al mismo producto en un
     // mismo lote se pisarian entre si y se perderian los ajustes anteriores.
@@ -1005,8 +1216,9 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       else if (m.tipo === 'ajuste') stock += m.cantidad;
       // El costo solo lo define un ingreso: en una salida, merma o ajuste el valor
       // enviado puede venir de un campo oculto y dejaria de corresponder al producto.
+      // El costo mostrado es el promedio ponderado de los lotes vigentes (corrección #11).
       const redefineCosto = (m.tipo === 'ingreso') && m.costoUnitario != null && m.costoUnitario > 0;
-      return { ...p, stock, costo: redefineCosto ? m.costoUnitario! : p.costo };
+      return { ...p, stock, costo: redefineCosto ? Math.round(costoPromedio(lotesRef.current, p.id, m.costoUnitario!)) : p.costo };
     }));
   };
 
@@ -1086,7 +1298,8 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   return (
     <ERPContext.Provider value={{
       ventas, gastos, clientes, proveedores, movimientos, inventario, movimientosInventario, promociones, abonos,
-      documentosTributarios, integracionEventos, pagosPOS, configuracionCumplimiento, saldoActual,
+      documentosTributarios, integracionEventos, pagosPOS, configuracionCumplimiento, saldoActual, saldos, fusionarClientesDuplicados,
+      lotes, envases, metodoCosteo, setMetodoCosteo,
       addVenta, updateVenta, addGasto, updateGasto, addCliente, updateCliente, addProveedor, updateProveedor, addProducto, editProducto, addMovimientoInventario, addPromocion, editPromocion,
       deleteVenta, deleteGasto, deleteCliente, deleteProveedor, deleteProducto, deletePromocion,
       addAbono, createNotaCredito, reconcilePagoPOS, previewVentaImpacto, getDocumentosByPeriodo, getF29Preparador,

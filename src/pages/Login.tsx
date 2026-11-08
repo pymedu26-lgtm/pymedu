@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -12,9 +12,27 @@ const rolRedirectMap: Record<string, string> = {
   emprendedor: '/erp/inicio',
   dueño: '/erp/inicio',
   demo: '/demo/inicio',
+  admin_proveedor: '/mentorias/gestion',
+  instructor: '/mentorias/gestion',
+  curador: '/mentorias/revision',
 };
 
+// Cuentas sembradas por server/src/db.js. Solo visibles en desarrollo o con VITE_DEMO=1 (corrección #25).
+const DEMO_HABILITADO = import.meta.env.DEV || import.meta.env.VITE_DEMO === '1';
+const DEMO_CLAVE = 'Demo#2026';
+const CUENTAS_DEMO = [
+  { label: 'Emprendedor (ERP)', email: 'emprendedor@pymedu.com' },
+  { label: 'Superadmin', email: 'supadmin@pymedu.com' },
+  { label: 'Admin institución', email: 'admin@colegiosanjose.cl' },
+  { label: 'Coordinador', email: 'coord@colegiosanjose.cl' },
+  { label: 'Mentor', email: 'mentor@colegiosanjose.cl' },
+  { label: 'Mentorías · Proveedor', email: 'proveedor@pymedu.com' },
+  { label: 'Mentorías · Curador', email: 'curador@pymedu.com' },
+];
+
 export default function Login() {
+  const [searchParams] = useSearchParams();
+  const mostrarDemo = DEMO_HABILITADO && searchParams.get('demo') === '1';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,6 +92,25 @@ export default function Login() {
         {error && (
           <div className="p-4 mb-6 bg-error-container text-on-error-container rounded-xl text-sm font-medium">
             {error}
+          </div>
+        )}
+
+        {mostrarDemo && (
+          <div className="mb-6 p-4 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5">
+            <p className="text-sm font-extrabold text-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-lg">play_circle</span>
+              Cuentas de demostración
+            </p>
+            <p className="text-xs text-on-surface-variant mt-1 mb-3">Elige una cuenta para completar el formulario y presiona «Entrar».</p>
+            <div className="grid grid-cols-2 gap-2">
+              {CUENTAS_DEMO.map(c => (
+                <button key={c.email} type="button" onClick={() => { setEmail(c.email); setPassword(DEMO_CLAVE); setError(''); }}
+                  title={c.email}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold text-left border transition-colors ${email === c.email ? 'bg-primary text-inverse-on-surface border-primary' : 'bg-surface-container-lowest text-on-surface border-outline-variant/40 hover:border-primary/50'}`}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

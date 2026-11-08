@@ -1,14 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { formatCLP } from '../lib/fechas';
+import { PLANES, periodoPlan } from '../lib/planes';
+
+// Cuentas de demostración solo en desarrollo o con VITE_DEMO=1 (corrección #25).
+const DEMO_HABILITADO = import.meta.env.DEV || import.meta.env.VITE_DEMO === '1';
 
 const FEATURES = [
   { icon: 'point_of_sale', title: 'Ventas y Gastos', desc: 'Registra cada movimiento con 2 clics. Sin columnas ni planillas.' },
   { icon: 'inventory_2', title: 'Inventario simple', desc: 'Controla tu stock con alertas automáticas de reposición.' },
-  { icon: 'badge', title: 'Remuneraciones Chile', desc: 'Liquidaciones, AFP, Fonasa, IUSC. Calculado al día.' },
   { icon: 'receipt_long', title: 'Documentos y F29', desc: 'Preparador de IVA y documentos tributarios internos.' },
-  { icon: 'groups', title: 'Equipo y accesos', desc: 'Roles, permisos e invitaciones para tu equipo.' },
-  { icon: 'auto_awesome', title: 'Asistente IA', desc: 'Pregunta en lenguaje natural y obtén respuestas de tu negocio.' },
+  { icon: 'gavel', title: 'Mercados Públicos', desc: 'Busca licitaciones de ChileCompra relacionadas con tu rubro.' },
+  { icon: 'badge', title: 'Remuneraciones Chile', desc: 'Liquidaciones, AFP, Fonasa, IUSC.', pronto: true },
+  { icon: 'groups', title: 'Equipo y accesos', desc: 'Roles, permisos e invitaciones para tu equipo.', pronto: true },
+  { icon: 'auto_awesome', title: 'Asistente IA', desc: 'Pregunta en lenguaje natural y obtén respuestas de tu negocio.', pronto: true },
 ];
 
 const BENEFITS = [
@@ -18,54 +24,23 @@ const BENEFITS = [
   { stat: '$0', label: 'para empezar' },
 ];
 
-const PLANS = [
-  {
-    name: 'Básico',
-    price: 'Free',
-    desc: 'Para emprendimientos unipersonales',
-    features: ['Dashboard financiero', '5 ventas/mes', 'Gastos ilimitados', 'Asistente IA básico'],
-    cta: 'Crear cuenta',
-    featured: false,
-  },
-  {
-    name: 'Emprende',
-    price: '$9.900',
-    period: '/mes',
-    desc: 'Para negocios en crecimiento',
-    features: ['Todo lo de Básico', 'Ventas ilimitadas', 'Inventario básico', 'Reportes mensuales', 'Soporte prioritario'],
-    cta: 'Elegir Emprende',
-    featured: false,
-  },
-  {
-    name: 'Pro Gestión',
-    price: '$19.900',
-    period: '/mes',
-    desc: 'Para pymes con equipo',
-    features: ['Todo lo de Emprende', 'Remuneraciones', 'Documentos laborales', 'Firma electrónica', 'Mercado Público', 'Portal Municipal'],
-    cta: 'Elegir Pro',
-    featured: true,
-  },
-  {
-    name: 'Empresa',
-    price: 'A medida',
-    period: '',
-    desc: 'Para organizaciones e instituciones',
-    features: ['Todo lo de Pro Gestión', 'Plantillas corporativas', 'API y webhooks', 'Soporte dedicado', 'Onboarding asistido'],
-    cta: 'Contactar',
-    featured: false,
-  },
-];
-
 const FAQS = [
   { q: '¿Necesito ser contador para usar PymEdu?', a: 'No. PymEdu está diseñado para dueños de negocio sin formación contable. Todo está explicado en lenguaje cotidiano.' },
-  { q: '¿Puedo probarlo antes de pagar?', a: 'Sí. Crea una cuenta gratis y usa el demo premium sin costo por tiempo ilimitado.' },
+  {
+    q: '¿Puedo probarlo antes de pagar?',
+    a: DEMO_HABILITADO
+      ? 'Sí. El plan Básico es gratis y sin tarjeta. También puedes entrar con una cuenta de demostración desde el botón «Demo interactivo».'
+      : 'Sí. El plan Básico es gratis y no pide tarjeta: crea tu cuenta y úsalo el tiempo que quieras antes de decidir si te cambias a Pro o Premium.',
+  },
   { q: '¿Funciona para mi tipo de negocio?', a: 'PymEdu funciona para cualquier mype: retail, servicios, gastronomía, manufactura, profesionales independientes.' },
-  { q: '¿Mis datos están seguros?', a: 'Sí. Usamos PostgreSQL en Railway con encriptación en tránsito, sesiones firmadas con token y separación de datos por empresa.' },
+  { q: '¿Mis datos están seguros?', a: 'Sí. Tus datos se guardan en infraestructura en la nube con copias de seguridad y acceso protegido: la conexión va cifrada, cada sesión requiere autenticación y la información de cada negocio se mantiene separada.' },
 ];
 
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const { theme, toggleTheme } = useTheme();
+  // Enlaces externos a una sección (ej. /#municipios desde el Portal Municipal).
+  useEffect(() => { if (window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView(); }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-surface-container-lowest">
@@ -125,10 +100,12 @@ export default function Landing() {
               Crear cuenta gratis
               <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
             </Link>
-            <Link to="/login" className="w-full sm:w-auto px-8 py-4 bg-surface-container-lowest text-primary rounded-full text-base font-bold border-2 border-primary/10 hover:border-primary/30 hover:bg-primary/5 transition-all inline-flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-lg">play_arrow</span>
-              Demo interactivo
-            </Link>
+            {DEMO_HABILITADO && (
+              <Link to="/login?demo=1" className="w-full sm:w-auto px-8 py-4 bg-surface-container-lowest text-primary rounded-full text-base font-bold border-2 border-primary/10 hover:border-primary/30 hover:bg-primary/5 transition-all inline-flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-lg">play_arrow</span>
+                Demo interactivo
+              </Link>
+            )}
           </div>
 
           <div className="mt-12 flex flex-wrap items-center justify-center gap-8 md:gap-12 text-sm text-on-surface-variant">
@@ -194,7 +171,10 @@ export default function Landing() {
                 <div className="w-11 h-11 rounded-xl command-gradient flex items-center justify-center mb-4 shadow-md shadow-primary/10 group-hover:shadow-lg group-hover:scale-110 transition-all">
                   <span className="material-symbols-outlined text-white text-xl">{f.icon}</span>
                 </div>
-                <h3 className="text-lg font-extrabold text-on-surface mb-2">{f.title}</h3>
+                <h3 className="text-lg font-extrabold text-on-surface mb-2 flex items-center gap-2 flex-wrap">
+                  {f.title}
+                  {f.pronto && <span className="text-[10px] font-bold uppercase tracking-wider bg-warning/15 text-warning px-2 py-0.5 rounded-full">Próximamente</span>}
+                </h3>
                 <p className="text-sm text-on-surface-variant leading-relaxed">{f.desc}</p>
               </div>
             ))}
@@ -211,50 +191,82 @@ export default function Landing() {
             <p className="text-on-surface-variant max-w-xl mx-auto">Empieza gratis. Escala cuando lo necesites. Sin cláusulas de permanencia.</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-            {PLANS.map((plan) => (
+          <div className="grid md:grid-cols-3 gap-5 max-w-5xl mx-auto">
+            {PLANES.map((plan) => (
               <div
-                key={plan.name}
+                key={plan.id}
                 className={`relative rounded-2xl p-6 border-2 transition-all duration-300 flex flex-col ${
-                  plan.featured
+                  plan.destacado
                     ? 'border-primary bg-primary/[0.03] shadow-xl shadow-primary/10 scale-[1.02]'
                     : 'border-outline-variant/20 bg-surface-container-lowest hover:border-primary/30 hover:shadow-lg'
                 }`}
               >
-                {plan.featured && (
+                {plan.destacado && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-inverse-on-surface text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
                     Recomendado
                   </div>
                 )}
                 <div className="mb-6">
-                  <h3 className="text-lg font-extrabold text-on-surface">{plan.name}</h3>
+                  <h3 className="text-lg font-extrabold text-on-surface">{plan.nombre}</h3>
                   <div className="mt-3 flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold text-primary">{plan.price}</span>
-                    {plan.period && <span className="text-sm text-on-surface-variant">{plan.period}</span>}
+                    <span className="text-3xl font-extrabold text-primary">{plan.precio === 0 ? 'Gratis' : formatCLP(plan.precio)}</span>
+                    <span className="text-sm text-on-surface-variant">{periodoPlan(plan)}</span>
                   </div>
-                  <p className="text-sm text-on-surface-variant mt-2">{plan.desc}</p>
+                  <p className="text-sm text-on-surface-variant mt-2">{plan.descripcion}</p>
                 </div>
                 <ul className="space-y-3 mb-8 flex-1">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm">
-                      <span className="material-symbols-outlined text-primary text-base mt-0.5">check_circle</span>
-                      <span className="text-on-surface-variant">{f}</span>
+                    <li key={f.texto} className="flex items-start gap-2.5 text-sm">
+                      <span className={`material-symbols-outlined text-base mt-0.5 ${f.estado === 'proximamente' ? 'text-on-surface-variant/50' : 'text-primary'}`}>
+                        {f.estado === 'proximamente' ? 'schedule' : 'check_circle'}
+                      </span>
+                      <span className={f.estado === 'proximamente' ? 'text-on-surface-variant/60' : 'text-on-surface-variant'}>
+                        {f.texto}
+                        {f.estado === 'proximamente' && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide text-warning">Próximamente</span>}
+                      </span>
                     </li>
                   ))}
                 </ul>
                 <Link
                   to="/register"
                   className={`w-full py-3 rounded-xl text-sm font-bold text-center transition-all ${
-                    plan.featured
+                    plan.destacado
                       ? 'command-gradient text-white shadow-lg shadow-primary/20 hover:shadow-xl hover:scale-[1.02]'
                       : 'bg-surface text-on-surface border border-outline-variant/20 hover:bg-surface-container-high'
                   }`}
                 >
-                  {plan.cta}
+                  {plan.precio === 0 ? 'Crear cuenta gratis' : `Elegir ${plan.nombre}`}
                 </Link>
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── Para municipios (presentación institucional, movida desde Portal Municipal: corrección #21) ── */}
+      <section id="municipios" className="py-16 md:py-20 bg-surface-container-low">
+        <div className="max-w-5xl mx-auto px-6 grid md:grid-cols-[1fr_1.2fr] gap-8 items-center">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-[0.2em] text-primary bg-primary/5 px-4 py-1.5 rounded-full">Para municipios</span>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-on-surface mt-5 mb-3">Acompaña a los emprendedores de tu comuna</h2>
+            <p className="text-on-surface-variant text-sm leading-relaxed">
+              Publica convocatorias y programas de apoyo, y sigue el avance de los negocios inscritos con indicadores agregados: rezagos, avance documental y adopción digital.
+            </p>
+          </div>
+          <ul className="grid sm:grid-cols-2 gap-3">
+            {[
+              { icon: 'campaign', t: 'Convocatorias visibles', d: 'Los emprendedores las ven en su Portal Municipal con fecha de cierre.' },
+              { icon: 'monitoring', t: 'Seguimiento agregado', d: 'Indicadores por comuna y programa, sin exponer ventas, márgenes ni datos nominativos.' },
+              { icon: 'school', t: 'Formación incluida', d: 'Academia financiera y legal para los beneficiarios.' },
+              { icon: 'handshake', t: 'Mentorías', d: 'Conecta a tus emprendedores con mentores y programas.' },
+            ].map((b) => (
+              <li key={b.t} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/10">
+                <span className="material-symbols-outlined text-primary">{b.icon}</span>
+                <p className="font-bold text-on-surface text-sm mt-1">{b.t}</p>
+                <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">{b.d}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -293,7 +305,7 @@ export default function Landing() {
         <div className="relative max-w-3xl mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl font-extrabold text-primary mb-6">Empieza hoy. Sin tarjeta de crédito.</h2>
           <p className="text-lg text-on-surface-variant mb-10 max-w-lg mx-auto">
-            Crea tu cuenta en 30 segundos y accede al demo completo con datos de prueba. Si te gusta, conecta tu negocio real.
+            Crea tu cuenta en 30 segundos con el plan Básico gratuito. Si te sirve, cámbiate a Pro o Premium cuando lo necesites.
           </p>
           <Link
             to="/register"
@@ -318,6 +330,7 @@ export default function Landing() {
             <nav className="flex items-center gap-6 text-sm text-on-surface-variant">
               <a href="#features" className="hover:text-primary transition-colors">Funcionalidades</a>
               <a href="#plans" className="hover:text-primary transition-colors">Planes</a>
+              <a href="#municipios" className="hover:text-primary transition-colors">Municipios</a>
               <Link to="/login" className="hover:text-primary transition-colors">Iniciar sesión</Link>
               <Link to="/register" className="hover:text-primary transition-colors">Registro</Link>
             </nav>
