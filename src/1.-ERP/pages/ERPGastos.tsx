@@ -465,14 +465,9 @@ export default function ERPGastos() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left hidden sm:table-cell">Fecha</th>
-                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">Proveedor / Concepto</th>
-                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left hidden md:table-cell">Categoría</th>
-                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">Monto</th>
-                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left hidden md:table-cell">Saldo</th>
-                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left hidden sm:table-cell">Método</th>
-                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">Estado</th>
-                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">Acciones</th>
+                {['Fecha', 'Proveedor / Concepto', 'Categoría', 'Monto', 'Saldo', 'Método', 'Estado', 'Acciones'].map(h => (
+                  <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
@@ -500,7 +495,7 @@ export default function ERPGastos() {
                     <td className="p-4 font-bold hidden md:table-cell">
                       {saldo > 0 ? <span className="text-secondary">{fmt(saldo)}</span> : <span className="text-success">$0</span>}
                     </td>
-                    <td className="p-4 text-on-surface-variant text-xs hidden sm:table-cell">{METODOS.find(m => m.value === g.metodo_pago)?.label || g.metodo_pago || '---'}</td>
+                    <td className="p-4 text-on-surface-variant text-xs">{METODOS.find(m => m.value === g.metodo_pago)?.label || g.metodo_pago || '---'}</td>
                     <td className="p-4">
                       <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold',
                         g.estado === 'Pagado' ? 'bg-success-container text-on-success-container' : 'bg-secondary/20 text-secondary')}>

@@ -956,7 +956,7 @@ const stockInsuficiente = productoSeleccionado
                 <th className="px-6 py-4 hidden md:table-cell">Realizado por</th>
                 <th className="px-6 py-4">Productos</th>
                 <th className="px-6 py-4 text-right">Total</th>
-                <th className="px-6 py-4 hidden lg:table-cell">Categoría</th>
+                <th className="px-6 py-4">Categoría</th>
                 <th className="px-6 py-4 text-center">Estado</th>
                 <th className="px-6 py-4 text-center">Acciones</th>
               </tr>

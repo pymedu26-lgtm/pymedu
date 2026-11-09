@@ -676,16 +676,16 @@ export default function ERPInventario() {
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary' },
-              { label: 'Valorización Costo', value: `$${valorInventario.toLocaleString('es-CL')}`, icon: 'payments', color: 'text-on-surface' },
-              { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-success' },
-              { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant' },
+              { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20' },
+              { label: 'Valorización Costo', value: `$${valorInventario.toLocaleString('es-CL')}`, icon: 'payments', color: 'text-on-surface', bg: 'bg-surface-container-low', border: 'border-outline-variant/30' },
+              { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-success', bg: 'bg-success/5', border: 'border-success/20' },
+              { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant', bg: productosBajoStock > 0 ? 'bg-error/5' : 'bg-surface-container-low', border: productosBajoStock > 0 ? 'border-error/20' : 'border-outline-variant/30' },
             ].map(k => (
               <div key={k.label} className="p-5 rounded-3xl border-2 border-outline-variant/30 bg-surface-container-low transition-all hover:shadow-md">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-[10px] font-black text-outline uppercase tracking-widest">{k.label}</p>
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-surface-container-lowest shadow-sm">
-                    <span className={cn('material-symbols-outlined text-lg', k.color)}>{k.icon}</span>
+                  <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center bg-surface-container-lowest shadow-sm', k.color)}>
+                    <span aria-hidden="true" className="material-symbols-outlined text-lg">{k.icon}</span>
                   </div>
                 </div>
                 <p className={cn('text-2xl font-black', k.color)}>{k.value}</p>
