@@ -370,7 +370,7 @@ name: 'Mi institución',
         className={cn(
           'flex flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300',
           esEscritorio
-            ? cn('sticky left-0 top-0 z-50 h-screen', !sidebarOpen && openGroups.size > 0 && 'z-[1100]', sidebarOpen ? 'w-[248px]' : 'w-[64px]')
+            ? cn('fixed left-0 top-0 z-50 h-screen overflow-y-auto', !sidebarOpen && openGroups.size > 0 && 'z-[1100]', sidebarOpen ? 'w-[248px]' : 'w-[64px]')
             : cn('fixed inset-y-0 left-0 z-[1200] h-[100dvh] w-[280px] max-w-[85vw]', cajonAbierto ? 'translate-x-0' : '-translate-x-full invisible')
         )}
       >

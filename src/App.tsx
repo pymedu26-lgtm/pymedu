@@ -142,7 +142,7 @@ function RoleNavSidebar() {
   };
 
   return (
-    <aside className={`sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300 ${collapsed ? 'w-[64px]' : 'w-[216px]'}`}>
+    <aside className={`fixed left-0 top-0 z-50 flex h-screen flex-col overflow-y-auto bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300 ${collapsed ? 'w-[64px]' : 'w-[216px]'}`}>
       <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-3.5 shrink-0">
         <button
           onClick={() => setCollapsed(!collapsed)}
