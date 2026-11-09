@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../lib/api';
-import { PLAN_FREE, PLAN_PREMIUM, PLAN_PRO } from '../../../lib/planes';
 
 const PAGE_SIZE = 20;
 
@@ -18,15 +17,15 @@ const ROLES_CREABLES = [
 ];
 
 const MEMBRESIAS = [
-  { value: 'free', label: PLAN_FREE.nombre },
-  { value: 'pro', label: PLAN_PRO.nombre },
-  { value: 'premium', label: PLAN_PREMIUM.nombre },
+  { value: 'free', label: 'Gratis' },
+  { value: 'pro', label: 'Pro' },
+  { value: 'premium', label: 'Premium' },
 ] as const;
 
 const membresiaConfig: Record<string, { label: string; color: string }> = {
-  free: { label: PLAN_FREE.nombre, color: 'bg-surface-container text-on-surface-variant' },
-  pro: { label: PLAN_PRO.nombre, color: 'bg-warning-container text-on-warning-container' },
-  premium: { label: PLAN_PREMIUM.nombre, color: 'bg-info-container text-on-info-container' },
+  free: { label: 'Gratis', color: 'bg-surface-container text-on-surface-variant' },
+  pro: { label: 'Pro', color: 'bg-warning-container text-on-warning-container' },
+  premium: { label: 'Premium', color: 'bg-info-container text-on-info-container' },
 };
 
 const rolConfig: Record<string, { label: string; color: string; icon: string }> = {
@@ -137,7 +136,7 @@ export default function UsuariosGlobales() {
       setError('Nombre, email y contraseña son obligatorios.');
       return;
     }
-    if (nuevoUsuario.password.length < 6) {
+    if (nuevoUsuario.password.length < 8) {
       setError('La contraseña debe tener al menos 8 caracteres.');
       return;
     }
@@ -215,7 +214,7 @@ export default function UsuariosGlobales() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-info">group</span>
+          <span className="material-symbols-outlined text-3xl text-info">group</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Todos los Usuarios</h1>
             <p className="text-on-surface-variant">{total} usuarios en {instituciones.length} instituciones</p>
@@ -225,7 +224,7 @@ export default function UsuariosGlobales() {
           onClick={() => { setError(''); setExito(''); setShowCrear(true); }}
           className="flex items-center gap-2 px-5 py-3 bg-primary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
         >
-          <span aria-hidden="true" className="material-symbols-outlined text-lg">person_add</span>
+          <span className="material-symbols-outlined text-lg">person_add</span>
           Crear usuario
         </button>
       </div>
@@ -242,7 +241,7 @@ export default function UsuariosGlobales() {
           >
             <div className="flex items-center gap-2 mb-2">
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${config.color}`}>{stats[key] || 0}</span>
-              <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant text-sm">{config.icon}</span>
+              <span className="material-symbols-outlined text-on-surface-variant text-sm">{config.icon}</span>
             </div>
             <p className="text-xs font-bold text-on-surface-variant">{config.label}</p>
           </button>
@@ -321,11 +320,11 @@ export default function UsuariosGlobales() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => handleEditar(u)} aria-label={`Editar usuario ${u.nombre_completo}`} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Editar">
-                        <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant text-lg">edit</span>
+                      <button onClick={() => handleEditar(u)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Editar">
+                        <span className="material-symbols-outlined text-on-surface-variant text-lg">edit</span>
                       </button>
                       <button className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Cambiar rol">
-                        <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant text-lg">swap_horiz</span>
+                        <span className="material-symbols-outlined text-on-surface-variant text-lg">swap_horiz</span>
                       </button>
                     </div>
                   </td>
@@ -336,7 +335,7 @@ export default function UsuariosGlobales() {
         </div>
         {!loading && usuarios.length === 0 && (
           <div className="p-12 text-center">
-            <span aria-hidden="true" className="material-symbols-outlined text-5xl text-on-surface-variant/30">person_off</span>
+            <span className="material-symbols-outlined text-5xl text-on-surface-variant/30">person_off</span>
             <p className="mt-3 text-on-surface-variant font-bold">No se encontraron usuarios</p>
           </div>
         )}
@@ -373,19 +372,19 @@ export default function UsuariosGlobales() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/30 flex justify-between items-center shrink-0">
               <h3 className="text-lg font-bold text-on-surface">Crear usuario</h3>
-              <button onClick={() => setShowCrear(false)} aria-label="Cerrar creación de usuario" className="text-on-surface-variant hover:text-on-surface">
-                <span aria-hidden="true" className="material-symbols-outlined">close</span>
+              <button onClick={() => setShowCrear(false)} className="text-on-surface-variant hover:text-on-surface">
+                <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
               {exito && (
                 <p className="flex items-center gap-1.5 text-xs font-bold text-on-success-container bg-success-container rounded-xl px-3 py-2">
-                  <span aria-hidden="true" className="material-symbols-outlined text-base">check_circle</span> {exito}
+                  <span className="material-symbols-outlined text-base">check_circle</span> {exito}
                 </p>
               )}
               {error && (
                 <p className="flex items-center gap-1.5 text-xs font-bold text-on-error-container bg-error-container rounded-xl px-3 py-2">
-                  <span aria-hidden="true" className="material-symbols-outlined text-base">error</span> {error}
+                  <span className="material-symbols-outlined text-base">error</span> {error}
                 </p>
               )}
               <div>
@@ -415,7 +414,7 @@ export default function UsuariosGlobales() {
                   value={nuevoUsuario.password}
                   onChange={e => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                 />
               </div>
               <div>
@@ -470,19 +469,19 @@ export default function UsuariosGlobales() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/30 flex justify-between items-center shrink-0">
               <h3 className="text-lg font-bold text-on-surface">Editar usuario</h3>
-              <button onClick={() => setShowEditar(false)} aria-label="Cerrar edición de usuario" className="text-on-surface-variant hover:text-on-surface">
-                <span aria-hidden="true" className="material-symbols-outlined">close</span>
+              <button onClick={() => setShowEditar(false)} className="text-on-surface-variant hover:text-on-surface">
+                <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
               {exito && (
                 <p className="flex items-center gap-1.5 text-xs font-bold text-on-success-container bg-success-container rounded-xl px-3 py-2">
-                  <span aria-hidden="true" className="material-symbols-outlined text-base">check_circle</span> {exito}
+                  <span className="material-symbols-outlined text-base">check_circle</span> {exito}
                 </p>
               )}
               {error && (
                 <p className="flex items-center gap-1.5 text-xs font-bold text-on-error-container bg-error-container rounded-xl px-3 py-2">
-                  <span aria-hidden="true" className="material-symbols-outlined text-base">error</span> {error}
+                  <span className="material-symbols-outlined text-base">error</span> {error}
                 </p>
               )}
               <div>

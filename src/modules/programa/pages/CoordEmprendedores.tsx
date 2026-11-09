@@ -18,16 +18,16 @@ interface Emprendedor {
 }
 
 const emprendedores: Emprendedor[] = [
-  { id: '1', nombre: 'Pedro Martinez', negocio: 'Pyme Demo Chile', cohorte: 'Emprendimiento Juvenil 2026', mentor: 'Carlos Ruiz', estado: 'activo', avance: 78, cursosCompletados: 12, cursosTotal: 18, documentosPendientes: 1, ultimaActividad: 'Hace 2 horas', hitos: ['Inscripcion SII', 'Plan de negocio'] },
-  { id: '2', nombre: 'Laura Diaz', negocio: 'Artesanias Laura', cohorte: 'Emprendimiento Juvenil 2026', mentor: 'Sin asignar', estado: 'riesgo', avance: 45, cursosCompletados: 6, cursosTotal: 18, documentosPendientes: 3, ultimaActividad: 'Hace 5 dias', hitos: [] },
-  { id: '3', nombre: 'Roberto Sanchez', negocio: 'Tech Solutions', cohorte: 'Innovacion Digital', mentor: 'Ana Morales', estado: 'activo', avance: 92, cursosCompletados: 16, cursosTotal: 18, documentosPendientes: 0, ultimaActividad: 'Ayer', hitos: ['Inscripcion SII', 'Plan de negocio', 'Marca INAPI'] },
-  { id: '4', nombre: 'Maria Lopez', negocio: 'Eco Foods', cohorte: 'Innovacion Digital', mentor: 'Jorge Pena', estado: 'activo', avance: 65, cursosCompletados: 9, cursosTotal: 18, documentosPendientes: 2, ultimaActividad: 'Hace 2 dias', hitos: ['Plan de negocio'] },
-  { id: '5', nombre: 'Juan Carlos Vega', negocio: 'Transporte Vega', cohorte: 'Sostenibilidad Local', mentor: 'Sofia Reyes', estado: 'completado', avance: 100, cursosCompletados: 18, cursosTotal: 18, documentosPendientes: 0, ultimaActividad: 'Hace 1 semana', hitos: ['Inscripcion SII', 'Plan de negocio', 'Marca INAPI', 'Certificacion'] },
-  { id: '6', nombre: 'Camila Rojas', negocio: 'EcoTextil', cohorte: 'Sostenibilidad Local', mentor: 'Carlos Ruiz', estado: 'activo', avance: 55, cursosCompletados: 7, cursosTotal: 18, documentosPendientes: 2, ultimaActividad: 'Hace 3 dias', hitos: ['Plan de negocio'] },
-  { id: '7', nombre: 'Felipe Torres', negocio: 'FoodTech', cohorte: 'Innovacion Digital', mentor: 'Ana Morales', estado: 'inactivo', avance: 20, cursosCompletados: 3, cursosTotal: 18, documentosPendientes: 4, ultimaActividad: 'Hace 2 semanas', hitos: [] },
+  { id: '1', nombre: 'Pedro Martínez', negocio: 'Pyme Demo Chile', cohorte: 'Emprendimiento Juvenil 2026', mentor: 'Carlos Ruiz', estado: 'activo', avance: 78, cursosCompletados: 12, cursosTotal: 18, documentosPendientes: 1, ultimaActividad: 'Hace 2 horas', hitos: ['Inscripcion SII', 'Plan de negocio'] },
+  { id: '2', nombre: 'Laura Díaz', negocio: 'Artesanías Laura', cohorte: 'Emprendimiento Juvenil 2026', mentor: 'Sin asignar', estado: 'riesgo', avance: 45, cursosCompletados: 6, cursosTotal: 18, documentosPendientes: 3, ultimaActividad: 'Hace 5 días', hitos: [] },
+  { id: '3', nombre: 'Roberto Sánchez', negocio: 'Tech Solutions', cohorte: 'Innovación Digital', mentor: 'Ana Morales', estado: 'activo', avance: 92, cursosCompletados: 16, cursosTotal: 18, documentosPendientes: 0, ultimaActividad: 'Ayer', hitos: ['Inscripcion SII', 'Plan de negocio', 'Marca INAPI'] },
+  { id: '4', nombre: 'María López', negocio: 'Eco Foods', cohorte: 'Innovación Digital', mentor: 'Jorge Peña', estado: 'activo', avance: 65, cursosCompletados: 9, cursosTotal: 18, documentosPendientes: 2, ultimaActividad: 'Hace 2 días', hitos: ['Plan de negocio'] },
+  { id: '5', nombre: 'Juan Carlos Vega', negocio: 'Transporte Vega', cohorte: 'Sostenibilidad Local', mentor: 'Sofía Reyes', estado: 'completado', avance: 100, cursosCompletados: 18, cursosTotal: 18, documentosPendientes: 0, ultimaActividad: 'Hace 1 semana', hitos: ['Inscripcion SII', 'Plan de negocio', 'Marca INAPI', 'Certificacion'] },
+  { id: '6', nombre: 'Camila Rojas', negocio: 'EcoTextil', cohorte: 'Sostenibilidad Local', mentor: 'Carlos Ruiz', estado: 'activo', avance: 55, cursosCompletados: 7, cursosTotal: 18, documentosPendientes: 2, ultimaActividad: 'Hace 3 días', hitos: ['Plan de negocio'] },
+  { id: '7', nombre: 'Felipe Torres', negocio: 'FoodTech', cohorte: 'Innovación Digital', mentor: 'Ana Morales', estado: 'inactivo', avance: 20, cursosCompletados: 3, cursosTotal: 18, documentosPendientes: 4, ultimaActividad: 'Hace 2 semanas', hitos: [] },
 ];
 
-const cohortes = ['Todas', 'Emprendimiento Juvenil 2026', 'Innovacion Digital', 'Sostenibilidad Local'];
+const cohortes = ['Todas', 'Emprendimiento Juvenil 2026', 'Innovación Digital', 'Sostenibilidad Local'];
 
 const estadoConfig: Record<EstadoEmprendedor, { label: string; color: string }> = {
   activo: { label: 'Activo', color: 'bg-success-container text-on-success-container' },

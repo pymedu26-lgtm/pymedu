@@ -85,6 +85,18 @@ export interface ConfiguracionCumplimiento {
   ppmTasa: number;
   usaFoliosManual: boolean;
   contadorEmail?: string;
+  /** Método de costeo del inventario (por defecto promedio). LIFO no se acepta en Chile. */
+  metodoCosteo?: 'fifo' | 'promedio';
+  /** Qué frasco abierto usar para una porción: el que tiene menos (para terminarlo) o el abierto hace más tiempo. */
+  politicaEnvaseAbierto?: 'menos_contenido' | 'mas_antiguo';
+  /** Combinar abiertas antes de abrir una nueva (por defecto no: se abre otra y el remanente queda). */
+  permitirMezclarEnvases?: boolean;
+  /** Margen objetivo (%) para sugerir precios cuando no hay un producto de origen. */
+  margenObjetivo?: number;
+  /** Subcategorías frecuentes (plantillas). Borrarlas no cambia los productos que ya las copiaron. */
+  plantillasSubcategoria?: import('./subcategorias').PlantillaSubcategoria[];
+  /** Preferencias del Centro de alertas. */
+  alertas?: import('./alertas').ConfigAlertas;
 }
 
 export interface SaleDocumentInput {

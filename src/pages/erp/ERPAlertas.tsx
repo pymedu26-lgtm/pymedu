@@ -1,334 +1,195 @@
-import { useMemo, useState } from 'react';
+// Centro de alertas: una sola fuente (services/alertas.ts vía ERPContext) con estado persistido
+// (nueva, vista, pospuesta, descartada) en la colección `notificaciones`.
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useERP } from '../../1.-ERP/context/ERPContext';
-import { formatearFechaLocal, hoyIso as hoyIsoLocal, parseFechaLocal } from '../../lib/fecha';
+import { CATEGORIAS, horaRelativa, type Alerta, type CategoriaAlerta } from '../../1.-ERP/services/alertas';
+import { normalizarNombre } from '../../1.-ERP/context/ERPContext';
+import { formatFecha } from '../../lib/fechas';
+import { cn } from '../../lib/utils';
 
-type AlertaTipo = 'critica' | 'advertencia' | 'tributaria' | 'info' | 'exito';
-type AlertaOrigen = 'sistema' | 'sii' | 'municipalidad' | 'mentor';
+const COLOR: Record<Alerta['tipo'], { icono: string; borde: string }> = {
+  critica: { icono: 'text-error bg-error/10', borde: 'border-l-error' },
+  tributaria: { icono: 'text-violet bg-violet/15', borde: 'border-l-violet' },
+  advertencia: { icono: 'text-warning bg-warning/15', borde: 'border-l-warning' },
+  info: { icono: 'text-primary bg-primary/10', borde: 'border-l-primary' },
+  exito: { icono: 'text-success bg-success/15', borde: 'border-l-success' },
+};
 
-interface Alerta {
-  id: string;
-  tipo: AlertaTipo;
-  origen: AlertaOrigen;
-  titulo: string;
-  detalle: string;
-  accion_label?: string;
-  accion_url?: string;
-  icono: string;
+const manana = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return d.toISOString(); };
+const enUnaSemana = () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(8, 0, 0, 0); return d.toISOString(); };
+const clavesDe = (a: Alerta) => (a.grupo ? a.grupo.map(g => g.clave) : [a.clave]);
+const fechaVisible = (a: Alerta) => (a.venceEn ? `Vence ${formatFecha(a.venceEn)}` : horaRelativa(a.creadaEn));
+
+function Tarjeta({ a, onMarcar, compacta }: { key?: string; a: Alerta; onMarcar: (claves: string[], estado: 'vista' | 'pospuesta' | 'descartada', hasta?: string) => void; compacta?: boolean }) {
+  const [menu, setMenu] = useState(false);
+  const [abierta, setAbierta] = useState(false);
+  const principal = a.acciones[0];
+  return (
+    <li className={cn('rounded-2xl border border-l-4 border-outline-variant/30 bg-surface-container-lowest p-3 sm:p-4', COLOR[a.tipo].borde, a.estado === 'vista' && 'opacity-80')}>
+      <div className="flex items-start gap-3">
+        <span className={cn('material-symbols-outlined shrink-0 rounded-xl p-1.5 text-xl', COLOR[a.tipo].icono)}>{a.icono}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            {a.estado === 'nueva' && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="nueva" />}
+            <h4 className="text-sm font-bold text-on-surface">{a.titulo}</h4>
+            {a.veces && a.veces > 1 && <span className="rounded-full bg-surface-container-high px-2 text-[10px] font-bold text-on-surface-variant">×{a.veces}</span>}
+          </div>
+          <p className={cn('mt-0.5 text-xs text-on-surface-variant', compacta && 'line-clamp-2')}>{a.detalle}</p>
+          <p className="mt-1 text-[11px] font-bold text-outline">
+            {fechaVisible(a)}{a.estado === 'pospuesta' && a.pospuestaHasta ? ` · pospuesta hasta ${formatFecha(a.pospuestaHasta.slice(0, 10))}` : ''}
+            {a.resueltaEn ? ` · resuelta ${horaRelativa(a.resueltaEn)}` : ''}
+          </p>
+          {a.grupo && (
+            <>
+              <button type="button" onClick={() => setAbierta(v => !v)} aria-expanded={abierta} className="mt-1 inline-flex min-h-9 items-center gap-1 text-xs font-bold text-primary">
+                <span className="material-symbols-outlined text-base">{abierta ? 'expand_less' : 'expand_more'}</span>{abierta ? 'Ocultar productos' : 'Ver productos'}
+              </button>
+              {abierta && (
+                <ul className="mt-1 divide-y divide-outline-variant/20 rounded-xl border border-outline-variant/30">
+                  {a.grupo.map(g => (
+                    <li key={g.clave} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                      <span className="min-w-0 flex-1 text-xs text-on-surface">{g.detalle}</span>
+                      <Link to={g.acciones[0]?.url ?? '/erp/inventario'} onClick={() => onMarcar([g.clave], 'vista')}
+                        className="inline-flex min-h-9 items-center rounded-full bg-primary px-3 text-[11px] font-bold text-inverse-on-surface">Reponer</Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+          {!a.resueltaEn && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {principal && (
+                <Link to={principal.url} onClick={() => onMarcar(clavesDe(a), 'vista')}
+                  className="inline-flex min-h-9 items-center gap-1 rounded-full border border-outline-variant/50 px-3 text-xs font-bold text-on-surface hover:border-primary/50">
+                  {principal.etiqueta}<span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </Link>
+              )}
+              {a.estado === 'nueva' && (
+                <button type="button" onClick={() => onMarcar(clavesDe(a), 'vista')} className="min-h-9 rounded-full px-3 text-xs font-bold text-on-surface-variant hover:text-primary">Marcar vista</button>
+              )}
+              <div className="relative">
+                <button type="button" onClick={() => setMenu(v => !v)} aria-expanded={menu} className="min-h-9 rounded-full px-3 text-xs font-bold text-on-surface-variant hover:text-primary">
+                  Posponer
+                </button>
+                {menu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
+                    <div className="absolute left-0 z-20 mt-1 w-44 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-1 shadow-xl">
+                      <button type="button" onClick={() => { onMarcar(clavesDe(a), 'pospuesta', manana()); setMenu(false); }} className="flex min-h-11 w-full items-center rounded-lg px-3 text-sm hover:bg-surface-container-low">Hasta mañana</button>
+                      <button type="button" onClick={() => { onMarcar(clavesDe(a), 'pospuesta', enUnaSemana()); setMenu(false); }} className="flex min-h-11 w-full items-center rounded-lg px-3 text-sm hover:bg-surface-container-low">Por 1 semana</button>
+                    </div>
+                  </>
+                )}
+              </div>
+              {a.naturaleza === 'evento' && (
+                <button type="button" onClick={() => onMarcar([a.clave], 'descartada')} className="min-h-9 rounded-full px-3 text-xs font-bold text-on-surface-variant hover:text-error">Descartar</button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </li>
+  );
 }
 
-const tipoEstilo: Record<AlertaTipo, { border: string; bg: string; icon_bg: string; icon_color: string; badge: string }> = {
-  critica:     { border: 'border-error/40',      bg: 'bg-error/5',        icon_bg: 'bg-error/10',       icon_color: 'text-error',       badge: 'bg-error text-inverse-on-surface' },
-  advertencia: { border: 'border-warning/40',  bg: 'bg-warning/5',      icon_bg: 'bg-warning/15',     icon_color: 'text-warning',      badge: 'bg-warning text-inverse-on-surface' },
-  tributaria:  { border: 'border-violet/40', bg: 'bg-violet/5',   icon_bg: 'bg-violet/15',  icon_color: 'text-violet',   badge: 'bg-violet text-inverse-on-surface' },
-  info:        { border: 'border-primary/30',     bg: 'bg-primary/5',      icon_bg: 'bg-primary/10',     icon_color: 'text-primary',      badge: 'bg-primary text-inverse-on-surface' },
-  exito:       { border: 'border-success/40',   bg: 'bg-success/5',       icon_bg: 'bg-success/15',      icon_color: 'text-success',      badge: 'bg-success text-inverse-on-surface' },
-};
-
-const origenLabel: Record<AlertaOrigen, string> = {
-  sistema: 'PymEdu',
-  sii: 'SII',
-  municipalidad: 'Municipalidad',
-  mentor: 'Academia',
-};
-
-const pesoTipo: Record<AlertaTipo, number> = { critica: 0, tributaria: 1, advertencia: 2, info: 3, exito: 4 };
-
-const flt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+function Seccion({ titulo, icono, vacio, children, cantidad, colapsada }: { titulo: string; icono: string; vacio: string; children: ReactNode; cantidad: number; colapsada?: boolean }) {
+  const [abierta, setAbierta] = useState(!colapsada);
+  return (
+    <section>
+      <button type="button" onClick={() => setAbierta(v => !v)} aria-expanded={abierta} className="mb-2 flex min-h-11 w-full items-center gap-2 text-left">
+        <span className="material-symbols-outlined text-lg text-primary">{icono}</span>
+        <h3 className="text-sm font-black uppercase tracking-wide text-on-surface">{titulo}</h3>
+        <span className="rounded-full bg-surface-container-high px-2 text-xs font-bold text-on-surface-variant">{cantidad}</span>
+        <span className="material-symbols-outlined ml-auto text-outline">{abierta ? 'expand_less' : 'expand_more'}</span>
+      </button>
+      {abierta && (cantidad === 0
+        ? <p className="rounded-2xl border border-dashed border-outline-variant/40 px-4 py-4 text-center text-xs text-on-surface-variant">{vacio}</p>
+        : <ul className="space-y-2">{children}</ul>)}
+    </section>
+  );
+}
 
 export default function ERPAlertas() {
-  const {
-    inventario, ventas, gastos, movimientos,
-    documentosTributarios, pagosPOS, promociones,
-    getSaldoPendienteVenta, getSaldoPendienteGasto,
-  } = useERP();
-  const [filtro, setFiltro] = useState<AlertaTipo | 'todas'>('todas');
-  const [leidas, setLeidas] = useState<Set<string>>(() => new Set());
+  const { alertas, alertasResueltas, marcarAlertas } = useERP();
+  const [categoria, setCategoria] = useState<CategoriaAlerta | 'todas'>('todas');
+  const [busqueda, setBusqueda] = useState('');
 
-  const hoy = new Date();
-  const diaDelMes = hoy.getDate();
-  const mes = hoy.getMonth();
-  const anio = hoy.getFullYear();
-  const hoyIso = hoyIsoLocal();
-
-  /** Días transcurridos entre dos fechas 'AAAA-MM-DD' sin corrimiento de zona. */
-  const diasEntre = (desde: string, hasta: string) => {
-    const a = parseFechaLocal(desde);
-    const b = parseFechaLocal(hasta);
-    if (!a || !b) return 0;
-    return Math.round((a.getTime() - b.getTime()) / 86400000);
-  };
-
-  const alertas = useMemo(() => {
-    const items: Alerta[] = [];
-
-    // 1. Stock bajo
-    inventario.filter(p => p.tipo === 'producto' && p.stock <= p.stockMinimo && p.estado === 'activo').forEach(p => {
-      items.push({
-        id: `stock-${p.id}`, tipo: p.stock === 0 ? 'critica' : 'advertencia', origen: 'sistema',
-        icono: p.stock === 0 ? 'inventory' : 'warning',
-        titulo: p.stock === 0 ? `Sin stock: "${p.nombre}"` : `Stock bajo: "${p.nombre}"`,
-        detalle: p.stock === 0
-          ? `Te has quedado sin "${p.nombre}". No puedes venderlo hasta reabastecerte.`
-          : `Solo te quedan ${p.stock} unidades de "${p.nombre}" (mínimo: ${p.stockMinimo}). Considera reabastecer.`,
-        accion_label: 'Ver inventario', accion_url: '/erp/inventario',
-      });
-    });
-
-    // 2. Cuentas por cobrar vencidas
-    ventas.filter(v => getSaldoPendienteVenta(v.id) > 0 && v.fecha_vencimiento && v.fecha_vencimiento <= hoyIso).forEach(v => {
-      const dias = diasEntre(hoyIso, v.fecha_vencimiento!);
-      items.push({
-        id: `cxc-ven-${v.id}`, tipo: 'critica', origen: 'sistema', icono: 'event_busy',
-        titulo: `Cuenta por cobrar vencida: ${v.cliente}`,
-        detalle: `Saldo ${flt(getSaldoPendienteVenta(v.id))} · venció el ${formatearFechaLocal(v.fecha_vencimiento)} (${dias} día(s) de atraso).`,
-        accion_label: 'Ver CxC', accion_url: '/erp/cobrar',
-      });
-    });
-
-    // 3. Cuentas por cobrar pendientes (no vencidas o sin fecha)
-    const cxcPendientes = ventas.filter(v => getSaldoPendienteVenta(v.id) > 0 && (!v.fecha_vencimiento || v.fecha_vencimiento > hoyIso));
-    const totalCxC = cxcPendientes.reduce((acc, v) => acc + getSaldoPendienteVenta(v.id), 0);
-    if (cxcPendientes.length > 0) {
-      items.push({
-        id: 'cxc-pendiente', tipo: 'advertencia', origen: 'sistema', icono: 'request_quote',
-        titulo: `${cxcPendientes.length} venta(s) por cobrar`,
-        detalle: `Tienes ${flt(totalCxC)} que aún no te han pagado. Revisa tus cuentas por cobrar.`,
-        accion_label: 'Ver cuentas por cobrar', accion_url: '/erp/cobrar',
-      });
-    }
-
-    // 4. Cuentas por pagar vencidas
-    gastos.filter(g => getSaldoPendienteGasto(g.id) > 0 && g.fecha_vencimiento && g.fecha_vencimiento <= hoyIso).forEach(g => {
-      const dias = diasEntre(hoyIso, g.fecha_vencimiento!);
-      items.push({
-        id: `cxp-ven-${g.id}`, tipo: 'critica', origen: 'sistema', icono: 'payments',
-        titulo: `Cuenta por pagar vencida: ${g.proveedor}`,
-        detalle: `Saldo ${flt(getSaldoPendienteGasto(g.id))} · vencía el ${formatearFechaLocal(g.fecha_vencimiento)} (${dias} día(s) de atraso).`,
-        accion_label: 'Ver CxP', accion_url: '/erp/pagar',
-      });
-    });
-
-    // 5. Cuentas por pagar pendientes
-    const cxpPendientes = gastos.filter(g => getSaldoPendienteGasto(g.id) > 0 && (!g.fecha_vencimiento || g.fecha_vencimiento > hoyIso));
-    const totalCxP = cxpPendientes.reduce((acc, g) => acc + getSaldoPendienteGasto(g.id), 0);
-    if (cxpPendientes.length > 0) {
-      items.push({
-        id: 'cxp-pendiente', tipo: 'advertencia', origen: 'sistema', icono: 'receipt_long',
-        titulo: `${cxpPendientes.length} pago(s) pendiente(s) a proveedores`,
-        detalle: `Debes ${flt(totalCxP)} a proveedores. No dejes que se atrase para evitar multas.`,
-        accion_label: 'Ver pagos pendientes', accion_url: '/erp/pagar',
-      });
-    }
-
-    // 6. Documentos tributarios rechazados u observados
-    documentosTributarios.filter(d => d.estado === 'rechazado_sii' || d.estado === 'observado').slice(0, 10).forEach(d => {
-      items.push({
-        id: `doc-${d.id}`, tipo: d.estado === 'rechazado_sii' ? 'critica' : 'advertencia', origen: 'sii',
-        icono: 'receipt_long',
-        titulo: `Documento ${d.estado === 'rechazado_sii' ? 'rechazado por el SII' : 'observado'}`,
-        detalle: `${d.tipoDocumento} folio ${d.folioInterno} · ${d.periodoTributario}. Revísalo antes de cerrar tu IVA.`,
-        accion_label: 'Preparar F29', accion_url: '/erp/iva-mensual',
-      });
-    });
-
-    // 7. Pagos POS sin venta asociada
-    pagosPOS.filter(p => p.estadoConciliacion === 'sin_venta').slice(0, 10).forEach(p => {
-      items.push({
-        id: `pos-${p.id}`, tipo: 'advertencia', origen: 'sistema', icono: 'point_of_sale',
-        titulo: 'Pago POS sin venta asociada',
-        detalle: `Pago de ${flt(p.monto)} sin conciliar. Concílialo para que caja, ventas e IVA cuadren.`,
-        accion_label: 'Ir a Ventas', accion_url: '/erp/ventas',
-      });
-    });
-
-    // 8. Cierre de mes SII (dentro de los últimos 10 días)
-    if (diaDelMes >= 20) {
-      const nombreMes = new Date(anio, mes, 1).toLocaleString('es-CL', { month: 'long' });
-      items.push({
-        id: 'iva-mensual', tipo: 'tributaria', origen: 'sii', icono: 'account_balance',
-        titulo: 'Cierre de mes SII próximo',
-        detalle: `El pago de IVA (F29) de ${nombreMes} vence el último día hábil del mes. Deja tus documentos listos.`,
-        accion_label: 'Ver IVA Mensual', accion_url: '/erp/iva-mensual',
-      });
-    }
-
-    // 9. Pago de sueldos (días 1-5)
-    if (diaDelMes <= 5) {
-      items.push({
-        id: 'sueldos-mes', tipo: 'critica', origen: 'sistema', icono: 'badge',
-        titulo: 'Recuerda pagar sueldos antes del día 5',
-        detalle: 'Según el Código del Trabajo, los sueldos deben pagarse hasta el día 5 del mes siguiente. Revisa tus pagos pendientes.',
-        accion_label: 'Ver CxP', accion_url: '/erp/pagar',
-      });
-    }
-
-    // 10. Flujo del mes positivo
-    const ingresosDelMes = movimientos.filter(m => {
-      const d = parseFechaLocal(m.fecha);
-      return !!d && d.getMonth() === mes && d.getFullYear() === anio && m.tipo === 'Ingreso';
-    }).reduce((acc, m) => acc + m.monto, 0);
-    const egresosDelMes = movimientos.filter(m => {
-      const d = parseFechaLocal(m.fecha);
-      return !!d && d.getMonth() === mes && d.getFullYear() === anio && m.tipo === 'Egreso';
-    }).reduce((acc, m) => acc + m.monto, 0);
-    if (ingresosDelMes > egresosDelMes && ingresosDelMes > 0) {
-      items.push({
-        id: 'flujo-positivo', tipo: 'exito', origen: 'sistema', icono: 'trending_up',
-        titulo: 'Tu flujo de caja este mes es positivo',
-        detalle: `Ingresaste ${flt(ingresosDelMes)} y gastaste ${flt(egresosDelMes)}. Tu negocio está generando ganancias.`,
-        accion_label: 'Ver Caja', accion_url: '/erp/caja',
-      });
-    }
-
-    // 11. Promociones por vencer
-    promociones.filter(p => p.estado === 'activa' && p.fechaFin && p.fechaFin >= hoyIso).forEach(p => {
-      const dias = diasEntre(p.fechaFin!, hoyIso);
-      if (dias <= 3) {
-        items.push({
-          id: `promo-${p.id}`, tipo: 'info', origen: 'sistema', icono: 'local_fire_department',
-          titulo: `Promoción "${p.nombre}" termina pronto`,
-          detalle: `Quedan ${dias} día(s) (${formatearFechaLocal(p.fechaFin)}).`,
-          accion_label: 'Ver promociones', accion_url: '/erp/promociones',
-        });
-      }
-    });
-
-    // 12. Novedad municipal
-    items.push({
-      id: 'muni-001', tipo: 'info', origen: 'municipalidad', icono: 'location_city',
-      titulo: 'Tu municipalidad publicó nuevas convocatorias',
-      detalle: 'Revisa los fondos concursables y beneficios disponibles para tu emprendimiento en el Portal Municipal.',
-      accion_label: 'Ver Portal Municipal', accion_url: '/erp/portal-municipal',
-    });
-
-    // 13. Novedad academia
-    items.push({
-      id: 'mentor-001', tipo: 'info', origen: 'mentor', icono: 'school',
-      titulo: 'Nuevos contenidos disponibles en la Academia',
-      detalle: 'Revisa los cursos recientes sobre finanzas, legal y emprendimiento para seguir creciendo.',
-      accion_label: 'Ir a Academia', accion_url: '/erp/academia',
-    });
-
-    return items.sort((a, b) => pesoTipo[a.tipo] - pesoTipo[b.tipo]);
-  }, [inventario, ventas, gastos, movimientos, documentosTributarios, pagosPOS, promociones,
-    getSaldoPendienteVenta, getSaldoPendienteGasto, hoyIso, diaDelMes, mes, anio]);
-
-  const marcarLeida = (id: string) => {
-    setLeidas(prev => new Set(prev).add(id));
-  };
-
-  const marcarTodasLeidas = () => {
-    setLeidas(prev => new Set([...prev, ...alertas.map(a => a.id)]));
-  };
-
-  const alertasFiltradas = filtro === 'todas' ? alertas : alertas.filter(a => a.tipo === filtro);
-  const noLeidas = alertas.filter(a => !leidas.has(a.id)).length;
-
-  const conteos = {
-    critica: alertas.filter(a => a.tipo === 'critica').length,
-    advertencia: alertas.filter(a => a.tipo === 'advertencia').length,
-    tributaria: alertas.filter(a => a.tipo === 'tributaria').length,
-    info: alertas.filter(a => a.tipo === 'info').length,
-    exito: alertas.filter(a => a.tipo === 'exito').length,
-  };
-
-  const kpis: { tipo: AlertaTipo | 'todas'; label: string; icon: string; cls: string; count: number }[] = [
-    { tipo: 'todas', label: 'Todas', icon: 'all_inclusive', cls: 'bg-surface-container text-on-surface', count: alertas.length },
-    { tipo: 'critica', label: 'Críticas', icon: 'error', cls: 'bg-error/10 text-error', count: conteos.critica },
-    { tipo: 'advertencia', label: 'Avisos', icon: 'warning', cls: 'bg-warning/15 text-warning', count: conteos.advertencia },
-    { tipo: 'tributaria', label: 'Tributarias', icon: 'account_balance', cls: 'bg-violet/15 text-violet', count: conteos.tributaria },
-    { tipo: 'info', label: 'Informativas', icon: 'info', cls: 'bg-primary/10 text-primary', count: conteos.info },
-    { tipo: 'exito', label: 'Positivas', icon: 'trending_up', cls: 'bg-success/15 text-success', count: conteos.exito },
-  ];
+  const filtradas = useMemo(() => {
+    const q = normalizarNombre(busqueda);
+    return alertas.filter(a => (categoria === 'todas' || a.categoria === categoria)
+      && (!q || normalizarNombre(`${a.titulo} ${a.detalle} ${(a.grupo ?? []).map(g => g.detalle).join(' ')}`).includes(q)));
+  }, [alertas, categoria, busqueda]);
+  const activas = filtradas.filter(a => a.estado === 'nueva' || a.estado === 'vista');
+  const accion = activas.filter(a => a.seccion === 'accion');
+  const vencimientos = activas.filter(a => a.seccion === 'vencimiento').sort((a, b) => (a.venceEn ?? '').localeCompare(b.venceEn ?? ''));
+  const avisos = activas.filter(a => a.seccion === 'aviso');
+  const actividad = activas.filter(a => a.seccion === 'actividad').sort((a, b) => b.creadaEn.localeCompare(a.creadaEn)).slice(0, 30);
+  const pospuestas = filtradas.filter(a => a.estado === 'pospuesta');
+  const resueltas = [...alertasResueltas.filter(a => categoria === 'todas' || a.categoria === categoria), ...filtradas.filter(a => a.estado === 'descartada')];
+  const nuevas = alertas.filter(a => a.estado === 'nueva');
+  const atencion = alertas.filter(a => (a.estado === 'nueva' || a.estado === 'vista') && (a.seccion === 'accion' || (a.seccion === 'vencimiento' && (a.venceEn ?? '9') <= new Date().toISOString().slice(0, 10)))).length;
+  const conteo = (c: CategoriaAlerta | 'todas') => alertas.filter(a => (a.estado === 'nueva' || a.estado === 'vista') && (c === 'todas' || a.categoria === c)).length;
+  const marcar = (claves: string[], estado: 'vista' | 'pospuesta' | 'descartada', hasta?: string) => marcarAlertas(claves, estado, hasta);
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span aria-hidden="true" className="material-symbols-outlined text-4xl">notifications_active</span>
-            Centro de alertas
-            {noLeidas > 0 && (
-              <span className="bg-error text-inverse-on-surface text-sm px-3 py-1 rounded-full font-bold">
-                {noLeidas} nuevas
-              </span>
-            )}
+    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 md:p-8">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-2xl font-extrabold text-primary sm:text-3xl">
+            <span className="material-symbols-outlined text-3xl sm:text-4xl">notifications_active</span> Centro de alertas
           </h2>
-          <p className="text-on-surface-variant mt-1 text-sm">PymEdu monitorea tu negocio y te avisa cuando algo requiere tu atención.</p>
+          <p className={cn('mt-1 text-sm font-bold', atencion > 0 ? 'text-on-surface' : 'text-success')} role="status">
+            {atencion > 0 ? `${atencion} ${atencion === 1 ? 'cosa requiere' : 'cosas requieren'} tu atención hoy` : 'Todo al día'}
+          </p>
         </div>
-        {noLeidas > 0 && (
-          <button onClick={marcarTodasLeidas}
-            className="flex items-center gap-2 px-4 py-2.5 border-2 border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary rounded-xl font-bold text-sm transition-colors">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">done_all</span>
-            Marcar todas como leídas
+        {nuevas.length > 0 && (
+          <button type="button" onClick={() => marcarAlertas(nuevas.flatMap(clavesDe), 'vista')}
+            className="flex min-h-11 items-center gap-2 rounded-xl border-2 border-outline-variant px-4 text-sm font-bold text-on-surface-variant hover:border-primary hover:text-primary">
+            <span className="material-symbols-outlined text-lg">done_all</span> Marcar todo como visto
           </button>
         )}
-      </div>
+      </header>
 
-      {/* Resumen KPIs / filtros */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        {kpis.map(k => (
-          <button key={k.tipo} onClick={() => setFiltro(k.tipo)}
-            className={`p-4 rounded-2xl flex flex-col items-center gap-1 transition-all font-bold text-sm border-2 ${filtro === k.tipo ? 'border-primary bg-primary/5 shadow-sm' : 'border-transparent bg-surface-container-lowest dark-card hover:border-outline-variant/50'}`}>
-            <span aria-hidden="true" className={`material-symbols-outlined text-2xl p-2 rounded-full ${k.cls}`}>{k.icon}</span>
-            <span className="text-on-surface text-lg font-extrabold">{k.count}</span>
-            <span className="text-on-surface-variant text-xs">{k.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Lista de alertas */}
       <div className="space-y-3">
-        {alertasFiltradas.length === 0 && (
-          <div className="rounded-3xl border border-dashed border-outline-variant bg-surface-container-lowest dark-card p-10 text-center">
-            <span aria-hidden="true" className="material-symbols-outlined text-4xl text-outline">notifications_off</span>
-            <p className="mt-3 font-bold text-on-surface">Sin alertas en esta categoría</p>
-            <p className="text-sm text-on-surface-variant mt-1">Todo está al día.</p>
-          </div>
-        )}
-
-        {alertasFiltradas.map(alerta => {
-          const estilo = tipoEstilo[alerta.tipo];
-          const leida = leidas.has(alerta.id);
-          return (
-            <div key={alerta.id}
-              className={`rounded-2xl border-2 p-5 transition-all ${estilo.border} ${estilo.bg} ${leida ? 'opacity-60' : ''}`}>
-              <div className="flex items-start gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${estilo.icon_bg}`}>
-                  <span aria-hidden="true" className={`material-symbols-outlined text-2xl ${estilo.icon_color}`}>{alerta.icono}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-bold text-on-surface text-sm">{alerta.titulo}</h4>
-                      {!leida && <span className="w-2 h-2 bg-primary rounded-full shrink-0" />}
-                    </div>
-                    <span className="text-xs font-bold text-on-surface-variant whitespace-nowrap">{origenLabel[alerta.origen]}</span>
-                  </div>
-                  <p className="text-sm text-on-surface-variant leading-relaxed mb-3">{alerta.detalle}</p>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {alerta.accion_url && alerta.accion_label && (
-                      <Link to={alerta.accion_url}
-                        className="px-4 py-2 bg-surface-container-lowest dark-card font-bold text-xs text-on-surface border border-outline-variant hover:border-primary/50 rounded-xl transition-colors flex items-center gap-1 shadow-sm">
-                        {alerta.accion_label}
-                        <span aria-hidden="true" className="material-symbols-outlined text-sm">arrow_forward</span>
-                      </Link>
-                    )}
-                    {!leida && (
-                      <button onClick={() => marcarLeida(alerta.id)}
-                        className="text-xs text-on-surface-variant hover:text-primary font-medium transition-colors">
-                        Marcar como leída
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        <div className="relative">
+          <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+          <input type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar alertas…" aria-label="Buscar alertas"
+            className="min-h-11 w-full rounded-2xl border border-outline-variant/40 bg-surface-container-lowest py-2 pl-10 pr-4 text-base outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm" />
+        </div>
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 hide-scrollbar sm:mx-0 sm:flex-wrap sm:px-0" role="tablist" aria-label="Filtrar por categoría">
+          {[{ valor: 'todas' as const, etiqueta: 'Todas', icono: 'all_inclusive' }, ...CATEGORIAS].map(c => (
+            <button key={c.valor} type="button" role="tab" aria-selected={categoria === c.valor} onClick={() => setCategoria(c.valor)}
+              className={cn('inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border px-4 text-xs font-bold',
+                categoria === c.valor ? 'border-primary bg-primary text-inverse-on-surface' : 'border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant')}>
+              <span className="material-symbols-outlined text-base">{c.icono}</span>{c.etiqueta}
+              <span className={cn('rounded-full px-1.5 text-[10px]', categoria === c.valor ? 'bg-white/20' : 'bg-surface-container-high')}>{conteo(c.valor)}</span>
+            </button>
+          ))}
+        </div>
       </div>
+
+      <Seccion titulo="Requiere acción" icono="priority_high" cantidad={accion.length} vacio="Nada urgente por ahora.">
+        {accion.map(a => <Tarjeta key={a.id} a={a} onMarcar={marcar} />)}
+      </Seccion>
+      <Seccion titulo="Próximos vencimientos" icono="event" cantidad={vencimientos.length} vacio="No hay vencimientos en los próximos días.">
+        {vencimientos.map(a => <Tarjeta key={a.id} a={a} onMarcar={marcar} />)}
+      </Seccion>
+      <Seccion titulo="Avisos" icono="campaign" cantidad={avisos.length} vacio="Sin avisos.">
+        {avisos.map(a => <Tarjeta key={a.id} a={a} onMarcar={marcar} />)}
+      </Seccion>
+      <Seccion titulo="Actividad reciente" icono="history" cantidad={actividad.length} vacio="Aún no hay actividad: aquí verás aperturas automáticas, ventas bloqueadas y mermas.">
+        {actividad.map(a => <Tarjeta key={a.id} a={a} onMarcar={marcar} compacta />)}
+      </Seccion>
+      {pospuestas.length > 0 && (
+        <Seccion titulo="Pospuestas" icono="snooze" cantidad={pospuestas.length} vacio="" colapsada>
+          {pospuestas.map(a => <Tarjeta key={a.id} a={a} onMarcar={marcar} compacta />)}
+        </Seccion>
+      )}
+      <Seccion titulo="Resueltas" icono="task_alt" cantidad={resueltas.length} vacio="Cuando una alerta se resuelva sola (por ejemplo, al reponer) aparecerá aquí." colapsada>
+        {resueltas.map(a => <Tarjeta key={a.id} a={a} onMarcar={marcar} compacta />)}
+      </Seccion>
     </div>
   );
 }

@@ -16,7 +16,7 @@ export default function ResetPassword() {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError('La contraseña debe tener al menos 8 caracteres');
       return;
     }
@@ -41,7 +41,7 @@ export default function ResetPassword() {
       <div className="w-full max-w-md bg-surface-container-lowest rounded-3xl p-8 shadow-xl">
         <div className="text-center mb-8">
           <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mx-auto mb-4">
-            <span aria-hidden="true" className="material-symbols-outlined text-white">lock_reset</span>
+            <span className="material-symbols-outlined text-white">lock_reset</span>
           </div>
           <h2 className="text-3xl font-extrabold text-on-surface">Restablecer contraseña</h2>
           <p className="text-on-surface-variant mt-2">Ingresa tu nueva contraseña</p>

@@ -1,19 +1,37 @@
 ﻿import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import { useSearchParams } from 'react-router-dom';
 const ModalCargaMasivaInventario = lazy(() => import('../components/ModalCargaMasivaInventario'));
-import { useERP, Producto, MovimientoInventario } from '../context/ERPContext';
+import { estadoStock as estadoStockCompartido } from '../services/alertas';
+import { presentacionesActivas } from '../services/costeo';
+import { resumenStock, usaEnvases, formatCantidad, stockDisponible, textoDisponibilidad, tipoPresentacion, textoMinimo, unidadMinimoDe } from '../services/inventarioFraccionado';
+import TablaResponsiva from '../../components/TablaResponsiva';
+import type { InventarioInicial } from '../services/registroProducto';
+import RegistroProducto from '../components/RegistroProducto';
+import FichaProducto from '../components/FichaProducto';
+import ModalRevisionUnidades from '../components/ModalRevisionUnidades';
+import Paginacion, { usePaginacion } from '../../components/Paginacion';
+import { formatCLP } from '../../lib/fechas';
+import { useERP, Producto, MovimientoInventario, type ResultadoInventario } from '../context/ERPContext';
 import { useAuth } from '../../context/AuthContext';
 import { puedeEditarModulo } from '@/lib/roles';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import SelectorFecha from '../components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
-import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
+import SelectorDesplegable, { etiquetaRangoPeriodo, rangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
-import { hoyIso, formatearFechaHoraLocal, formatearFechaLocal, rangoMes as rangoMesLocal, timestampDesdeFechaLocal } from '@/lib/fecha';
-import { useColoresTema } from '@/lib/useColoresTema';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
+import { rangoMes as rangoMesLocal } from '@/lib/fechas';
+import { agruparSerie, totalesPor, NOMBRE_GRANULARIDAD } from '@/lib/series';
+import GraficoSerie from '../../components/graficos/GraficoSerie';
+import GraficoDona from '../../components/graficos/GraficoDona';
+import GraficoBarras from '../../components/graficos/GraficoBarras';
+import { TarjetaGrafico } from '../../components/graficos/comunes';
+import { usePaletaGraficos } from '../../components/graficos/paleta';
 
-const COLORES_CATEGORIA = ['primary', 'secondary', 'tertiary', 'teal', 'violet'] as const;
+/** Cantidades en unidades (los gráficos de inventario no son montos). */
+const formatoUds = (n: number) => `${Math.round(n).toLocaleString('es-CL')} uds`;
+const formatoEjeUds = (n: number) => Math.round(n).toLocaleString('es-CL');
+const formatoProductos = (n: number) => `${n.toLocaleString('es-CL')} productos`;
 
 export type EstadoStock = 'sin_stock' | 'bajo' | 'ok' | 'no_aplica';
 
@@ -25,12 +43,14 @@ export type EstadoStock = 'sin_stock' | 'bajo' | 'ok' | 'no_aplica';
  *
  * `stock` permite evaluar contra el stock de otro periodo; si se omite usa el actual.
  */
-function estadoStock(producto: Producto, stock: number = producto.stock): EstadoStock {
-  if (producto.tipo !== 'producto' || producto.estado !== 'activo') return 'no_aplica';
-  if (stock <= 0) return 'sin_stock';
-  if (stock <= producto.stockMinimo) return 'bajo';
-  return 'ok';
+function estadoStock(producto: Producto, stock: number = producto.stock, envases?: import('../context/ERPContext').Envase[]): EstadoStock {
+  // Delegado al criterio único (services/alertas.ts): con envases compara las CERRADAS con el mínimo.
+  return estadoStockCompartido(producto, stock, envases);
 }
+
+/** Costo y precio reales aunque vengan como texto o en campos de servicio (corrección #11). */
+const costoDe = (p: Producto) => Number(p.costo) || Number(p.costoFijo) || Number(p.costoHora) || 0;
+const precioDe = (p: Producto) => Number(p.precio) || Number(p.precioFijo) || Number(p.tarifaHora) || presentacionesActivas(p)[0]?.precio || 0;
 
 const ETIQUETA_STOCK: Record<EstadoStock, { texto: string; clase: string }> = {
   sin_stock: { texto: 'Sin stock', clase: 'bg-error-container text-on-error-container' },
@@ -104,17 +124,19 @@ const UNIDADES_PRODUCTO: { valor: string; etiqueta: string }[] = [
 ]
 
 export default function ERPInventario() {
-  const { inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario } = useERP();
+  const {
+    inventario, movimientosInventario, ventas, proveedores, addProducto, editProducto, deleteProducto, addMovimientoInventario, envases, lotes,
+    metodoCosteo, setMetodoCosteo, politicaEnvaseAbierto, plantillasSubcategoria, margenObjetivo, guardarPlantilla,
+  } = useERP();
   // La matriz de roles define quien escribe en cada modulo, pero hasta ahora solo se
   // dibujaba en la pantalla de administracion y ninguna pagina la consultaba.
-  const { perfil } = useAuth();
-  const puedeEditar = puedeEditarModulo(perfil?.rol, 'inventario');
-  const c = useColoresTema();
+  const { perfil, tienePermiso } = useAuth();
+  // Permiso del rol dinámico (si no hay roles cargados, cae en la matriz fija anterior).
+  const puedeEditar = tienePermiso('inventario.escribir') || puedeEditarModulo(perfil?.rol, 'inventario');
+  const paleta = usePaletaGraficos();
   const [activeTab, setActiveTab] = useState<'lista' | 'movimientos'>('lista');
   const [showModal, setShowModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
-  const [errorMovimiento, setErrorMovimiento] = useState('');
-  const [errorFormulario, setErrorFormulario] = useState('');
   const [showHistorialModal, setShowHistorialModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -124,19 +146,41 @@ export default function ERPInventario() {
   const [mostrarInputCategoria, setMostrarInputCategoria] = useState(false)
   const [nuevaCategoria, setNuevaCategoria] = useState('')
   const [barcodeManualEntry, setBarcodeManualEntry] = useState(false)
+  /** Ficha del producto fraccionado (envases o granel). */
+  const [fichaId, setFichaId] = useState<string | null>(null);
+  /** Productos antiguos a revisar (lista fija al abrir, para avanzar uno por uno). */
+  const [revisionIds, setRevisionIds] = useState<string[] | null>(null);
+  const [errorMovimiento, setErrorMovimiento] = useState('');
+  /** Acción con que se abre la ficha desde una alerta (reponer, merma). */
+  const [accionFicha, setAccionFicha] = useState<'reponer' | 'merma' | null>(null);
+  const [filtroStock, setFiltroStock] = useState<'todos' | 'bajo'>('todos');
+  // Enlaces del Centro de alertas: ?producto=ID[&accion=reponer|merma] abre su ficha; ?filtro=bajo filtra.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = params.get('producto');
+    const filtro = params.get('filtro');
+    if (!id && filtro !== 'bajo') return;
+    if (id && inventario.some(p => p.id === id)) {
+      setFichaId(id);
+      const accion = params.get('accion');
+      setAccionFicha(accion === 'reponer' || accion === 'merma' ? accion : null);
+    }
+    if (filtro === 'bajo') setFiltroStock('bajo');
+    if (id && !inventario.some(p => p.id === id) && inventario.length === 0) return; // aún cargando
+    setParams({}, { replace: true });
+  }, [params, inventario]);
 
   /* ══ Periodo de los movimientos: mismo selector que Ventas, a la derecha ══ */
 
   const [periodoMovimientos, setPeriodoMovimientos] = useState('este_mes');
   const [rangoMovimientos, setRangoMovimientos] = useState({ fechaInicio: '', fechaFin: '' });
 
-  /** Rango de mes natural en ISO 'YYYY-MM-DD', igual que en Ventas. */
+  /** Rango de mes natural en fechas locales (toISOString() corría el día por UTC). */
   const rangoMes = (offset: number) => rangoMesLocal(offset);
 
   useEffect(() => {
-    if (periodoMovimientos === 'personalizado') return;
-    const { inicio, fin } = periodoMovimientos === 'mes_anterior' ? rangoMes(-1) : rangoMes(0);
-    setRangoMovimientos({ fechaInicio: inicio, fechaFin: fin });
+    const rango = rangoPeriodo(periodoMovimientos);
+    if (rango) setRangoMovimientos({ fechaInicio: rango.inicio, fechaFin: rango.fin });
   }, [periodoMovimientos]);
 
   /** El rango manual parte con el mes actual; las fechas quedan editables. */
@@ -180,33 +224,20 @@ export default function ERPInventario() {
   }), [movimientosEnRango]);
 
   /**
-   * Movimientos por dia del periodo: un punto por fecha, con entradas y salidas
-   * por separado. Si el rango cruza meses (Personalizado) la etiqueta lleva
-   * dia/mes/año; agrupar solo por dia de mes mezclaba meses distintos en la
-   * misma columna. Las fechas ISO ordenan cronologicamente.
+   * Entradas y salidas del periodo en tramos continuos que cubren TODO el rango (día,
+   * semana o mes según su largo): con varios meses ya no se dibuja un punto por fecha.
    */
-  const datosMovimientosPorDia = useMemo(() => {
-    const porFecha: Record<string, { entradas: number; salidas: number }> = {};
-    movimientosEnRango.forEach(m => {
-      const fecha = (m.fecha || '').slice(0, 10);
-      if (!fecha) return;
-      const serie = porFecha[fecha] ?? (porFecha[fecha] = { entradas: 0, salidas: 0 });
-      if (m.tipo === 'ingreso' || m.tipo === 'devolucion') serie.entradas += m.cantidad;
-      else if (m.tipo === 'salida' || m.tipo === 'merma') serie.salidas += m.cantidad;
-    });
-    const fechas = Object.keys(porFecha).sort();
-    const mismoMes = fechas.every(f => f.slice(0, 7) === fechas[0]?.slice(0, 7));
-    return fechas.map(fecha => ({
-      etiqueta: mismoMes ? `Dia ${Number(fecha.slice(8, 10))}` : formatFecha(fecha),
-      entradas: porFecha[fecha].entradas,
-      salidas: porFecha[fecha].salidas,
-    }));
-  }, [movimientosEnRango]);
-
-  /** Con rangos largos la etiqueta diaria se junta: se deja ~12 como maximo. */
-  const saltoEtiquetasMovimientos = datosMovimientosPorDia.length > 34
-    ? Math.ceil(datosMovimientosPorDia.length / 12)
-    : 0;
+  const serieMovimientos = useMemo(
+    () => agruparSerie(
+      movimientosEnRango,
+      { inicio: rangoMovimientos.fechaInicio, fin: rangoMovimientos.fechaFin },
+      m => m.fecha,
+      m => m.tipo === 'ingreso' || m.tipo === 'devolucion' ? { entradas: m.cantidad, salidas: 0 }
+        : m.tipo === 'salida' || m.tipo === 'merma' ? { entradas: 0, salidas: m.cantidad }
+          : { entradas: 0, salidas: 0 }
+    ),
+    [movimientosEnRango, rangoMovimientos.fechaInicio, rangoMovimientos.fechaFin]
+  );
 
   const etiquetaRangoMovimientos = etiquetaRangoPeriodo(
     periodoMovimientos === 'personalizado',
@@ -261,7 +292,27 @@ export default function ERPInventario() {
   }, [movimientosInventario, rangoMovimientos.fechaFin]);
 
   /** El stock a mostrar: el del cierre del periodo, o el actual si no hay nada que revertir. */
-  const stockMostrado = (p: Producto): number => (stockAlCierre ? stockAlCierre(p) : p.stock);
+  const stockMostrado = (p: Producto): number => (stockAlCierre ? stockAlCierre(p) : stockDisponible(p, envases));
+  /** Estado con el criterio único: con stock actual y envases compara las cerradas con el mínimo. */
+  const estadoActual = (p: Producto) => estadoStock(p, stockMostrado(p), stockAlCierre ? undefined : envases);
+  /** «19 botellas + 1 abierta (70 ml)», «1,2 t · 2 lotes», «40 unidades». */
+  const textoStockLista = (p: Producto): string => {
+    if (p.tipo !== 'producto') return '—';
+    const stock = stockMostrado(p);
+    if (usaEnvases(p) && !stockAlCierre) return resumenStock(p, envases).texto;
+    if (p.formaCompra === 'granel' || (p.unidadBase && p.unidadBase !== 'unidad')) {
+      const nLotes = lotes.filter(l => l.productoId === p.id && l.cantidadRestante > 0).length;
+      const cantidad = unidadMinimoDe(p) === 't' || (p.unidadBase === 'kg' && stock >= 1000)
+        ? `${(stock / 1000).toLocaleString('es-CL', { maximumFractionDigits: 2 })} t`
+        : formatCantidad(stock, p.unidadBase);
+      return nLotes > 1 && !stockAlCierre ? `${cantidad} · ${nLotes} lotes` : cantidad;
+    }
+    const medida = (p.unidadMedida ?? '').trim();
+    const generica = !medida || ['un', 'unidad', 'unidades', 'u'].includes(medida.toLowerCase());
+    return `${Number(stock).toLocaleString('es-CL')} ${generica ? (Number(stock) === 1 ? 'unidad' : 'unidades') : medida}`;
+  };
+  const productosRevision = useMemo(() => inventario.filter(p => p.requiereRevisionUnidades), [inventario]);
+  const esFraccionado = (p: Producto) => usaEnvases(p) || p.formaCompra === 'granel';
 
   /**
    * Productos y servicios mas solicitados en el periodo. Se cuenta por cantidad, que
@@ -283,9 +334,9 @@ export default function ERPInventario() {
     });
     return inventario
       .filter(p => porProducto.has(p.id))
-      .map(p => ({ nombre: p.nombre, solicitudes: porProducto.get(p.id) ?? 0 }))
-      .filter(x => x.solicitudes > 0)
-      .sort((a, b) => b.solicitudes - a.solicitudes || a.nombre.localeCompare(b.nombre))
+      .map(p => ({ nombre: p.nombre, valor: porProducto.get(p.id) ?? 0 }))
+      .filter(x => x.valor > 0)
+      .sort((a, b) => b.valor - a.valor || a.nombre.localeCompare(b.nombre))
       .slice(0, 5);
   }, [ventas, inventario, rangoMovimientos]);
 
@@ -322,7 +373,7 @@ export default function ERPInventario() {
 
   const exportToCSV = () => {
     descargarCSV(
-      `inventario_${hoyIso()}.csv`,
+      `inventario_${new Date().toISOString().split('T')[0]}.csv`,
       [...COLUMNAS_INVENTARIO],
       inventario.map(p => [
         p.nombre, p.codigo, p.codigoBarras, p.categoria, p.tipo, p.descripcion,
@@ -336,7 +387,7 @@ export default function ERPInventario() {
     tipo: 'ingreso',
     cantidad: 1,
     costoUnitario: 0,
-    fecha: hoyIso(),
+    fecha: new Date().toISOString().split('T')[0],
     motivo: ''
   });
 
@@ -355,21 +406,18 @@ export default function ERPInventario() {
   // e inactivos, mientras que el selector de Ventas solo ofrece los que estan activos.
   // Los KPIs siguen el periodo elegido: el stock mostrado es el del cierre, no el de hoy.
   const totalProductos = inventario.filter(p => p.estado === 'activo').length;
-  const valorInventario = inventario.reduce((acc, p) => acc + (stockMostrado(p) * p.costo), 0);
-  const valorVenta = inventario.reduce((acc, p) => acc + (stockMostrado(p) * p.precio), 0);
+  const valorInventario = inventario.reduce((acc, p) => acc + (p.tipo === 'producto' ? stockMostrado(p) * costoDe(p) : 0), 0);
+  const valorVenta = inventario.reduce((acc, p) => acc + (p.tipo === 'producto' ? stockMostrado(p) * (presentacionesActivas(p).length ? precioDe(p) / (presentacionesActivas(p)[0].factor || 1) : precioDe(p)) : 0), 0);
   const productosBajoStock = inventario.filter(p => {
-    const e = estadoStock(p, stockMostrado(p));
+    const e = estadoActual(p);
     return e === 'sin_stock' || e === 'bajo';
   }).length;
 
   // Solo se acumula la valorizacion a costo, que es lo que usa el pie chart.
-  const valorizacionPorCategoria = useMemo(() => {
-    const mapa: Record<string, number> = {};
-    inventario.filter(p => p.tipo === 'producto').forEach(p => {
-      mapa[p.categoria] = (mapa[p.categoria] ?? 0) + stockMostrado(p) * p.costo;
-    });
-    return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
-  }, [inventario, stockAlCierre]);
+  const valorizacionPorCategoria = useMemo(
+    () => totalesPor(inventario.filter(p => p.tipo === 'producto'), p => p.categoria, p => stockMostrado(p) * costoDe(p)),
+    [inventario, stockAlCierre]
+  );
 
   /**
    * Conteo de productos activos segun su estado de stock en el periodo: alimenta el
@@ -378,19 +426,19 @@ export default function ERPInventario() {
   const stockPorEstado = useMemo(() => {
     const conteo: Record<'sin_stock' | 'bajo' | 'ok', number> = { sin_stock: 0, bajo: 0, ok: 0 };
     inventario.forEach(p => {
-      const e = estadoStock(p, stockMostrado(p));
+      const e = estadoActual(p);
       if (e !== 'no_aplica') conteo[e] += 1;
     });
     const total = conteo.sin_stock + conteo.bajo + conteo.ok;
     return {
       total,
       datos: [
-        { key: 'sin_stock', name: 'Sin stock', value: conteo.sin_stock },
-        { key: 'bajo', name: 'Stock bajo', value: conteo.bajo },
-        { key: 'ok', name: 'En stock', value: conteo.ok }
+        { nombre: 'Sin stock', valor: conteo.sin_stock, color: paleta.critico },
+        { nombre: 'Stock bajo', valor: conteo.bajo, color: paleta.alerta },
+        { nombre: 'En stock', valor: conteo.ok, color: paleta.ok }
       ]
     };
-  }, [inventario, stockAlCierre]);
+  }, [inventario, stockAlCierre, paleta]);
 
   const inventarioFiltrado = useMemo(() =>
     inventario.filter(p => {
@@ -398,28 +446,30 @@ export default function ERPInventario() {
         p.codigo.toLowerCase().includes(busqueda.toLowerCase()) ||
         p.categoria.toLowerCase().includes(busqueda.toLowerCase());
       const matchTipo = filtroTipo === 'todos' || p.tipo === filtroTipo;
-      return matchBusqueda && matchTipo;
-    }), [inventario, busqueda, filtroTipo]
+      const matchStock = filtroStock === 'todos' || ['bajo', 'sin_stock'].includes(estadoStock(p, stockDisponible(p, envases), envases));
+      return matchBusqueda && matchTipo && matchStock;
+    }), [inventario, busqueda, filtroTipo, filtroStock, envases]
   );
+  // Paginación: con 10.061 productos la tabla completa congelaba la página (corrección #5).
+  const paginacionInventario = usePaginacion(inventarioFiltrado, 25, [busqueda, filtroTipo, filtroStock]);
 
   const handleEditClick = (producto: Producto) => {
     setEditingId(producto.id);
     setNuevoProducto(producto);
-    setErrorFormulario('');
     setShowModal(true);
   };
 
   const handleMovimientoClick = (productoId: string) => {
     const producto = inventario.find(p => p.id === productoId);
-    setErrorMovimiento('');
     setNuevoMovimiento({
       productoId,
       tipo: 'ingreso',
       cantidad: 1,
       costoUnitario: producto?.costo || 0,
-      fecha: hoyIso(),
+      fecha: new Date().toISOString().split('T')[0],
       motivo: ''
     });
+    setErrorMovimiento('');
     setShowMovimientoModal(true);
   };
 
@@ -447,28 +497,6 @@ export default function ERPInventario() {
   };
 
   const handleGuardar = () => {
-    const nombre = (nuevoProducto.nombre || '').trim();
-    if (!nombre) {
-      setErrorFormulario('Indica el nombre del producto o servicio.');
-      return;
-    }
-    if (!nuevoProducto.categoria?.trim()) {
-      setErrorFormulario('Selecciona o crea una categoría.');
-      return;
-    }
-    if (tipoEnFormulario === 'producto') {
-      const stock = Number(nuevoProducto.stock);
-      const stockMinimo = Number(nuevoProducto.stockMinimo);
-      if (!Number.isFinite(stock) || stock < 0) {
-        setErrorFormulario('El stock actual debe ser un número igual o mayor que cero.');
-        return;
-      }
-      if (!Number.isFinite(stockMinimo) || stockMinimo < 0) {
-        setErrorFormulario('El stock mínimo debe ser un número igual o mayor que cero.');
-        return;
-      }
-    }
-    setErrorFormulario('');
     if (nuevoProducto.nombre && nuevoProducto.categoria) {
       const tf = tipoEnFormulario
       const esProducto = tf === 'producto'
@@ -494,7 +522,7 @@ export default function ERPInventario() {
           : Number(nuevoProducto.costo) || 0
 
       const productoData: Partial<Producto> = {
-        nombre,
+        nombre: nuevoProducto.nombre,
         codigo: nuevoProducto.codigo?.trim() || '',
         codigoBarras: esServicio ? '' : (nuevoProducto.codigoBarras?.trim() || ''),
         categoria: nuevoProducto.categoria,
@@ -519,7 +547,13 @@ export default function ERPInventario() {
             ? (nuevoProducto.unidadMedida || 'pedido')
             : (nuevoProducto.unidadMedida || 'un'),
         estado: nuevoProducto.estado || 'activo',
-        proveedorId: nuevoProducto.proveedorId || ''
+        proveedorId: nuevoProducto.proveedorId || '',
+        ...(esServicio ? {} : {
+          unidadBase: nuevoProducto.unidadBase || 'unidad',
+          presentaciones: (nuevoProducto.presentaciones ?? []).filter(x => x.nombre.trim() && x.factor > 0),
+          controlEnvases: !!nuevoProducto.controlEnvases,
+          capacidadEnvase: nuevoProducto.controlEnvases ? Number(nuevoProducto.capacidadEnvase) || 0 : undefined,
+        }),
       };
 
       if (editingId) {
@@ -533,540 +567,45 @@ export default function ERPInventario() {
       setMostrarInputCategoria(false);
       setNuevaCategoria('');
       setBarcodeManualEntry(false);
-      setErrorFormulario('');
       setNuevoProducto(CAMPOS_INICIALES('producto'));
     }
   };
 
-  const handleGuardarMovimiento = () => {
-    const cantidad = Number(nuevoMovimiento.cantidad);
-    const motivo = (nuevoMovimiento.motivo || '').trim();
-    const producto = inventario.find(p => p.id === nuevoMovimiento.productoId);
-
-    if (!nuevoMovimiento.productoId || !producto) {
-      setErrorMovimiento('Selecciona un producto para registrar el movimiento.');
-      return;
+  const cerrarModalProducto = () => {
+    setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto'));
+  };
+  /** Guardado del formulario «Registrar producto» (RegistroProducto). */
+  const guardarProducto = (datos: Partial<Producto>, inicial: InventarioInicial): ResultadoInventario => {
+    if (editingId) {
+      editProducto(editingId, datos);
+      cerrarModalProducto();
+      return { ok: true, id: editingId };
     }
-    if (!Number.isFinite(cantidad) || cantidad === 0) {
-      setErrorMovimiento('La cantidad debe ser distinta de cero.');
-      return;
-    }
-    if (!motivo) {
-      setErrorMovimiento('Indica el motivo u observación del movimiento.');
-      return;
-    }
-    if (nuevoMovimiento.tipo !== 'ajuste' && cantidad < 0) {
-      setErrorMovimiento('La cantidad debe ser positiva. Usa "Ajuste (+/-)" para descontar o sumar manualmente.');
-      return;
-    }
-    if (nuevoMovimiento.tipo === 'salida' || nuevoMovimiento.tipo === 'merma') {
-      if (cantidad > producto.stock) {
-        setErrorMovimiento(`Stock insuficiente: disponible ${producto.stock} ${producto.unidadMedida || 'unidades'}.`);
-        return;
-      }
-    }
-
-    setErrorMovimiento('');
-    addMovimientoInventario({
-      productoId: nuevoMovimiento.productoId,
-      tipo: nuevoMovimiento.tipo as 'ingreso' | 'salida' | 'ajuste' | 'merma' | 'devolucion',
-      cantidad,
-      costoUnitario: Number(nuevoMovimiento.costoUnitario) || undefined,
-      fecha: timestampDesdeFechaLocal(nuevoMovimiento.fecha) || new Date().toISOString(),
-      motivo
-    });
-    setShowMovimientoModal(false);
+    const r = addProducto({ ...CAMPOS_INICIALES('producto'), ...datos } as Omit<Producto, 'id'>, inicial);
+    if (r.ok) cerrarModalProducto();
+    return r;
   };
 
-  return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-outline-variant/30 pb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <span aria-hidden="true" className="material-symbols-outlined text-primary text-3xl">inventory_2</span>
-            </div>
-            <h2 className="text-3xl font-black text-on-surface tracking-tight">Gestión de Inventario</h2>
-          </div>
-          <p className="text-on-surface-variant text-sm font-medium">Control centralizado de existencias, costos y logística operativa.</p>
-        </div>
-        
-        <div className="flex flex-wrap gap-3">
-          <button onClick={() => setShowCargaMasiva(true)}
-            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">upload_file</span>
-            Carga Masiva
-          </button>
-          <button onClick={exportToCSV}
-            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
-            Exportar
-          </button>
-          {puedeEditar && (
-            <button onClick={() => {
-              setEditingId(null)
-              setMostrarInputCategoria(false)
-              setNuevaCategoria('')
-              setBarcodeManualEntry(false)
-              setNuevoProducto(CAMPOS_INICIALES('producto'))
-              setErrorFormulario('')
-              setShowModal(true)
-            }}
-              className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2">
-              <span aria-hidden="true" className="material-symbols-outlined text-lg">add_box</span>
-              Nuevo Producto
-            </button>
-          )}
-        </div>
-        {!puedeEditar && (
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary/10 text-secondary border border-secondary/30 rounded-xl text-sm font-bold">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">lock</span>
-            Solo lectura: tu rol no permite modificar el inventario
-          </div>
-        )}
-      </div>
+  const handleGuardarMovimiento = () => {
+    setErrorMovimiento('');
+    if (!nuevoMovimiento.motivo?.trim()) { setErrorMovimiento('Escribe el motivo.'); return; }
+    if (nuevoMovimiento.productoId && nuevoMovimiento.cantidad && nuevoMovimiento.motivo) {
+      const r = addMovimientoInventario({
+        productoId: nuevoMovimiento.productoId,
+        tipo: nuevoMovimiento.tipo as 'ingreso' | 'salida' | 'ajuste' | 'merma' | 'devolucion',
+        cantidad: Number(nuevoMovimiento.cantidad),
+        costoUnitario: Number(nuevoMovimiento.costoUnitario) || undefined,
+        fecha: new Date(nuevoMovimiento.fecha!).toISOString(),
+        motivo: nuevoMovimiento.motivo
+      });
+      if (!r.ok) { setErrorMovimiento(r.error.mensaje); return; }
+      setShowMovimientoModal(false);
+    }
+  };
 
-      {/* Tabs. El filtro de mes vive en la misma fila en las dos pestañas, siempre a
-          la izquierda, y el grupo de pestañas queda a la derecha. Las fechas del rango
-          personalizado se alinean por la base con el selector y las pestañas para que
-          el bloque no se desajuste al aparecer. Se eliminaron los botones
-          table_rows / grid_view, asi que la vista de tarjetas ya no tiene forma de
-          activarse y la tabla es la unica vista. */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-6">
-        <FiltroPeriodo
-          className="min-w-0 flex-1"
-          periodo={periodoMovimientos}
-          etiqueta={etiquetaRangoMovimientos}
-          rango={rangoMovimientos}
-          onPeriodo={elegirPeriodoMovimientos}
-          onRango={setRangoMovimientos}
-        />
-
-        <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto shrink-0">
-          {[
-            { id: 'lista', label: 'Inventario', icon: 'list' },
-            { id: 'movimientos', label: 'Movimientos', icon: 'swap_horiz' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={cn(
-                "flex items-center justify-center gap-2 flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
-                activeTab === tab.id ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
-              )}
-            >
-              <span aria-hidden="true" className="material-symbols-outlined text-lg">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {activeTab === 'lista' && (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          {/* Aviso de que los numeros son el stock del cierre del periodo, no el de hoy.
-              Sin esto, cambiar de mes parece que el stock se hubiera alterado solo. */}
-          {stockAlCierre && (
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold">
-              <span aria-hidden="true" className="material-symbols-outlined text-lg">history</span>
-              Stock al cierre de {etiquetaRangoMovimientos}. Ajustar o registrar movimientos sigue operando sobre el stock actual.
-            </div>
-          )}
-          {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20' },
-              { label: 'Valorización Costo', value: `$${valorInventario.toLocaleString('es-CL')}`, icon: 'payments', color: 'text-on-surface', bg: 'bg-surface-container-low', border: 'border-outline-variant/30' },
-              { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-success', bg: 'bg-success/5', border: 'border-success/20' },
-              { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant', bg: productosBajoStock > 0 ? 'bg-error/5' : 'bg-surface-container-low', border: productosBajoStock > 0 ? 'border-error/20' : 'border-outline-variant/30' },
-            ].map(k => (
-              <div key={k.label} className="p-5 rounded-3xl border-2 border-outline-variant/30 bg-surface-container-low transition-all hover:shadow-md">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-[10px] font-black text-outline uppercase tracking-widest">{k.label}</p>
-                  <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center bg-surface-container-lowest shadow-sm', k.color)}>
-                    <span aria-hidden="true" className="material-symbols-outlined text-lg">{k.icon}</span>
-                  </div>
-                </div>
-                <p className={cn('text-2xl font-black', k.color)}>{k.value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Graficos: los mismos tres perfiles que Ventas, con los campos del
-              inventario. Este bloque reemplaza al vacio que quedaba bajo los KPIs. */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
-              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">show_chart</span>
-                Movimientos por Día
-              </h3>
-              <p className="text-[11px] text-outline font-medium mb-4">
-                Entradas y salidas del periodo · {etiquetaRangoMovimientos}
-              </p>
-              {datosMovimientosPorDia.length === 0 ? (
-                <div className="h-[260px] flex flex-col items-center justify-center text-center">
-                  <span aria-hidden="true" className="material-symbols-outlined text-4xl text-outline/30 mb-2">event_busy</span>
-                  <p className="text-on-surface-variant text-sm font-bold">Sin movimientos en el periodo</p>
-                </div>
-              ) : (
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={datosMovimientosPorDia}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                      <XAxis dataKey="etiqueta" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval={saltoEtiquetasMovimientos} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                      <RechartsTooltip
-                        contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value: number, name: string) => [`${value.toLocaleString('es-CL')} uds`, name === 'entradas' ? 'Entradas' : 'Salidas']}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '11px', color: c.onSurfaceVariant }} />
-                      <Line type="monotone" dataKey="entradas" stroke={c.success} strokeWidth={3} dot={{ r: 3, fill: c.success }} activeDot={{ r: 6 }} name="Entradas" />
-                      <Line type="monotone" dataKey="salidas" stroke={c.error} strokeWidth={3} dot={{ r: 3, fill: c.error }} activeDot={{ r: 6 }} name="Salidas" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
-              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">trophy</span>
-                Top 5 Más Solicitados
-              </h3>
-              <p className="text-[11px] text-outline font-medium mb-4">
-                Productos y servicios con mas demanda en el periodo · {etiquetaRangoMovimientos}
-              </p>
-              {topMasSolicitados.length === 0 ? (
-                <div className="h-[260px] flex flex-col items-center justify-center text-center">
-                  <span aria-hidden="true" className="material-symbols-outlined text-4xl text-outline/30 mb-2">shopping_cart</span>
-                  <p className="text-on-surface-variant text-sm font-bold">Sin solicitudes en el periodo</p>
-                  <p className="text-outline text-xs mt-1">Aqui apareceran los productos y servicios mas pedidos.</p>
-                </div>
-              ) : (
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topMasSolicitados} layout="vertical" margin={{ left: 8, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.outlineVariant} />
-                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} allowDecimals={false} />
-                      <YAxis type="category" dataKey="nombre" axisLine={false} tickLine={false} width={110} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                      <RechartsTooltip
-                        contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value: number) => [`${value.toLocaleString('es-CL')} uds`, 'Solicitudes']}
-                      />
-                      <Bar dataKey="solicitudes" fill={c.tertiary} radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Pie Chart */}
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
-              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-6 flex items-center gap-2">
-                <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">pie_chart</span>
-                Distribución por Categoría
-              </h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={valorizacionPorCategoria.map(([cat, valor]) => ({ name: cat, value: valor }))}
-                      cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value"
-                    >
-                      {valorizacionPorCategoria.map((_entry, index) => (
-                        <Cell key={`cell-${index}`} fill={c[COLORES_CATEGORIA[index % COLORES_CATEGORIA.length]]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip
-                      contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                      formatter={(value: number) => `$${value.toLocaleString('es-CL')}`}
-                    />
-                    <Legend verticalAlign="middle" align="right" layout="vertical" wrapperStyle={{ color: c.onSurfaceVariant }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Salud del Stock */}
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm flex flex-col">
-              <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">query_stats</span>
-                Salud del Stock
-              </h3>
-              <p className="text-[11px] text-outline font-medium mb-4">
-                Productos activos según su nivel de existencias
-              </p>
-              {stockPorEstado.total === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center min-h-[200px]">
-                  <span aria-hidden="true" className="material-symbols-outlined text-4xl text-outline/30 mb-2">inventory_2</span>
-                  <p className="text-on-surface-variant text-sm font-bold">Sin productos activos</p>
-                </div>
-              ) : (
-                <>
-                  <div className="h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={stockPorEstado.datos}
-                          cx="50%" cy="50%" innerRadius={48} outerRadius={80} paddingAngle={4} dataKey="value" nameKey="name" stroke="none"
-                        >
-                          {stockPorEstado.datos.map(item => (
-                            <Cell
-                              key={item.key}
-                              fill={item.key === 'sin_stock' ? c.error : item.key === 'bajo' ? c.secondary : c.success}
-                            />
-                          ))}
-                        </Pie>
-                        <RechartsTooltip
-                          contentStyle={{ borderRadius: '16px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                          formatter={(value: number, name: string) => [`${value.toLocaleString('es-CL')}`, name]}
-                        />
-                        <Legend layout="horizontal" verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: '11px', color: c.onSurfaceVariant }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {productosBajoStock > 0 ? (
-                    <p className="text-[11px] font-bold text-secondary mt-3 text-center">
-                      {productosBajoStock} {productosBajoStock === 1 ? 'producto requiere' : 'productos requieren'} atención
-                    </p>
-                  ) : (
-                    <p className="text-[11px] font-bold text-success mt-3 text-center">Stock saludable en todos los productos</p>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Filtros */}
-          <div className="flex flex-col sm:flex-row gap-4 bg-surface-container-lowest p-4 rounded-3xl border-2 border-outline-variant/20">
-            <div className="relative flex-1">
-              <span aria-hidden="true" className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
-              <input 
-                type="text" placeholder="Buscar por nombre, código o categoría..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-surface-container-low border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 outline-none font-medium text-on-surface" 
-              />
-            </div>
-            <SelectorDesplegable
-              valor={filtroTipo}
-              onChange={valor => setFiltroTipo(valor as any)}
-              opciones={[
-                { valor: 'todos', etiqueta: 'Todos los Tipos' },
-                { valor: 'producto', etiqueta: 'Productos' },
-                { valor: 'servicio', etiqueta: 'Servicios' }
-              ]}
-            />
-          </div>
-
-          {/* Sin resultados se muestra solo el aviso: antes se pintaba la tabla con
-              encabezados y sin filas y, debajo, el mismo aviso otra vez. */}
-          {inventarioFiltrado.length === 0 ? (
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-dashed border-outline-variant/30 p-20 text-center">
-              <span aria-hidden="true" className="material-symbols-outlined text-6xl text-outline/30 mb-4">inventory_2</span>
-              <h3 className="text-xl font-black text-on-surface-variant">No se encontraron productos</h3>
-              <p className="text-outline text-sm mt-2">Prueba cambiando los filtros o la búsqueda.</p>
-            </div>
-          ) : (
-            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-surface-container-low border-b border-outline-variant/20">
-                    <tr>
-                      {['Código', 'Nombre', 'Categoría', 'Stock', 'Costo', 'Precio Venta', 'Margen', 'Acciones'].map((h, i) => {
-                        const esOcultable = i === 2 || i === 4 || i === 5; // Categoría, Costo, Precio Venta
-                        return (
-                          <th key={h} className={cn('px-6 py-5 font-black text-outline uppercase tracking-widest text-[10px]', esOcultable ? 'hidden md:table-cell' : '')}>{h}</th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/20">
-                    {inventarioFiltrado.map((producto) => {
-                      const precioNeto = producto.incluyeIva ? Math.round(producto.precio / 1.19) : producto.precio;
-                      const margen = precioNeto > 0 ? ((precioNeto - producto.costo) / precioNeto) * 100 : 0;
-                      const stockPeriodo = stockMostrado(producto);
-                      const estado = estadoStock(producto, stockPeriodo);
-
-                      return (
-                        <tr key={producto.id} className="group hover:bg-surface-container-low/50 transition-colors">
-                          <td className="px-6 py-4">
-                            <span className="px-2.5 py-1 bg-surface-container-high text-on-surface-variant rounded-lg font-black text-[10px] uppercase tracking-wider">
-                              {producto.codigo || 'S/C'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-on-surface">{producto.nombre}</span>
-                              <span className="text-[10px] text-outline font-medium truncate max-w-[150px]">{producto.descripcion}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 hidden md:table-cell">
-                            <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-wider">
-                              {producto.categoria}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            {producto.tipo === 'producto' ? (
-                              <div className="flex flex-col items-end gap-0.5">
-                                <span className={cn(
-                                  "font-black text-base",
-                                  estado === 'sin_stock' ? 'text-error' : estado === 'bajo' ? 'text-secondary' : 'text-on-surface'
-                                )}>
-                                  {stockPeriodo}
-                                </span>
-                                <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida}</span>
-                                {estado !== 'ok' && estado !== 'no_aplica' && (
-                                  <span className={cn('text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full', ETIQUETA_STOCK[estado].clase)}>
-                                    {ETIQUETA_STOCK[estado].texto}
-                                  </span>
-                                )}
-                                {(producto.stockReservado || 0) > 0 && stockPeriodo === producto.stock ? (
-                                  <span className="text-[9px] font-medium text-primary">
-                                    ({producto.stockReservado} res. – disp. {Math.max(0, (producto.stock || 0) - (producto.stockReservado || 0))})
-                                  </span>
-                                ) : null}
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-end gap-0.5">
-                                <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida || 'servicio'}</span>
-                                <span aria-hidden="true" className="material-symbols-outlined text-outline/30">work</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right font-bold text-on-surface-variant hidden md:table-cell">
-                            ${producto.costo.toLocaleString('es-CL')}
-                          </td>
-                          <td className="px-6 py-4 text-right hidden md:table-cell">
-                            <div className="flex flex-col items-end">
-                              <span className="font-black text-on-surface">${producto.precio.toLocaleString('es-CL')}</span>
-                              <span className="text-[9px] text-outline font-bold uppercase">{producto.incluyeIva ? 'IVA inc.' : '+ IVA'}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <span className={cn(
-                              "px-2.5 py-1 rounded-lg text-[11px] font-black",
-                              margen > 30 ? "bg-success-container text-on-success-container" : margen > 15 ? "bg-secondary/10 text-secondary" : "bg-error/10 text-error"
-                            )}>
-                              {margen.toFixed(1)}%
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center justify-center gap-1 transition-opacity opacity-100">
-                              {puedeEditar && (
-                                <>
-                                  <button onClick={() => handleMovimientoClick(producto.id)}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Ajustar stock">
-                                    <span aria-hidden="true" className="material-symbols-outlined text-lg">swap_horiz</span>
-                                  </button>
-                                  <button onClick={() => handleEditClick(producto)}
-                                    aria-label={`Editar producto ${producto.nombre}`}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Editar">
-                                    <span aria-hidden="true" className="material-symbols-outlined text-lg">edit</span>
-                                  </button>
-                                  <button onClick={() => { setItemToDelete(producto.id); setDeleteModalOpen(true); }}
-                                    aria-label={`Eliminar producto ${producto.nombre}`}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-error/10 hover:text-error transition-all" title="Eliminar">
-                                    <span aria-hidden="true" className="material-symbols-outlined text-lg">delete</span>
-                                  </button>
-                                </>
-                              )}
-                              <button onClick={() => { setSelectedProductId(producto.id); setShowHistorialModal(true); }}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Historial">
-                                <span aria-hidden="true" className="material-symbols-outlined text-lg">history</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab Movimientos */}
-      {activeTab === 'movimientos' && (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-outline-variant/20 flex items-center justify-between gap-3 flex-wrap">
-              <h3 className="text-lg font-black text-on-surface">Historial Global de Movimientos</h3>
-              <span className="px-4 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-black">
-                {movimientosFiltrados.total > movimientosFiltrados.lista.length
-                  ? `Últimos ${movimientosFiltrados.lista.length} de ${movimientosFiltrados.total}`
-                  : `${movimientosFiltrados.total} registros`}
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-surface-container-low">
-                  <tr>
-                    {['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Motivo'].map(h => (
-                      <th key={h} className="px-6 py-4 font-black text-outline uppercase tracking-widest text-[10px]">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/20">
-                  {movimientosFiltrados.lista.map(mov => {
-                    const prod = inventario.find(p => p.id === mov.productoId);
-                    return (
-                      <tr key={mov.id} className="hover:bg-surface-container-low/50 transition-colors">
-                        <td className="px-6 py-4 text-on-surface-variant font-medium">
-                          {formatearFechaHoraLocal(mov.fecha)}
-                        </td>
-                        <td className="px-6 py-4 font-bold text-on-surface">{prod?.nombre || 'Producto eliminado'}</td>
-                        <td className="px-6 py-4">
-                          <span className={cn(
-                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                            mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? "bg-success-container text-on-success-container" :
-                            mov.tipo === 'salida' || mov.tipo === 'merma' ? "bg-error/10 text-error" : "bg-surface-container-high text-on-surface-variant"
-                          )}>
-                            {mov.tipo}
-                          </span>
-                        </td>
-                        <td className={cn(
-                          "px-6 py-4 text-right font-black",
-                          mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? "text-success" : "text-error"
-                        )}>
-                          {mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? '+' : '-'}{mov.cantidad}
-                        </td>
-                        <td className="px-6 py-4 text-on-surface-variant text-xs italic">{mov.motivo}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {movimientosFiltrados.lista.length === 0 && (
-                <div className="p-16 text-center">
-                  <span aria-hidden="true" className="material-symbols-outlined text-5xl text-outline/30 mb-3 block">event_busy</span>
-                  <p className="text-on-surface-variant font-bold">Sin movimientos en el periodo seleccionado</p>
-                  <p className="text-outline text-sm mt-1">
-                    {movimientosInventario.length > 0
-                      ? 'Prueba con otro rango o vuelve a "Este Mes".'
-                      : 'Cuando ajustes el stock de un producto, el movimiento aparecera aqui.'}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Nuevo Producto / Editar */}
-      {showModal && (
-        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
-              <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar Producto' : 'Registrar Nuevo Producto'}</h3>
-              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} aria-label="Cerrar formulario de producto" className="text-on-surface-variant hover:text-error transition-colors">
-                <span aria-hidden="true" className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-6 space-y-4 overflow-y-auto flex-grow">
+  // Selector Producto / Servicio: va arriba en ambos formularios.
+  const selectorTipo = (
+    <>
               {/* La pregunta va primero porque de ella depende que campos tengan sentido:
                   un servicio no lleva codigo de barras ni stock minimo. */}
               <div>
@@ -1102,12 +641,457 @@ export default function ERPInventario() {
                   })}
                 </div>
               </div>
+    </>
+  );
+
+  return (
+    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-outline-variant/30 pb-6">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-3xl">inventory_2</span>
+            </div>
+            <h2 className="text-3xl font-black text-on-surface tracking-tight">Gestión de Inventario</h2>
+          </div>
+          <p className="text-on-surface-variant text-sm font-medium">Control centralizado de existencias, costos y logística operativa.</p>
+        </div>
+        
+        <div className="flex flex-wrap gap-3">
+          <button onClick={() => setShowCargaMasiva(true)}
+            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">upload_file</span>
+            Carga Masiva
+          </button>
+          <button onClick={exportToCSV}
+            className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">download</span>
+            Exportar
+          </button>
+          {puedeEditar && (
+            <button onClick={() => {
+              setEditingId(null)
+              setMostrarInputCategoria(false)
+              setNuevaCategoria('')
+              setBarcodeManualEntry(false)
+              setNuevoProducto(CAMPOS_INICIALES('producto'))
+              setShowModal(true)
+            }}
+              className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2">
+              <span className="material-symbols-outlined text-lg">add_box</span>
+              Nuevo Producto
+            </button>
+          )}
+        </div>
+        {!puedeEditar && (
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary/10 text-secondary border border-secondary/30 rounded-xl text-sm font-bold">
+            <span className="material-symbols-outlined text-lg">lock</span>
+            Solo lectura: tu rol no permite modificar el inventario
+          </div>
+        )}
+      </div>
+
+      {/* Tabs. El filtro de mes vive en la misma fila en las dos pestañas, siempre a
+          la izquierda, y el grupo de pestañas queda a la derecha. Las fechas del rango
+          personalizado se alinean por la base con el selector y las pestañas para que
+          el bloque no se desajuste al aparecer. Se eliminaron los botones
+          table_rows / grid_view, asi que la vista de tarjetas ya no tiene forma de
+          activarse y la tabla es la unica vista. */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-6">
+        <FiltroPeriodo
+          className="min-w-0 flex-1"
+          periodo={periodoMovimientos}
+          etiqueta={etiquetaRangoMovimientos}
+          rango={rangoMovimientos}
+          onPeriodo={elegirPeriodoMovimientos}
+          onRango={setRangoMovimientos}
+        />
+
+        <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto shrink-0">
+          {[
+            { id: 'lista', label: 'Inventario', icon: 'list' },
+            { id: 'movimientos', label: 'Movimientos', icon: 'swap_horiz' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={cn(
+                "flex items-center justify-center gap-2 flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
+                activeTab === tab.id ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
+              )}
+            >
+              <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === 'lista' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* Aviso de que los numeros son el stock del cierre del periodo, no el de hoy.
+              Sin esto, cambiar de mes parece que el stock se hubiera alterado solo. */}
+          {stockAlCierre && (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold">
+              <span className="material-symbols-outlined text-lg">history</span>
+              Stock al cierre de {etiquetaRangoMovimientos}. Ajustar o registrar movimientos sigue operando sobre el stock actual.
+            </div>
+          )}
+          {/* KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20' },
+              { label: 'Valorización Costo', value: formatCLP(valorInventario), icon: 'payments', color: 'text-on-surface', bg: 'bg-surface-container-low', border: 'border-outline-variant/30' },
+              { label: 'Valorización Venta', value: formatCLP(Math.round(valorVenta)), icon: 'sell', color: 'text-on-success-container', bg: 'bg-success-container', border: 'border-success/30' },
+              { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant', bg: productosBajoStock > 0 ? 'bg-error/5' : 'bg-surface-container-low', border: productosBajoStock > 0 ? 'border-error/20' : 'border-outline-variant/30' },
+            ].map(k => (
+              <div key={k.label} className={cn('p-5 rounded-3xl border-2 transition-all hover:shadow-md', k.bg, k.border)}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-black text-outline uppercase tracking-widest">{k.label}</p>
+                  <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center bg-surface-container-lowest shadow-sm', k.color)}>
+                    <span className="material-symbols-outlined text-lg">{k.icon}</span>
+                  </div>
+                </div>
+                <p className={cn('text-2xl font-black', k.color)}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráficos: movimientos del periodo anchos + ranking; valorización (dona Top-6 + Otros) + salud del stock */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <TarjetaGrafico
+              className="lg:col-span-2"
+              icono="swap_vert"
+              titulo="Movimientos de stock"
+              subtitulo={`Entradas y salidas ${NOMBRE_GRANULARIDAD[serieMovimientos.granularidad]} · ${etiquetaRangoMovimientos}`}
+              extra={`${movimientosEnRango.length.toLocaleString('es-CL')} movimientos`}
+            >
+              <GraficoSerie
+                puntos={serieMovimientos.puntos}
+                tipo="barra"
+                series={[
+                  { clave: 'entradas', nombre: 'Entradas', color: paleta.ingresos },
+                  { clave: 'salidas', nombre: 'Salidas', color: paleta.egresos },
+                ]}
+                formato={formatoUds}
+                formatoEje={formatoEjeUds}
+                vacio="Sin movimientos en el periodo"
+              />
+            </TarjetaGrafico>
+            <TarjetaGrafico icono="trophy" titulo="Más solicitados" subtitulo="Unidades vendidas en el periodo">
+              <GraficoBarras items={topMasSolicitados} max={5} color={paleta.neto} formato={formatoUds} vacio="Sin solicitudes en el periodo" />
+            </TarjetaGrafico>
+            <TarjetaGrafico
+              className="lg:col-span-2"
+              icono="donut_large"
+              titulo="Valorización por categoría"
+              subtitulo={stockAlCierre ? `A costo, stock al cierre de ${etiquetaRangoMovimientos}` : 'A costo, stock actual'}
+            >
+              <GraficoDona items={valorizacionPorCategoria} etiquetaTotal="Valor a costo" vacio="Sin productos con stock valorizado" />
+            </TarjetaGrafico>
+            <TarjetaGrafico icono="query_stats" titulo="Salud del stock" subtitulo="Productos activos según su nivel de existencias">
+              <GraficoDona
+                items={stockPorEstado.datos}
+                etiquetaTotal="Productos"
+                formato={formatoProductos}
+                formatoCorto={formatoEjeUds}
+                vacio="Sin productos activos"
+              />
+              {stockPorEstado.total > 0 && (
+                <p className={cn('text-[11px] font-bold mt-3 text-center', productosBajoStock > 0 ? 'text-secondary' : 'text-success')}>
+                  {productosBajoStock > 0
+                    ? `${productosBajoStock} ${productosBajoStock === 1 ? 'producto requiere' : 'productos requieren'} atención`
+                    : 'Stock saludable en todos los productos'}
+                </p>
+              )}
+            </TarjetaGrafico>
+          </div>
+
+          {productosRevision.length > 0 && (
+            <div className="flex flex-col gap-3 rounded-2xl border-2 border-secondary/40 bg-secondary/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="flex items-center gap-2 text-sm font-bold text-on-surface">
+                <span className="material-symbols-outlined text-secondary">rule</span>
+                Hay {productosRevision.length} producto{productosRevision.length === 1 ? '' : 's'} que necesita{productosRevision.length === 1 ? '' : 'n'} revisar sus unidades.
+              </p>
+              {puedeEditar && (
+                <button type="button" onClick={() => setRevisionIds(productosRevision.map(p => p.id))}
+                  className="rounded-full bg-primary px-4 py-2 text-xs font-bold text-inverse-on-surface">Revisar ahora</button>
+              )}
+            </div>
+          )}
+
+          {/* Filtros */}
+          <div className="flex flex-col sm:flex-row gap-4 bg-surface-container-lowest p-4 rounded-3xl border-2 border-outline-variant/20">
+            <div className="relative flex-1">
+              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
+              <input 
+                type="text" placeholder="Buscar por nombre, código o categoría..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-surface-container-low border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 outline-none font-medium text-on-surface" 
+              />
+            </div>
+            <label className="flex items-center gap-2 rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface-variant"
+              title="FIFO: cada venta usa el costo de la compra más antigua con stock. Promedio: usa el promedio ponderado de todo tu stock, recalculado en cada compra. LIFO no se acepta tributariamente en Chile. Cambia el método solo al inicio de un año (afecta reportes).">
+              Costeo
+              <select value={metodoCosteo} onChange={e => {
+                if (window.confirm('Cambiar el método de costeo afecta el costo de las próximas ventas y tus reportes. Se recomienda hacerlo solo al inicio de un año. ¿Continuar?')) setMetodoCosteo(e.target.value as 'fifo' | 'promedio');
+              }} className="bg-transparent font-black text-on-surface outline-none">
+                <option value="promedio">Promedio ponderado</option>
+                <option value="fifo">FIFO / PEPS</option>
+              </select>
+            </label>
+            <button type="button" onClick={() => setFiltroStock(v => (v === 'bajo' ? 'todos' : 'bajo'))} aria-pressed={filtroStock === 'bajo'}
+              className={cn('flex min-h-11 items-center justify-center gap-1 rounded-xl border px-3 text-xs font-bold', filtroStock === 'bajo' ? 'border-secondary bg-secondary/10 text-secondary' : 'border-outline-variant/40 text-on-surface-variant')}>
+              <span className="material-symbols-outlined text-base">warning</span> Stock bajo
+            </button>
+            <SelectorDesplegable
+              valor={filtroTipo}
+              onChange={valor => setFiltroTipo(valor as any)}
+              opciones={[
+                { valor: 'todos', etiqueta: 'Todos los Tipos' },
+                { valor: 'producto', etiqueta: 'Productos' },
+                { valor: 'servicio', etiqueta: 'Servicios' }
+              ]}
+            />
+          </div>
+
+          {/* Sin resultados se muestra solo el aviso: antes se pintaba la tabla con
+              encabezados y sin filas y, debajo, el mismo aviso otra vez. */}
+          {inventarioFiltrado.length === 0 ? (
+            <div className="bg-surface-container-lowest rounded-3xl border-2 border-dashed border-outline-variant/30 p-10 sm:p-20 text-center">
+              <span className="material-symbols-outlined text-6xl text-outline/30 mb-4">inventory_2</span>
+              <h3 className="text-xl font-black text-on-surface-variant">No se encontraron productos</h3>
+              <p className="text-outline text-sm mt-2">{filtroStock === 'bajo' ? 'Ningún producto tiene stock bajo.' : 'Prueba cambiando los filtros o la búsqueda.'}</p>
+            </div>
+          ) : (
+            <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
+              <TablaResponsiva
+                filas={paginacionInventario.visibles as Producto[]}
+                clave={p => p.id}
+                resaltada={fichaId}
+                etiquetaExpandir="Subcategorías de venta"
+                expandible={p => {
+                  const lista = p.tipo === 'producto' ? (p.presentaciones ?? []) : [];
+                  if (lista.length === 0) return null;
+                  return (
+                    <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {lista.map(x => {
+                        const disp = textoDisponibilidad(p, envases, x, politicaEnvaseAbierto);
+                        const tipo = tipoPresentacion(p, x);
+                        return (
+                          <li key={x.id} className={cn('flex items-center gap-3 rounded-xl border px-3 py-2', x.activa ? 'border-outline-variant/30 bg-surface-container-lowest' : 'border-dashed border-outline-variant/30 opacity-60')}>
+                            <span className="material-symbols-outlined text-lg text-primary">{tipo === 'completa' ? 'liquor' : tipo === 'variable' ? 'scale' : 'water_drop'}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-on-surface">{x.nombre}</p>
+                              <p className="text-[11px] text-on-surface-variant">
+                                {formatCLP(x.precio)}{tipo === 'variable' ? ` por ${x.unidadVenta ?? (p.unidadBase === 'ml' ? 'L' : 'kg')}` : ''} · {x.activa ? disp.texto : 'Inactiva'}
+                              </p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                }}
+                tituloTarjeta={p => (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {p.nombre}
+                    {p.requiereRevisionUnidades && <span className="rounded-full bg-secondary/15 px-2 py-0.5 text-[10px] font-black text-secondary">Revisar unidades</span>}
+                  </span>
+                )}
+                subtituloTarjeta={p => `${p.categoria}${p.codigo ? ` · ${p.codigo}` : ''}`}
+                insigniaTarjeta={p => {
+                  const e = estadoActual(p);
+                  return e === 'sin_stock' || e === 'bajo'
+                    ? <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-black uppercase', ETIQUETA_STOCK[e].clase)}>{ETIQUETA_STOCK[e].texto}</span>
+                    : null;
+                }}
+                datosTarjeta={p => [
+                  { etiqueta: 'Stock', valor: textoStockLista(p) },
+                  { etiqueta: 'Precio', valor: `${formatCLP(precioDe(p))}${presentacionesActivas(p).length > 1 ? ` · ${presentacionesActivas(p).length} subcat.` : ''}` },
+                ]}
+                onFila={p => (p.tipo === 'producto' ? setFichaId(p.id) : undefined)}
+                acciones={p => [
+                  ...(puedeEditar && p.tipo === 'producto' ? [{
+                    etiqueta: esFraccionado(p) ? 'Abrir, merma o reponer' : 'Ajustar stock', icono: 'swap_horiz',
+                    onClick: () => (esFraccionado(p) ? setFichaId(p.id) : handleMovimientoClick(p.id)),
+                  }] : []),
+                  ...(puedeEditar ? [{ etiqueta: 'Editar', icono: 'edit', onClick: () => handleEditClick(p) }] : []),
+                  { etiqueta: 'Historial', icono: 'history', onClick: () => { setSelectedProductId(p.id); setShowHistorialModal(true); } },
+                  ...(puedeEditar ? [{ etiqueta: 'Eliminar', icono: 'delete', peligro: true, onClick: () => { setItemToDelete(p.id); setDeleteModalOpen(true); } }] : []),
+                ]}
+                columnas={[
+                  {
+                    clave: 'nombre', titulo: 'Producto', celda: p => (
+                      <div className="flex min-w-[12rem] flex-col">
+                        <span className="font-bold text-on-surface">{p.nombre}</span>
+                        {p.requiereRevisionUnidades && <span className="mt-0.5 w-fit rounded-full bg-secondary/15 px-2 py-0.5 text-[10px] font-black text-secondary">Revisar unidades</span>}
+                        <span className="text-[10px] font-medium text-outline">{p.codigo || 'S/C'}{p.descripcion ? ` · ${p.descripcion}` : ''}</span>
+                      </div>
+                    ),
+                  },
+                  {
+                    clave: 'categoria', titulo: 'Categoría', celda: p => (
+                      <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-primary">{p.categoria}</span>
+                    ),
+                  },
+                  {
+                    clave: 'stock', titulo: 'Stock', alinear: 'derecha', celda: p => {
+                      if (p.tipo !== 'producto') return <span className="text-[10px] font-bold uppercase text-outline">{p.unidadMedida || 'servicio'}</span>;
+                      const e = estadoActual(p);
+                      const color = e === 'sin_stock' ? 'text-error' : e === 'bajo' ? 'text-secondary' : 'text-on-surface';
+                      return (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={cn('text-sm font-black leading-tight', color)}>{textoStockLista(p)}</span>
+                          {(p.stockMinimoUnidad ?? 0) > 0 && <span className="text-[10px] font-bold text-outline">mínimo {textoMinimo(p)}</span>}
+                          {e !== 'ok' && e !== 'no_aplica' && <span className={cn('rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase', ETIQUETA_STOCK[e].clase)}>{ETIQUETA_STOCK[e].texto}</span>}
+                        </div>
+                      );
+                    },
+                  },
+                  {
+                    clave: 'costo', titulo: 'Costo', alinear: 'derecha', celda: p => (
+                      <span className="font-bold text-on-surface-variant">
+                        {formatCLP(costoDe(p))}
+                        {p.unidadBase && p.unidadBase !== 'unidad' && <span className="block text-[9px] text-outline">por {p.unidadBase}</span>}
+                      </span>
+                    ),
+                  },
+                  {
+                    clave: 'precio', titulo: 'Precio', alinear: 'derecha', celda: p => (
+                      <div className="flex flex-col items-end">
+                        <span className="font-black text-on-surface">{formatCLP(precioDe(p))}</span>
+                        <span className="text-[9px] font-bold uppercase text-outline">
+                          {presentacionesActivas(p).length > 1 ? `${presentacionesActivas(p).length} subcategorías` : p.incluyeIva ? 'IVA inc.' : '+ IVA'}
+                        </span>
+                      </div>
+                    ),
+                  },
+                  {
+                    clave: 'margen', titulo: 'Margen', alinear: 'derecha', celda: p => {
+                      const pres = presentacionesActivas(p);
+                      const precioRef = pres[0]?.precio ?? precioDe(p);
+                      const costoRef = costoDe(p) * (pres[0]?.factor ?? 1) + (Number(pres[0]?.costoInsumos) || 0);
+                      const precioNeto = p.incluyeIva ? Math.round(precioRef / 1.19) : precioRef;
+                      const margen = precioNeto > 0 ? ((precioNeto - costoRef) / precioNeto) * 100 : 0;
+                      return (
+                        <span className={cn('rounded-lg px-2.5 py-1 text-[11px] font-black', margen > 30 ? 'bg-success-container text-on-success-container' : margen > 15 ? 'bg-secondary/10 text-secondary' : 'bg-error/10 text-error')}>
+                          {margen.toFixed(1)}%
+                        </span>
+                      );
+                    },
+                  },
+                ]}
+              />
+              <Paginacion {...paginacionInventario} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab Movimientos */}
+      {activeTab === 'movimientos' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-outline-variant/20 flex items-center justify-between gap-3 flex-wrap">
+              <h3 className="text-lg font-black text-on-surface">Historial Global de Movimientos</h3>
+              <span className="px-4 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-black">
+                {movimientosFiltrados.total > movimientosFiltrados.lista.length
+                  ? `Últimos ${movimientosFiltrados.lista.length} de ${movimientosFiltrados.total}`
+                  : `${movimientosFiltrados.total} registros`}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-surface-container-low">
+                  <tr>
+                    {['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Motivo'].map(h => (
+                      <th key={h} className="px-6 py-4 font-black text-outline uppercase tracking-widest text-[10px]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/20">
+                  {movimientosFiltrados.lista.map(mov => {
+                    const prod = inventario.find(p => p.id === mov.productoId);
+                    return (
+                      <tr key={mov.id} className="hover:bg-surface-container-low/50 transition-colors">
+                        <td className="px-6 py-4 text-on-surface-variant font-medium">
+                          {new Date(mov.fecha).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-on-surface">{prod?.nombre || 'Producto eliminado'}</td>
+                        <td className="px-6 py-4">
+                          <span className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                            mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? "bg-success-container text-on-success-container" :
+                            mov.tipo === 'salida' || mov.tipo === 'merma' ? "bg-error/10 text-error" : "bg-surface-container-high text-on-surface-variant"
+                          )}>
+                            {mov.tipo}
+                          </span>
+                        </td>
+                        <td className={cn(
+                          "px-6 py-4 text-right font-black",
+                          mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? "text-success" : "text-error"
+                        )}>
+                          {mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? '+' : '-'}{mov.cantidad}
+                        </td>
+                        <td className="px-6 py-4 text-on-surface-variant text-xs italic">{mov.motivo}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {movimientosFiltrados.lista.length === 0 && (
+                <div className="p-16 text-center">
+                  <span className="material-symbols-outlined text-5xl text-outline/30 mb-3 block">event_busy</span>
+                  <p className="text-on-surface-variant font-bold">Sin movimientos en el periodo seleccionado</p>
+                  <p className="text-outline text-sm mt-1">
+                    {movimientosInventario.length > 0
+                      ? 'Prueba con otro rango o vuelve a "Este Mes".'
+                      : 'Cuando ajustes el stock de un producto, el movimiento aparecera aqui.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Nuevo Producto / Editar */}
+      {showModal && (
+        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-surface-container-lowest w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col h-[100dvh] sm:h-auto sm:max-h-[92vh] sm:rounded-3xl">
+            <div className="px-4 sm:px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
+              <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar producto' : 'Registrar producto'}</h3>
+              <button onClick={cerrarModalProducto} aria-label="Cerrar" className="text-on-surface-variant hover:text-error transition-colors">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            {tipoEnFormulario === 'producto' ? (
+              <RegistroProducto
+                key={editingId ?? 'nuevo'}
+                editando={editingId ? inventario.find(p => p.id === editingId) ?? null : null}
+                general={nuevoProducto}
+                onGeneral={cambios => setNuevoProducto(prev => ({ ...prev, ...cambios }))}
+                inventario={inventario}
+                proveedores={proveedores}
+                envases={envases}
+                plantillas={plantillasSubcategoria}
+                margenObjetivo={margenObjetivo}
+                rubroNegocio={perfil?.negocio_rubro ?? undefined}
+                onGuardarPlantilla={guardarPlantilla}
+                encabezado={selectorTipo}
+                onCancelar={cerrarModalProducto}
+                onGuardar={guardarProducto}
+              />
+            ) : (<>
+            <div className="p-6 space-y-4 overflow-y-auto flex-grow">
+              {selectorTipo}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre <span className="text-error">*</span></label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre</label>
                       <input type="text" value={nuevoProducto.nombre} onChange={(e) => setNuevoProducto({...nuevoProducto, nombre: e.target.value})}
                         className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: Cuaderno Universitario" />
                     </div>
@@ -1119,7 +1103,7 @@ export default function ERPInventario() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría <span className="text-error">*</span></label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
                     <SelectorDesplegable
                       className="w-full"
                       valor={nuevoProducto.categoria || ''}
@@ -1183,24 +1167,6 @@ export default function ERPInventario() {
                     )}
                   </div>
 
-                  {/* Uso operativo solo aplica a producto físico */}
-                  {tipoEnFormulario === 'producto' && (
-                    <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Uso operativo</label>
-                      <SelectorDesplegable
-                        className="w-full"
-                        valor={nuevoProducto.tipoOperativo || 'producto_simple'}
-                        onChange={valor => setNuevoProducto({ ...nuevoProducto, tipoOperativo: valor as Producto['tipoOperativo'] })}
-                        opciones={[
-                          { valor: 'producto_simple', etiqueta: 'Producto simple' },
-                          { valor: 'pack', etiqueta: 'Pack / combo' },
-                          { valor: 'insumo', etiqueta: 'Insumo' },
-                          { valor: 'producto_compuesto', etiqueta: 'Producto compuesto' }
-                        ]}
-                      />
-                    </div>
-                  )}
-
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Descripción</label>
                     <textarea value={nuevoProducto.descripcion} onChange={(e) => setNuevoProducto({...nuevoProducto, descripcion: e.target.value})}
@@ -1236,7 +1202,7 @@ export default function ERPInventario() {
                             className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                       </>
-                    ) : tipoEnFormulario === 'servicio_pedido' ? (
+                    ) : (
                       <>
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo fijo ($)</label>
@@ -1246,19 +1212,6 @@ export default function ERPInventario() {
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio fijo ($)</label>
                           <CampoMoneda valor={nuevoProducto.precioFijo || nuevoProducto.precio || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, precioFijo: valor})}
-                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div>
-                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Costo Unitario</label>
-                          <CampoMoneda valor={nuevoProducto.costo || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, costo: valor})}
-                            className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Precio Venta Base</label>
-                          <CampoMoneda valor={nuevoProducto.precio || ''} onChange={(valor) => setNuevoProducto({...nuevoProducto, precio: valor})}
                             className="px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                         </div>
                       </>
@@ -1272,55 +1225,18 @@ export default function ERPInventario() {
                     <label htmlFor="incluyeIva" className="text-sm text-on-surface font-medium">El precio de venta incluye IVA</label>
                   </div>
 
-                  {tipoEnFormulario === 'producto' && (
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Actual</label>
-                        <input type="number" min="0" step="1" value={nuevoProducto.stock || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: Number(e.target.value)})}
-                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" disabled={!!editingId} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Mínimo</label>
-                        <input type="number" min="0" step="1" value={nuevoProducto.stockMinimo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stockMinimo: Number(e.target.value)})}
-                          className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Unidad</label>
-                        <SelectorDesplegable
-                          className="w-full [&>button]:py-3"
-                          valor={nuevoProducto.unidadMedida || 'un'}
-                          onChange={valor => setNuevoProducto({ ...nuevoProducto, unidadMedida: valor })}
-                          opciones={(() => {
-                            const actual = nuevoProducto.unidadMedida
-                            const lista = UNIDADES_PRODUCTO.map(u => ({ valor: u.valor, etiqueta: u.etiqueta }))
-                            if (actual && !UNIDADES_PRODUCTO.some(u => u.valor === actual)) {
-                              lista.unshift({ valor: actual, etiqueta: actual })
-                            }
-                            return lista
-                          })()}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
-
-              <p className="mt-3 text-[11px] text-on-surface-variant">Los campos marcados con <span className="text-error">*</span> son obligatorios.</p>
-              {errorFormulario && (
-                <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm font-semibold text-error">
-                  <span aria-hidden="true" className="material-symbols-outlined text-lg leading-none">error</span>
-                  <span>{errorFormulario}</span>
-                </div>
-              )}
             </div>
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50 shrink-0">
-              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); setErrorFormulario(''); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
+              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 Cancelar
               </button>
               <button onClick={handleGuardar} className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
                 {editingId ? 'Guardar Cambios' : 'Guardar Producto'}
               </button>
             </div>
+            </>)}
           </div>
         </div>
       )}
@@ -1331,8 +1247,8 @@ export default function ERPInventario() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50">
               <h3 className="text-xl font-bold text-primary">Registrar Movimiento</h3>
-              <button onClick={() => setShowMovimientoModal(false)} aria-label="Cerrar registro de movimiento" className="text-on-surface-variant hover:text-error transition-colors">
-                <span aria-hidden="true" className="material-symbols-outlined">close</span>
+              <button onClick={() => setShowMovimientoModal(false)} className="text-on-surface-variant hover:text-error transition-colors">
+                <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 space-y-4">
@@ -1359,8 +1275,8 @@ export default function ERPInventario() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad <span className="text-error">*</span></label>
-                  <input type="number" step="1" min={nuevoMovimiento.tipo === 'ajuste' ? undefined : 0} value={nuevoMovimiento.cantidad || ''} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, cantidad: Number(e.target.value)})}
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad</label>
+                  <input type="number" value={nuevoMovimiento.cantidad || ''} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, cantidad: Number(e.target.value)})}
                     className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                 </div>
               </div>
@@ -1372,7 +1288,7 @@ export default function ERPInventario() {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Motivo / Observación <span className="text-error">*</span></label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Motivo / Observación</label>
                 <input type="text" value={nuevoMovimiento.motivo} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, motivo: e.target.value})}
                   className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: Compra a proveedor, conteo físico..." />
               </div>
@@ -1383,13 +1299,8 @@ export default function ERPInventario() {
                       onChange={fecha => setNuevoMovimiento({ ...nuevoMovimiento, fecha: fecha })}
                     />
               </div>
-              {errorMovimiento && (
-                <div role="alert" className="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm font-semibold text-error">
-                  <span aria-hidden="true" className="material-symbols-outlined text-lg leading-none">error</span>
-                  <span>{errorMovimiento}</span>
-                </div>
-              )}
             </div>
+            {errorMovimiento && <p className="px-6 pb-2 text-sm font-bold text-error">{errorMovimiento}</p>}
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50">
               <button onClick={() => setShowMovimientoModal(false)} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 Cancelar
@@ -1411,11 +1322,11 @@ export default function ERPInventario() {
                 <h3 className="text-xl font-bold text-primary">Historial de Movimientos</h3>
                 <p className="text-sm text-on-surface-variant">{inventario.find(p => p.id === selectedProductId)?.nombre}</p>
               </div>
-              <button onClick={() => { setShowHistorialModal(false); setSelectedProductId(null); }} aria-label="Cerrar historial de movimientos" className="text-on-surface-variant hover:text-error transition-colors">
-                <span aria-hidden="true" className="material-symbols-outlined">close</span>
+              <button onClick={() => { setShowHistorialModal(false); setSelectedProductId(null); }} className="text-on-surface-variant hover:text-error transition-colors">
+                <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="p-0 overflow-x-auto overflow-y-auto flex-1">
+            <div className="p-0 overflow-y-auto flex-1">
               <table className="w-full text-left text-sm">
                 <thead className="bg-surface-container-low text-on-surface-variant font-bold uppercase tracking-wider text-xs sticky top-0">
                   <tr>
@@ -1431,7 +1342,7 @@ export default function ERPInventario() {
                     .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
                     .map(mov => (
                     <tr key={mov.id} className="hover:bg-surface-container-low/30 transition-colors">
-                      <td className="px-6 py-4 text-on-surface-variant">{formatearFechaLocal(mov.fecha)}</td>
+                      <td className="px-6 py-4 text-on-surface-variant">{new Date(mov.fecha).toLocaleDateString('es-CL')}</td>
                       <td className="px-6 py-4">
                         <span className={cn('px-2 py-1 rounded-md text-xs font-bold capitalize',
                           mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? 'bg-success-container text-on-success-container' :
@@ -1464,6 +1375,17 @@ export default function ERPInventario() {
             </div>
           </div>
         </div>
+      )}
+
+      {fichaId && inventario.some(p => p.id === fichaId) && (
+        <FichaProducto producto={inventario.find(p => p.id === fichaId)!} onCerrar={() => { setFichaId(null); setAccionFicha(null); }} puedeEditar={puedeEditar}
+          accionInicial={accionFicha} onEditar={puedeEditar ? () => { const p = inventario.find(x => x.id === fichaId); setFichaId(null); if (p) handleEditClick(p); } : undefined} />
+      )}
+      {revisionIds && (
+        <ModalRevisionUnidades
+          productos={revisionIds.map(id => inventario.find(p => p.id === id)).filter((p): p is Producto => !!p)}
+          onCerrar={() => setRevisionIds(null)}
+        />
       )}
 
       {/* Modal Confirmar Eliminación */}

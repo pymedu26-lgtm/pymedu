@@ -2,19 +2,19 @@ import { useAuth } from '@/context/AuthContext';
 
 const cohortes = [
   { id: 'c1', nombre: 'Emprendimiento Juvenil 2026', emprendedores: 15, mentorAsignados: 3, avance: 68, estado: 'activa' as const },
-  { id: 'c2', nombre: 'Innovacion Digital', emprendedores: 22, mentorAsignados: 4, avance: 45, estado: 'activa' as const },
+  { id: 'c2', nombre: 'Innovación Digital', emprendedores: 22, mentorAsignados: 4, avance: 45, estado: 'activa' as const },
   { id: 'c3', nombre: 'Sostenibilidad Local', emprendedores: 8, mentorAsignados: 2, avance: 90, estado: 'activa' as const },
 ];
 
 const alertas = [
-  { id: '1', tipo: 'riesgo' as const, titulo: 'Laura Diaz — 5 dias sin actividad', descripcion: 'Emprendedor sin conexion reciente. Requiere seguimiento urgente.', emprendedor: 'Laura Diaz', prioridad: 'alta' },
-  { id: '2', tipo: 'vencimiento' as const, titulo: '3 documentos pendientes de revision', descripcion: 'Formulario Sercotec vence el 01 de Agosto.', emprendedor: 'Varios', prioridad: 'media' },
-  { id: '3', tipo: 'alerta' as const, titulo: 'Maria Lopez — IVA sin declarar', descripcion: 'Facturacion de julio pendiente de revisión tributaria.', emprendedor: 'Maria Lopez', prioridad: 'media' },
+  { id: '1', tipo: 'riesgo' as const, titulo: 'Laura Díaz — 5 días sin actividad', descripcion: 'Emprendedor sin conexión reciente. Requiere seguimiento urgente.', emprendedor: 'Laura Díaz', prioridad: 'alta' },
+  { id: '2', tipo: 'vencimiento' as const, titulo: '3 documentos pendientes de revisión', descripcion: 'Formulario Sercotec vence el 01 de Agosto.', emprendedor: 'Varios', prioridad: 'media' },
+  { id: '3', tipo: 'alerta' as const, titulo: 'María López — IVA sin declarar', descripcion: 'Facturación de julio pendiente de revisión tributaria.', emprendedor: 'María López', prioridad: 'media' },
 ];
 
 const eventos = [
   { id: 'e1', titulo: 'Webinar: Finanzas para emprendedores', fecha: '28 Jul 2026', hora: '10:00', tipo: 'webinar', participantes: 25 },
-  { id: 'e2', titulo: 'Reunion de coordinacion', fecha: '29 Jul 2026', hora: '09:00', tipo: 'reunion', participantes: 5 },
+  { id: 'e2', titulo: 'Reunión de coordinación', fecha: '29 Jul 2026', hora: '09:00', tipo: 'reunion', participantes: 5 },
   { id: 'e3', titulo: 'Taller: Como postular a fondos', fecha: '31 Jul 2026', hora: '14:00', tipo: 'taller', participantes: 18 },
   { id: 'e4', titulo: 'Cierre de cohorte Juvenil', fecha: '15 Ago 2026', hora: '11:00', tipo: 'evento', participantes: 15 },
 ];
@@ -22,7 +22,7 @@ const eventos = [
 const tareasPendientes = [
   { id: 't1', tarea: 'Asignar mentor a nuevos emprendedores', cohortes: 2, plazo: '27 Jul 2026', prioridad: 'alta' },
   { id: 't2', tarea: 'Revisar avance modulo Finanzas', cohortes: 1, plazo: '30 Jul 2026', prioridad: 'media' },
-  { id: 't3', tarea: 'Enviar encuesta de satisfaccion', cohortes: 3, plazo: '01 Ago 2026', prioridad: 'media' },
+  { id: 't3', tarea: 'Enviar encuesta de satisfacción', cohortes: 3, plazo: '01 Ago 2026', prioridad: 'media' },
   { id: 't4', tarea: 'Preparar materiales webinar', cohortes: 1, plazo: '27 Jul 2026', prioridad: 'alta' },
 ];
 
@@ -49,7 +49,7 @@ export default function CoordDashboard() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span aria-hidden="true" className="material-symbols-outlined text-3xl text-info">group_work</span>
+        <span className="material-symbols-outlined text-3xl text-info">group_work</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Panel Coordinador</h1>
           <p className="text-on-surface-variant">Bienvenido, {perfil?.nombre_completo}</p>
@@ -62,12 +62,12 @@ export default function CoordDashboard() {
           { label: 'Emprendedores', value: totalEmprendedores.toString(), icon: 'groups', color: 'bg-success', sub: 'en 3 cohortes' },
           { label: 'Mentores', value: totalMentores.toString(), icon: 'school', color: 'bg-teal', sub: 'asignados' },
           { label: 'Alertas Activas', value: alertas.length.toString(), icon: 'warning', color: 'bg-error', sub: `${alertasAltas} alta prioridad` },
-          { label: 'Eventos esta semana', value: '3', icon: 'event', color: 'bg-info', sub: 'proximos' },
+          { label: 'Eventos esta semana', value: '3', icon: 'event', color: 'bg-info', sub: 'próximos' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
             <div className="flex items-center gap-3 mb-3">
               <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-inverse-on-surface`}>
-                <span aria-hidden="true" className="material-symbols-outlined">{stat.icon}</span>
+                <span className="material-symbols-outlined">{stat.icon}</span>
               </span>
               <div>
                 <span className="text-sm font-bold text-on-surface-variant">{stat.label}</span>
@@ -83,7 +83,7 @@ export default function CoordDashboard() {
         {/* Alertas */}
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-            <span aria-hidden="true" className="material-symbols-outlined text-error">notifications_active</span>
+            <span className="material-symbols-outlined text-error">notifications_active</span>
             <h2 className="font-extrabold text-on-surface">Alertas y Casos Criticos</h2>
           </div>
           <div className="divide-y divide-outline-variant/30">
@@ -118,7 +118,7 @@ export default function CoordDashboard() {
         {/* Eventos proximos */}
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-            <span aria-hidden="true" className="material-symbols-outlined text-info">event</span>
+            <span className="material-symbols-outlined text-info">event</span>
             <h2 className="font-extrabold text-on-surface">Próximos eventos</h2>
           </div>
           <div className="divide-y divide-outline-variant/30">
@@ -126,7 +126,7 @@ export default function CoordDashboard() {
               <div key={evento.id} className="p-4 hover:bg-surface-container-low/50 transition-colors">
                 <div className="flex items-center gap-3">
                   <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tipoEventoConfig[evento.tipo].color}`}>
-                    <span aria-hidden="true" className="material-symbols-outlined text-lg">{tipoEventoConfig[evento.tipo].icon}</span>
+                    <span className="material-symbols-outlined text-lg">{tipoEventoConfig[evento.tipo].icon}</span>
                   </span>
                   <div className="min-w-0">
                     <p className="font-bold text-on-surface text-sm truncate">{evento.titulo}</p>
@@ -143,7 +143,7 @@ export default function CoordDashboard() {
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
         <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span aria-hidden="true" className="material-symbols-outlined text-success">school</span>
+            <span className="material-symbols-outlined text-success">school</span>
             <h2 className="font-extrabold text-on-surface">Cohortes Activas</h2>
           </div>
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-container text-on-success-container">{cohortes.length} activas</span>
@@ -171,7 +171,7 @@ export default function CoordDashboard() {
       {/* Tareas pendientes */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
         <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-          <span aria-hidden="true" className="material-symbols-outlined text-warning">task_alt</span>
+          <span className="material-symbols-outlined text-warning">task_alt</span>
           <h2 className="font-extrabold text-on-surface">Tareas Pendientes</h2>
         </div>
         <div className="divide-y divide-outline-variant/30">

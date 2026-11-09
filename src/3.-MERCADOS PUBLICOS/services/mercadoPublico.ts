@@ -1,16 +1,6 @@
 const TICKET = import.meta.env.VITE_MERCADO_PUBLICO_TICKET || '1C04EA61-2DF0-41EC-B56B-F84B67158915';
 const BASE_URL = 'https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json';
 
-/** Cache del listado: se reutiliza por 5 minutos para no golpear la API. */
-const TTL_LISTADO_MS = 5 * 60 * 1000;
-/** Cache de detalles: cambian poco durante el dia. */
-const TTL_DETALLE_MS = 6 * 60 * 60 * 1000;
-const TIMEOUT_MS = 8000;
-const REINTENTOS = 2;
-/** Espacio minimo entre llamadas para no gatillar el limite de la API. */
-const RITMO_MS = 400;
-const ENFRIAMIENTO_429_MS = 60 * 1000;
-
 export interface LicitacionAPI {
   CodigoExterno: string;
   Nombre: string;
@@ -37,158 +27,78 @@ export interface DetalleLicitacionAPI {
   };
 }
 
-export type TipoErrorMercado = 'rate_limit' | 'timeout' | 'red' | 'api';
+// Corrección #20: la API pública limita peticiones (HTTP 429). Se cachea 15 min en sessionStorage,
+// se reintenta con backoff exponencial (máx. 3) en 429/5xx/red y cada intento tiene timeout.
+const TTL_MS = 15 * 60 * 1000;
+const TIMEOUT_MS = 10_000;
+const MAX_REINTENTOS = 3;
+const PREFIJO_CACHE = 'mp_cache:';
 
-export class MercadoPublicoError extends Error {
-  tipo: TipoErrorMercado;
-  reintentar: boolean;
+const esperar = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  constructor(tipo: TipoErrorMercado, mensaje: string, reintentar: boolean) {
-    super(mensaje);
-    this.name = 'MercadoPublicoError';
-    this.tipo = tipo;
-    this.reintentar = reintentar;
+function leerCache<T>(clave: string): T | null {
+  try {
+    const crudo = sessionStorage.getItem(PREFIJO_CACHE + clave);
+    if (!crudo) return null;
+    const { t, v } = JSON.parse(crudo) as { t: number; v: T };
+    return Date.now() - t < TTL_MS ? v : null;
+  } catch {
+    return null;
   }
 }
 
-export interface ResultadoListado {
-  items: LicitacionAPI[];
-  desdeCache: boolean;
-  actualizadoEn: number;
-  desactualizado: boolean;
+function guardarCache(clave: string, valor: unknown) {
+  try {
+    sessionStorage.setItem(PREFIJO_CACHE + clave, JSON.stringify({ t: Date.now(), v: valor }));
+  } catch { /* cuota llena o storage bloqueado: seguimos sin caché */ }
 }
 
-interface EntradaCache<T> {
-  valor: T;
-  guardadoEn: number;
-}
-
-let cacheListado: EntradaCache<LicitacionAPI[]> | null = null;
-const cacheDetalles = new Map<string, EntradaCache<DetalleLicitacionAPI>>();
-let bloqueadoHasta = 0;
-let ultimaLlamada = 0;
-
-const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function respetarRitmo() {
-  const desdeUltima = Date.now() - ultimaLlamada;
-  if (desdeUltima < RITMO_MS) await esperar(RITMO_MS - desdeUltima);
-  ultimaLlamada = Date.now();
-}
-
-function errorDeRed(error: unknown): MercadoPublicoError {
-  const nombre = (error as { name?: string } | null)?.name;
-  if (nombre === 'AbortError') {
-    return new MercadoPublicoError('timeout', 'La API de Mercado Público tardó demasiado en responder.', true);
+async function pedirListado<T>(query: string, forzar = false): Promise<T[]> {
+  if (!forzar) {
+    const enCache = leerCache<T[]>(query);
+    if (enCache) return enCache;
   }
-  return new MercadoPublicoError('red', 'No se pudo conectar con la API de Mercado Público. Revisa tu conexión.', true);
-}
-
-/**
- * Peticion con timeout, ritmo limitado y reintentos con espera creciente.
- * Un 429 bloquea las llamadas durante un minuto en vez de reintentar en bucle.
- */
-async function pedirJson<T>(url: string): Promise<T> {
-  if (Date.now() < bloqueadoHasta) {
-    const segundos = Math.ceil((bloqueadoHasta - Date.now()) / 1000);
-    throw new MercadoPublicoError(
-      'rate_limit',
-      `La API está limitando las solicitudes. Espera ${segundos} segundo${segundos === 1 ? '' : 's'} y vuelve a intentar.`,
-      false,
-    );
-  }
-
-  let ultimoError: MercadoPublicoError = new MercadoPublicoError('red', 'No se pudo conectar con la API.', true);
-
-  for (let intento = 0; intento <= REINTENTOS; intento++) {
-    await respetarRitmo();
+  let ultimoError = 'No se pudo conectar con Mercado Público.';
+  for (let intento = 0; intento <= MAX_REINTENTOS; intento++) {
+    if (intento > 0) await esperar(1000 * 2 ** (intento - 1)); // 1 s, 2 s, 4 s
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
     try {
-      const response = await fetch(url, { signal: controller.signal });
-
-      if (response.status === 429) {
-        bloqueadoHasta = Date.now() + ENFRIAMIENTO_429_MS;
-        throw new MercadoPublicoError(
-          'rate_limit',
-          'La API de Mercado Público rechazó las solicitudes por exceso de uso (429). Espera un minuto y vuelve a intentar.',
-          false,
-        );
+      const res = await fetch(`${BASE_URL}?${query}&ticket=${TICKET}`, { signal: controller.signal });
+      if (res.ok) {
+        const data = await res.json();
+        const listado = (data.Listado ?? []) as T[];
+        guardarCache(query, listado);
+        return listado;
       }
-
-      if (response.status >= 500) {
-        throw new MercadoPublicoError('api', 'La API de Mercado Público está teniendo problemas. Intenta nuevamente en unos minutos.', true);
-      }
-
-      if (!response.ok) {
-        throw new MercadoPublicoError('api', `La API de Mercado Público respondió con error ${response.status}.`, false);
-      }
-
-      return (await response.json()) as T;
+      ultimoError = res.status === 429
+        ? 'Mercado Público está recibiendo demasiadas consultas en este momento (límite de la API).'
+        : `Mercado Público respondió con un error (HTTP ${res.status}).`;
+      if (res.status !== 429 && res.status < 500) break; // 4xx distinto de 429: reintentar no ayuda
     } catch (error) {
-      ultimoError = error instanceof MercadoPublicoError ? error : errorDeRed(error);
-      if (!ultimoError.reintentar || intento === REINTENTOS) throw ultimoError;
-      await esperar(800 * 2 ** intento);
+      ultimoError = error instanceof DOMException && error.name === 'AbortError'
+        ? 'Mercado Público tardó demasiado en responder.'
+        : 'No se pudo conectar con Mercado Público. Revisa tu conexión.';
     } finally {
       clearTimeout(timer);
     }
   }
-
-  throw ultimoError;
-}
-
-function listadoDesdeCache(desactualizado: boolean): ResultadoListado {
-  return {
-    items: cacheListado?.valor ?? [],
-    desdeCache: true,
-    actualizadoEn: cacheListado?.guardadoEn ?? 0,
-    desactualizado,
-  };
+  throw new Error(ultimoError);
 }
 
 export const mercadoPublicoService = {
-  /** Listado de licitaciones activas. Usa cache y propaga errores tipados. */
-  async getLicitacionesHoy(forceRefresh = false): Promise<ResultadoListado> {
-    const ahora = Date.now();
-    if (!forceRefresh && cacheListado && ahora - cacheListado.guardadoEn < TTL_LISTADO_MS) {
-      return listadoDesdeCache(false);
-    }
+  /** Licitaciones activas. Lanza Error con un mensaje legible si la API no responde. */
+  getLicitacionesHoy(forzar = false) {
+    return pedirListado<LicitacionAPI>('estado=activas', forzar);
+  },
 
+  /** Detalle de una licitación; null si no se pudo obtener (la vista usa los datos básicos). */
+  async getDetalleLicitacion(codigo: string) {
     try {
-      const data = await pedirJson<{ Listado?: LicitacionAPI[] }>(`${BASE_URL}?estado=activas&ticket=${TICKET}`);
-      const items = Array.isArray(data.Listado) ? data.Listado : [];
-      cacheListado = { valor: items, guardadoEn: Date.now() };
-      return { items, desdeCache: false, actualizadoEn: cacheListado.guardadoEn, desactualizado: false };
-    } catch (error) {
-      // Si ya hay datos buenos, mostrarlos antes que dejar la pantalla vacia.
-      if (cacheListado) return listadoDesdeCache(true);
-      throw error;
+      const listado = await pedirListado<DetalleLicitacionAPI>(`codigo=${encodeURIComponent(codigo)}`);
+      return listado[0] ?? null;
+    } catch {
+      return null;
     }
-  },
-
-  /** Detalle puntual de una licitacion, con cache por codigo. */
-  async getDetalleLicitacion(codigo: string): Promise<DetalleLicitacionAPI | null> {
-    const cache = cacheDetalles.get(codigo);
-    if (cache && Date.now() - cache.guardadoEn < TTL_DETALLE_MS) return cache.valor;
-
-    const data = await pedirJson<{ Listado?: DetalleLicitacionAPI[] }>(
-      `${BASE_URL}?codigo=${encodeURIComponent(codigo)}&ticket=${TICKET}`,
-    );
-    const detalle = Array.isArray(data.Listado) && data.Listado.length > 0 ? data.Listado[0] : null;
-    if (detalle) cacheDetalles.set(codigo, { valor: detalle, guardadoEn: Date.now() });
-    return detalle;
-  },
-
-  /** Limpia la cache (util para el boton de refrescar de la pantalla). */
-  limpiarCache() {
-    cacheListado = null;
-    cacheDetalles.clear();
-    bloqueadoHasta = 0;
-  },
-
-  /** Indica si la API esta en enfriamiento por un 429 reciente. */
-  enEnfriamiento(): boolean {
-    return Date.now() < bloqueadoHasta;
   },
 };

@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useERP, MetodoPago } from '../../1.-ERP/context/ERPContext';
+import type { DocumentoPendiente } from '../../1.-ERP/services/saldos';
 import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
-import VencimientoBadge from '../../components/VencimientoBadge';
 import { cn, formatFecha } from '@/lib/utils';
-import { hoyIso } from '@/lib/fecha';
-import { DOCUMENT_LABELS, normalizeDocumentType } from '../../1.-ERP/services/documentCompliance';
+import { formatCLP, hoyISO } from '../../lib/fechas';
+import PestanasCuentas from '../../1.-ERP/components/PestanasCuentas';
+import Paginacion, { usePaginacion } from '../../components/Paginacion';
+import TablaResponsiva, { type ColumnaTabla } from '../../components/TablaResponsiva';
+import ModalResponsivo from '../../components/ModalResponsivo';
+import { ChipVencimiento } from './ERPCobrar';
 
 const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'efectivo', label: 'Efectivo' },
@@ -15,31 +20,45 @@ const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'cheque', label: 'Cheque' },
 ];
 
+const POR_PAGINA = 25;
+
 /** Deuda que el negocio tiene con un proveedor (gasto) o que un cliente debe al negocio (venta). */
 type Deuda = { tipo: 'pago' | 'cobro'; id: string };
 
 export default function ERPPagar() {
   const {
-    gastos, ventas, getSaldoPendienteGasto, getSaldoPendienteVenta, getAbonosByReferencia, addAbono
+    gastos, ventas, saldos, getSaldoPendienteGasto, getSaldoPendienteVenta, getAbonosByReferencia, addAbono
   } = useERP();
   const [deudaModal, setDeudaModal] = useState<Deuda | null>(null);
-  const [activeTab, setActiveTab] = useState<'pagar' | 'cobrar'>('pagar');
-  const [form, setForm] = useState({ monto: '', metodo_pago: 'efectivo' as MetodoPago, fecha: hoyIso() });
+  const [form, setForm] = useState({ monto: '', metodo_pago: 'efectivo' as MetodoPago, fecha: hoyISO() });
+  const [soloVencidas, setSoloVencidas] = useState(false);
+  // Enlace directo desde el Centro de alertas: /erp/pagar?gasto=ID
+  const [searchParams] = useSearchParams();
+  const gastoEnlazado = searchParams.get('gasto');
 
-  const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+  const fmt = (n: number) => formatCLP(Math.abs(n));
+  // Fuente única de saldos, más atrasados primero (correcciones #4 y #15).
+  const pendientes = saldos.pendientesPagar.filter(d => !soloVencidas || d.diasAtraso > 0);
+  const paginacion = usePaginacion(pendientes, POR_PAGINA, [soloVencidas]);
+  const { setPagina } = paginacion;
 
-  /** Gastos con saldo pendiente: lo que el negocio debe a sus proveedores. */
-  const porPagar = gastos
-    .filter(g => getSaldoPendienteGasto(g.id) > 0)
-    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-
-  /** Ventas con saldo pendiente: boletas o facturas que los clientes deben al negocio. */
-  const porCobrar = ventas
-    .filter(v => getSaldoPendienteVenta(v.id) > 0)
-    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-
-  const totalPorPagar = porPagar.reduce((a, g) => a + getSaldoPendienteGasto(g.id), 0);
-  const totalPorCobrar = porCobrar.reduce((a, v) => a + getSaldoPendienteVenta(v.id), 0);
+  /* Si el gasto del enlace queda oculto por «Solo vencidas», se quita ese filtro; luego se salta
+   * a su página para que la tabla lo resalte y lo lleve a la vista. Una vez por id (estado y no
+   * ref, para que funcione igual con el doble efecto de StrictMode). */
+  const [enlaceAtendido, setEnlaceAtendido] = useState<string | null>(null);
+  const docEnlazado = gastoEnlazado ? saldos.pendientesPagar.find(d => d.id === gastoEnlazado) : undefined;
+  useEffect(() => {
+    if (!docEnlazado || enlaceAtendido === docEnlazado.id) return;
+    if (soloVencidas && docEnlazado.diasAtraso <= 0) setSoloVencidas(false);
+  }, [docEnlazado, enlaceAtendido, soloVencidas]);
+  const indiceEnlazado = docEnlazado ? pendientes.findIndex(d => d.id === docEnlazado.id) : -1;
+  useEffect(() => {
+    // Va después del reinicio a la página 1 que hace usePaginacion al cambiar el filtro.
+    if (!docEnlazado || enlaceAtendido === docEnlazado.id || indiceEnlazado < 0) return;
+    setPagina(Math.floor(indiceEnlazado / POR_PAGINA) + 1);
+    setEnlaceAtendido(docEnlazado.id);
+  }, [docEnlazado, enlaceAtendido, indiceEnlazado, setPagina]);
+  const enlaceSinSaldo = !!gastoEnlazado && !docEnlazado && gastos.some(g => g.id === gastoEnlazado);
 
   const registrarAbono = () => {
     if (!deudaModal || !form.monto || Number(form.monto) <= 0) return;
@@ -72,217 +91,118 @@ export default function ERPPagar() {
       });
     }
     setDeudaModal(null);
-    setForm({ monto: '', metodo_pago: 'efectivo', fecha: hoyIso() });
+    setForm({ monto: '', metodo_pago: 'efectivo', fecha: hoyISO() });
   };
 
+  const botonPagar = (g: DocumentoPendiente) => (
+    <button type="button" onClick={() => setDeudaModal({ tipo: 'pago', id: g.id })}
+      className="flex min-h-11 md:min-h-0 items-center gap-1 px-3 py-1.5 rounded-xl bg-error text-inverse-on-surface text-xs font-bold hover:bg-error/80 transition-colors">
+      <span className="material-symbols-outlined text-sm">savings</span>
+      Pagar
+    </button>
+  );
+
+  const columnas: ColumnaTabla<DocumentoPendiente>[] = [
+    { clave: 'documento', titulo: 'Documento', celda: g => <span className="font-bold text-xs text-on-surface whitespace-nowrap">{g.numero}</span> },
+    { clave: 'fecha', titulo: 'Fecha', celda: g => <span className="text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</span> },
+    { clave: 'proveedor', titulo: 'Proveedor', celda: g => <span className="font-bold text-on-surface">{g.contraparte}</span> },
+    { clave: 'total', titulo: 'Total', celda: g => <span className="font-bold text-on-surface whitespace-nowrap">{fmt(g.monto)}</span> },
+    { clave: 'saldo', titulo: 'Saldo', celda: g => <span className="font-extrabold text-error whitespace-nowrap">{fmt(g.saldo)}</span> },
+    { clave: 'vencimiento', titulo: 'Vencimiento', celda: g => <ChipVencimiento fecha={g.fechaVencimiento} diasAtraso={g.diasAtraso} /> },
+    { clave: 'abonos', titulo: 'Abonos', celda: g => <span className="text-on-surface-variant text-xs">{getAbonosByReferencia(g.id).length || '—'}</span> },
+    { clave: 'acciones', titulo: 'Acciones', celda: botonPagar },
+  ];
+
+  const esPago = deudaModal?.tipo === 'pago';
+  const gastoModal = deudaModal && esPago ? gastos.find(g => g.id === deudaModal.id) : undefined;
+  const ventaModal = deudaModal && !esPago ? ventas.find(v => v.id === deudaModal.id) : undefined;
+  const nombreModal = esPago ? gastoModal?.proveedor : ventaModal?.cliente;
+  const saldoModal = esPago
+    ? (gastoModal ? getSaldoPendienteGasto(gastoModal.id) : 0)
+    : (ventaModal ? getSaldoPendienteVenta(ventaModal.id) : 0);
+
   return (
-    <div className="p-8 space-y-8">
-      <div>
-        <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-          <span aria-hidden="true" className="material-symbols-outlined text-4xl">account_balance_wallet</span>
-          Cuentas por Pagar y Cobrar
-        </h2>
-        <p className="text-on-surface-variant mt-1 text-sm">
-          Lo que el negocio debe a proveedores y lo que los clientes deben por boletas o facturas.
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8">
+      <PestanasCuentas />
+
+      <label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-on-surface-variant">
+        <input type="checkbox" checked={soloVencidas} onChange={e => setSoloVencidas(e.target.checked)} className="h-5 w-5 shrink-0" />
+        Solo vencidas ({saldos.resumen.comprasVencidas.toLocaleString('es-CL')} · {fmt(saldos.resumen.vencidoPagar)})
+      </label>
+
+      {enlaceSinSaldo && (
+        <p className="flex items-center gap-2 rounded-2xl bg-success-container px-4 py-3 text-sm font-semibold text-on-success-container">
+          <span className="material-symbols-outlined text-lg">task_alt</span>
+          El gasto del aviso ya no tiene saldo por pagar.
         </p>
-      </div>
+      )}
 
-      <div className="flex justify-end">
-        <div className="flex p-1 bg-surface-container-high rounded-2xl w-full sm:w-auto shrink-0">
-          {[
-            { id: 'pagar', label: 'Por pagar', icon: 'account_balance_wallet' },
-            { id: 'cobrar', label: 'Por cobrar', icon: 'payments' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'pagar' | 'cobrar')}
-              className={cn(
-                "flex items-center justify-center gap-2 flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
-                activeTab === tab.id ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
-              )}
-            >
-              <span aria-hidden="true" className="material-symbols-outlined text-lg">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
+      {pendientes.length === 0 ? (
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-8 sm:p-12 text-center">
+          <span className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
+          <h3 className="mt-4 text-lg font-bold text-on-surface">Todo al día</h3>
+          <p className="mt-1 text-sm text-on-surface-variant">No tienes cuentas por pagar {soloVencidas ? 'vencidas' : 'pendientes'}.</p>
         </div>
-      </div>
-
-      {/* ══ Lo que debemos: gastos/proveedores ══ */}
-      {activeTab === 'pagar' && (
-        <section className="space-y-4 animate-in fade-in duration-500">
-          {porPagar.length === 0 && (
-            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-12 text-center">
-              <span aria-hidden="true" className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
-              <h3 className="mt-4 text-lg font-bold text-on-surface">Todo al día</h3>
-              <p className="mt-1 text-sm text-on-surface-variant">No tienes cuentas por pagar pendientes a proveedores.</p>
-            </div>
-          )}
-          {porPagar.length > 0 && (
-            <>
-              <div className="bg-error/5 p-6 rounded-2xl border border-error/20">
-                <p className="text-[10px] font-black uppercase tracking-widest text-error">Total por pagar (proveedores)</p>
-                <p className="text-3xl font-black text-error mt-1">{fmt(totalPorPagar)}</p>
-                <p className="text-xs text-on-surface-variant mt-1">{porPagar.length} cuenta(s) pendiente(s)</p>
-              </div>
-              <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-surface-container-low border-b border-outline-variant/20">
-                      <tr>
-                        {['Fecha', 'Proveedor', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
-                          <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/10">
-                      {porPagar.map(g => {
-                        const saldo = getSaldoPendienteGasto(g.id);
-                        const abonos = getAbonosByReferencia(g.id);
-                        return (
-                          <tr key={g.id} className="hover:bg-surface-container-low/50 transition-colors">
-                            <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</td>
-                            <td className="p-4 font-bold text-on-surface">{g.proveedor}</td>
-                            <td className="p-4 font-bold text-on-surface">{fmt(g.monto)}</td>
-                            <td className="p-4 font-extrabold text-error">{fmt(saldo)}</td>
-                            <td className="p-4"><VencimientoBadge fecha={g.fecha_vencimiento} /></td>
-                            <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
-                            <td className="p-4">
-                              <button onClick={() => setDeudaModal({ tipo: 'pago', id: g.id })}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-error text-inverse-on-surface text-xs font-bold hover:bg-error/80 transition-colors">
-                                <span aria-hidden="true" className="material-symbols-outlined text-sm">savings</span>
-                                Pagar
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-        </section>
+      ) : (
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
+          <TablaResponsiva
+            filas={paginacion.visibles}
+            clave={g => g.id}
+            columnas={columnas}
+            resaltada={gastoEnlazado}
+            tituloTarjeta={g => g.contraparte}
+            subtituloTarjeta={g => `${g.numero} · ${formatFecha(g.fecha)}`}
+            insigniaTarjeta={botonPagar}
+            datosTarjeta={g => [
+              { etiqueta: 'Saldo', valor: <span className="font-extrabold text-error">{fmt(g.saldo)}</span> },
+              { etiqueta: 'Total', valor: fmt(g.monto) },
+              { etiqueta: 'Vencimiento', valor: <ChipVencimiento fecha={g.fechaVencimiento} diasAtraso={g.diasAtraso} /> },
+              { etiqueta: 'Abonos', valor: getAbonosByReferencia(g.id).length || '—' },
+            ]}
+          />
+          <Paginacion {...paginacion} />
+        </div>
       )}
 
-      {/* ══ Lo que nos deben: boletas/facturas de clientes ══ */}
-      {activeTab === 'cobrar' && (
-        <section className="space-y-4 animate-in fade-in duration-500">
-          {porCobrar.length === 0 && (
-            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-12 text-center">
-              <span aria-hidden="true" className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
-              <h3 className="mt-4 text-lg font-bold text-on-surface">Todo al día</h3>
-              <p className="mt-1 text-sm text-on-surface-variant">No tienes boletas o facturas por cobrar pendientes de los clientes.</p>
-            </div>
-          )}
-          {porCobrar.length > 0 && (
+      {deudaModal && (
+        <ModalResponsivo
+          titulo={<span className={esPago ? 'text-error' : 'text-secondary'}>{esPago ? 'Registrar pago' : 'Registrar cobro'}</span>}
+          subtitulo={`${nombreModal ?? ''} · saldo ${fmt(saldoModal)}`}
+          onCerrar={() => setDeudaModal(null)}
+          ancho="sm:max-w-md"
+          pie={
             <>
-              <div className="bg-secondary/5 p-6 rounded-2xl border border-secondary/20">
-                <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Total por cobrar (clientes)</p>
-                <p className="text-3xl font-black text-secondary mt-1">{fmt(totalPorCobrar)}</p>
-                <p className="text-xs text-on-surface-variant mt-1">{porCobrar.length} boleta(s)/factura(s) pendiente(s)</p>
-              </div>
-              <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-surface-container-low border-b border-outline-variant/20">
-                      <tr>
-                        {['Fecha', 'Cliente', 'Documento', 'Total', 'Saldo', 'Vence', 'Abonos', 'Acciones'].map(h => (
-                          <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/10">
-                      {porCobrar.map(v => {
-                        const saldo = getSaldoPendienteVenta(v.id);
-                        const abonos = getAbonosByReferencia(v.id);
-                        return (
-                          <tr key={v.id} className="hover:bg-surface-container-low/50 transition-colors">
-                            <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(v.fecha)}</td>
-                            <td className="p-4 font-bold text-on-surface">{v.cliente}</td>
-                            <td className="p-4 text-on-surface-variant">
-                              <span className="px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary">
-                                {DOCUMENT_LABELS[normalizeDocumentType(v.tipo_documento)]}
-                              </span>
-                            </td>
-                            <td className="p-4 font-bold text-on-surface">{fmt(v.monto)}</td>
-                            <td className="p-4 font-extrabold text-secondary">{fmt(saldo)}</td>
-                            <td className="p-4"><VencimientoBadge fecha={v.fecha_vencimiento} /></td>
-                            <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
-                            <td className="p-4">
-                              <button onClick={() => setDeudaModal({ tipo: 'cobro', id: v.id })}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-secondary text-inverse-on-surface text-xs font-bold hover:bg-secondary/80 transition-colors">
-                                <span aria-hidden="true" className="material-symbols-outlined text-sm">payments</span>
-                                Cobrar
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <button type="button" onClick={() => setDeudaModal(null)} className="flex-1 min-h-11 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button type="button" onClick={registrarAbono} disabled={!form.monto || Number(form.monto) <= 0}
+                className={cn('flex-1 min-h-11 py-3 rounded-2xl text-inverse-on-surface font-bold disabled:opacity-50',
+                  esPago ? 'bg-error' : 'bg-secondary')}>
+                {esPago ? 'Registrar Pago' : 'Registrar Cobro'}
+              </button>
             </>
-          )}
-        </section>
-      )}
-
-      {deudaModal && (() => {
-        const esPago = deudaModal.tipo === 'pago';
-        const gasto = esPago ? gastos.find(g => g.id === deudaModal.id) : undefined;
-        const venta = !esPago ? ventas.find(v => v.id === deudaModal.id) : undefined;
-        const nombre = esPago ? gasto?.proveedor : venta?.cliente;
-        const saldo = esPago
-          ? (gasto ? getSaldoPendienteGasto(gasto.id) : 0)
-          : (venta ? getSaldoPendienteVenta(venta.id) : 0);
-        return (
-          <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-              <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center">
-                <div>
-                  <h3 className={cn('text-lg font-bold', esPago ? 'text-error' : 'text-secondary')}>
-                    {esPago ? 'Registrar pago' : 'Registrar cobro'}
-                  </h3>
-                  <p className="text-xs text-on-surface-variant mt-1">{nombre} · saldo {fmt(saldo)}</p>
-                </div>
-                <button onClick={() => setDeudaModal(null)} aria-label="Cerrar registro de pago" className="text-on-surface-variant hover:text-on-surface">
-                  <span aria-hidden="true" className="material-symbols-outlined">close</span>
-                </button>
+          }
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Monto</label>
+                <CampoMoneda valor={form.monto} onChange={monto => setForm({ ...form, monto: String(monto) })}
+                  className={cn('min-h-11 px-4 py-3 border-2 rounded-xl text-base sm:text-sm font-bold outline-none bg-surface-container-lowest text-on-surface', esPago ? 'border-error/50 focus:border-error' : 'border-secondary/50 focus:border-secondary')} />
               </div>
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Monto</label>
-                    <CampoMoneda valor={form.monto} onChange={monto => setForm({ ...form, monto: String(monto) })}
-                      className={cn('px-4 py-3 border-2 rounded-xl font-bold outline-none bg-surface-container-lowest text-on-surface', esPago ? 'border-error/50 focus:border-error' : 'border-secondary/50 focus:border-secondary')} />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
-                    <SelectorFecha value={form.fecha} onChange={fecha => setForm({ ...form, fecha: fecha })} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Método de pago</label>
-                  <select value={form.metodo_pago} onChange={e => setForm({ ...form, metodo_pago: e.target.value as MetodoPago })}
-                    className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface">
-                    {METODOS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
+                <SelectorFecha value={form.fecha} onChange={fecha => setForm({ ...form, fecha: fecha })} />
               </div>
-              <div className="px-6 pb-6 flex gap-3">
-                <button onClick={() => setDeudaModal(null)} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-                <button onClick={registrarAbono} disabled={!form.monto || Number(form.monto) <= 0}
-                  className={cn('flex-1 py-3 rounded-2xl text-inverse-on-surface font-bold disabled:opacity-50',
-                    esPago ? 'bg-error' : 'bg-secondary')}>
-                  {esPago ? 'Registrar Pago' : 'Registrar Cobro'}
-                </button>
-              </div>
+            </div>
+            <div>
+              <label htmlFor="pago-metodo" className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Método de pago</label>
+              <select id="pago-metodo" value={form.metodo_pago} onChange={e => setForm({ ...form, metodo_pago: e.target.value as MetodoPago })}
+                className="w-full min-h-11 px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface">
+                {METODOS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
             </div>
           </div>
-        );
-      })()}
+        </ModalResponsivo>
+      )}
     </div>
   );
 }

@@ -16,7 +16,6 @@ export default function Register() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmarPassword, setConfirmarPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [institucion, setInstitucion] = useState<InstitucionResultado | null>(null);
@@ -60,17 +59,8 @@ export default function Register() {
 
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError('');
-
-    if (password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres.');
-      return;
-    }
-    if (password !== confirmarPassword) {
-      setError('Las contraseñas no coinciden.');
-      return;
-    }
     setLoading(true);
+    setError('');
 
     try {
       const perfil = await register(
@@ -91,6 +81,9 @@ export default function Register() {
         emprendedor: '/erp/inicio',
         dueño: '/erp/inicio',
         demo: '/demo/inicio',
+        admin_proveedor: '/mentorias/gestion',
+        instructor: '/mentorias/gestion',
+        curador: '/mentorias/revision',
       };
       navigate(rolRedirectMap[String(perfil.rol)] ?? '/erp/inicio', { replace: true });
     } catch (err) {
@@ -105,7 +98,7 @@ export default function Register() {
       <div className="w-full max-w-md bg-surface-container-lowest rounded-3xl p-8 shadow-xl">
         <div className="text-center mb-8">
           <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mx-auto mb-4">
-            <span aria-hidden="true" className="material-symbols-outlined text-white">person_add</span>
+            <span className="material-symbols-outlined text-white">person_add</span>
           </div>
           <h2 className="text-3xl font-extrabold text-on-surface">Crea tu cuenta</h2>
           <p className="text-on-surface-variant mt-2">Nivel actual: PYME Free</p>
@@ -148,7 +141,7 @@ export default function Register() {
             </label>
             {institucion ? (
               <div className="w-full p-4 rounded-xl border-2 border-surface-container-high flex items-center gap-3">
-                <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">apartment</span>
+                <span className="material-symbols-outlined text-on-surface-variant">apartment</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-on-surface truncate">{institucion.nombre}</p>
                   <p className="text-xs text-on-surface-variant">
@@ -161,7 +154,7 @@ export default function Register() {
                   className="p-1 rounded-lg hover:bg-surface-container-lowest transition-colors"
                   title="Quitar institución"
                 >
-                  <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">close</span>
+                  <span className="material-symbols-outlined text-on-surface-variant">close</span>
                 </button>
               </div>
             ) : (
@@ -188,7 +181,7 @@ export default function Register() {
                           onClick={() => seleccionarInstitucion(r)}
                           className="w-full text-left px-4 py-3 hover:bg-surface-container-low transition-colors flex items-center gap-3"
                         >
-                          <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">apartment</span>
+                          <span className="material-symbols-outlined text-on-surface-variant">apartment</span>
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-on-surface truncate">{r.nombre}</p>
                             <p className="text-xs text-on-surface-variant truncate">
@@ -233,19 +226,6 @@ export default function Register() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full p-4 rounded-xl border-2 border-surface-container-high focus:border-primary/50 outline-none"
               placeholder="Mínimo 8 caracteres"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-on-surface mb-1">Confirmar contraseña</label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={confirmarPassword}
-              onChange={(e) => setConfirmarPassword(e.target.value)}
-              className="w-full p-4 rounded-xl border-2 border-surface-container-high focus:border-primary/50 outline-none"
-              placeholder="Repite tu contraseña"
             />
           </div>
 

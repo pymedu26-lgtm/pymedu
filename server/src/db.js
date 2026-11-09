@@ -1,24 +1,72 @@
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
+import { readFileSync, readdirSync, mkdirSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let pool;
 
+/**
+ * Modo de base de datos:
+ *  - 'postgres': hay DATABASE_URL (Railway u otro Postgres). Comportamiento de siempre.
+ *  - 'local'   : sin DATABASE_URL, o DB_MODE=local. Usa PGlite (Postgres embebido en
+ *                Node, mismo dialecto SQL) guardado en server/.data/pglite. No requiere
+ *                instalar nada ni conexión a Railway. Se evalúa al primer uso porque
+ *                index.js carga el .env después de importar este módulo.
+ */
+export const modoBD = () => (process.env.DB_MODE === 'local' || !process.env.DATABASE_URL ? 'local' : 'postgres');
+
+/** Envoltura de PGlite con la misma interfaz que pg.Pool#query ({ rows, rowCount }). */
+function crearBaseLocal() {
+  const dir = process.env.PGLITE_DIR || path.resolve(__dirname, '../.data/pglite');
+  mkdirSync(dir, { recursive: true });
+  const lista = import('@electric-sql/pglite').then(async ({ PGlite }) => {
+    const instancia = new PGlite(dir);
+    await instancia.waitReady;
+    console.log(`[db] Modo LOCAL (PGlite) en ${dir}`);
+    return instancia;
+  });
+  return {
+    async query(sql, params = []) {
+      const local = await lista;
+      // Sin parámetros puede venir un script con varias sentencias (DDL): exec lo admite.
+      if (params.length === 0) {
+        const resultados = await local.exec(sql);
+        const ultimo = resultados.at(-1) ?? { rows: [], affectedRows: 0 };
+        return { rows: ultimo.rows, rowCount: ultimo.affectedRows ?? ultimo.rows.length };
+      }
+      const r = await local.query(sql, params);
+      return { rows: r.rows, rowCount: r.affectedRows ?? r.rows.length };
+    },
+  };
+}
+
 export function conectar() {
   if (!pool) {
-    const connectionString =
-      process.env.DATABASE_URL ||
-      'postgresql://postgres:postgres@localhost:5432/pymedu';
-    pool = new Pool({
-      connectionString,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-    });
+    pool = modoBD() === 'local'
+      ? crearBaseLocal()
+      : new Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+      });
   }
   return pool;
+}
+
+/** Ejecuta en orden los scripts de server/sql (01_cuentas, 02_erp_inventario, 03_mentorias, 04_academia). */
+export async function ejecutarScriptsSQL() {
+  const carpeta = path.resolve(__dirname, '../sql');
+  const archivos = readdirSync(carpeta).filter((f) => /^\d+_.+\.sql$/.test(f)).sort();
+  for (const archivo of archivos) {
+    await conectar().query(readFileSync(path.join(carpeta, archivo), 'utf8'));
+  }
+  return archivos;
 }
 
 // Traduce SQL con comodines de SQLite (?) y datetime('now') al dialecto de Postgres ($1..$n y now()).
@@ -72,7 +120,8 @@ const db = {
         rol TEXT NOT NULL CHECK (rol IN (
           'superadmin', 'admin_institucional', 'coordinador',
           'mentor', 'emprendedor', 'dueño', 'dueno', 'vendedor',
-          'gestor', 'encargado_rrhh', 'empleado', 'contador_externo', 'demo'
+          'gestor', 'encargado_rrhh', 'empleado', 'contador_externo', 'demo',
+          'admin_proveedor', 'instructor', 'curador'
         )),
         institucion_id TEXT REFERENCES instituciones(id) ON DELETE SET NULL,
         reporta_a TEXT REFERENCES perfiles(id) ON DELETE SET NULL,
@@ -193,7 +242,8 @@ const db = {
       ALTER TABLE perfiles ADD CONSTRAINT perfiles_rol_check CHECK (rol IN (
         'superadmin', 'admin_institucional', 'coordinador',
         'mentor', 'emprendedor', 'dueño', 'dueno', 'vendedor',
-        'gestor', 'encargado_rrhh', 'empleado', 'contador_externo', 'demo'
+        'gestor', 'encargado_rrhh', 'empleado', 'contador_externo', 'demo',
+        'admin_proveedor', 'instructor', 'curador'
       ));
 
       -- Reparación idempotente del CHECK de rol en codigos_invitacion
@@ -234,8 +284,12 @@ const db = {
       ['admin@colegiosanjose.cl', pw, 'Admin Institucional San Jose', 'admin_institucional', inst, 'premium', 'A'],
       ['coord@colegiosanjose.cl', pw, 'Coordinador San Jose', 'coordinador', inst, 'premium', 'A'],
       ['mentor@colegiosanjose.cl', pw, 'Mentor San Jose', 'mentor', inst, 'pro', 'A'],
-      ['emprendedor@pymedu.com', pw, 'Emprendedor Demo', 'emprendedor', null, 'free', 'C'],
+      // Plan Pro: la cuenta demo muestra Caja, Cobrar/Pagar y Reportes (Básico no los incluye).
+      ['emprendedor@pymedu.com', pw, 'Emprendedor Demo', 'emprendedor', null, 'pro', 'B'],
       ['demo@pymedu.com', pw, 'Cuenta Demo', 'demo', null, 'premium', 'A'],
+      // Roles nuevos de Mentorías (documento de arquitectura)
+      ['proveedor@pymedu.com', pw, 'Consultora Crece (Proveedor)', 'admin_proveedor', null, 'pro', 'A'],
+      ['curador@pymedu.com', pw, 'Comité de Contenido', 'curador', null, 'pro', 'A'],
     ];
     for (const [email, hash, nombre, rol, institucion_id, membresia, segmento] of demo) {
       await preparar(`
@@ -258,11 +312,22 @@ const db = {
 // dos inits concurrentes provocaban deadlock 40P01 en Railway).
 export async function inicializar() {
   await db.initDB();
+  const scripts = await ejecutarScriptsSQL();
+  console.log(`[db] Esquemas aplicados: ${scripts.join(', ')}`);
   await db.seedDB().catch((err) => console.error('[db] Error en seedDB (no crítico):', err.message));
-  if (process.env.SEED_DEMO === '1') {
+  // Núcleo (permisos, roles plantilla, organizaciones): necesario en todos los entornos.
+  const { sembrarNucleo } = await import('./seeds/nucleo.js');
+  await sembrarNucleo().catch((err) => console.error('[db] Error sembrando núcleo (no crítico):', err.message));
+  // En modo local los datos demo vienen activados salvo SEED_DEMO=0.
+  const sembrarDemo = process.env.SEED_DEMO === '1' || (modoBD() === 'local' && process.env.SEED_DEMO !== '0');
+  if (sembrarDemo) {
     await db.seedDemo().catch((err) => console.error('[db] Error en seedDemo (no crítico):', err.message));
+    const { sembrarDemoLocal } = await import('./seeds/demo.js');
+    await sembrarDemoLocal().catch((err) => console.error('[db] Error en datos demo (no crítico):', err.message));
+    const { sembrarNucleo: reasignar } = await import('./seeds/nucleo.js');
+    await reasignar().catch(() => {}); // asigna roles a las cuentas demo recién creadas
   }
-  console.log('[db] Base de datos Postgres inicializada');
+  console.log(`[db] Base de datos inicializada (modo ${modoBD()})`);
 }
 
 export default db;

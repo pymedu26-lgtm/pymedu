@@ -3,8 +3,14 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useERP } from '../1.-ERP/context/ERPContext';
-import { useState, useRef, useCallback, useLayoutEffect, useEffect, useMemo } from 'react';
-import { PLAN_FREE, PLAN_PREMIUM, PLAN_PRO, puedeUsarMercadosPublicos } from '../lib/planes';
+import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import Toaster from '../components/Toaster';
+import { cuentaCampana, visibles, horaRelativa, type Alerta } from '../1.-ERP/services/alertas';
+
+const COLOR_ALERTA: Record<Alerta['tipo'], string> = {
+  critica: 'text-error bg-error/10', tributaria: 'text-violet bg-violet/15', advertencia: 'text-warning bg-warning/15', info: 'text-primary bg-primary/10', exito: 'text-success bg-success/15',
+};
 
 interface NavItem {
   name: string;
@@ -14,7 +20,6 @@ interface NavItem {
   hint: string;
   permiso?: string | null;
   lock?: boolean;
-  requierePremium?: boolean;
   badge?: () => string | null;
 }
 
@@ -27,97 +32,46 @@ interface NavGroup {
 
 export default function ERPLayout() {
   const { perfil, signOut, puedeHacer } = useAuth();
-  const { ventas, gastos, clientes, inventario, errorPersistencia, falloCarga, recargarErp, reintentarGuardado } = useERP();
+  const { saldos, alertas, marcarAlertas } = useERP();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showNotificaciones, setShowNotificaciones] = useState(false);
-  const [busqueda, setBusqueda] = useState('');
   const [openGroups, setOpenGroups] = useState<Set<string>>(
     () => new Set()
   );
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // Desde 1024 px el menú es lateral (ancho o en íconos). Bajo 1024 px es un CAJÓN deslizable
+  // que se abre con la hamburguesa de la barra superior, se cierra al tocar fuera y al navegar.
+  const [esEscritorio, setEsEscritorio] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1024);
+  const [sidebarAbierto, setSidebarAbierto] = useState(true);
+  const [cajonAbierto, setCajonAbierto] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const alCambiar = (e: MediaQueryListEvent) => { setEsEscritorio(e.matches); if (e.matches) setCajonAbierto(false); };
+    mq.addEventListener('change', alCambiar);
+    return () => mq.removeEventListener('change', alCambiar);
+  }, []);
+  useEffect(() => { setCajonAbierto(false); setCampanaAbierta(false); }, [location.pathname, location.search]);
+  /** En el cajón (móvil y tablet) el menú siempre se ve expandido. */
+  const sidebarOpen = esEscritorio ? sidebarAbierto : true;
+  const setSidebarOpen = (v: boolean) => (esEscritorio ? setSidebarAbierto(v) : setCajonAbierto(false));
+  // Campana: insignia con alertas nuevas (críticas y avisos) y las 5 principales.
+  const [campanaAbierta, setCampanaAbierta] = useState(false);
+  const nuevasCampana = cuentaCampana(alertas);
+  const principales = visibles(alertas).slice(0, 5);
   const [avatarError, setAvatarError] = useState(false);
   const [flyoutTop, setFlyoutTop] = useState(8);
   const flyoutRef = useRef<HTMLDivElement>(null);
   const gruposRef = useRef<Record<string, HTMLElement | null>>({});
 
-  const esPremium = puedeUsarMercadosPublicos(perfil?.membresia_nivel);
-  // En movil el menu siempre se muestra expandido dentro del cajon.
-  const sidebarExpandido = sidebarOpen || mobileOpen;
+  const esPremium = perfil?.membresia_nivel === 'pro' || perfil?.membresia_nivel === 'premium';
 
-  const cxcCount = ventas.filter(v => v.estado === 'Pendiente').length;
-  const cxpCount = gastos.filter(g => g.estado === 'Por Pagar').length;
-  const cxcUrgente = ventas.some(v => v.estado === 'Pendiente' && v.saldo_pendiente > v.monto * 0.5);
-  const cxpUrgente = gastos.some(g => g.estado === 'Por Pagar' && g.saldo_pendiente > g.monto * 0.5);
+  // Contadores desde la fuente única de saldos; cada documento se cuenta UNA vez (corrección #17).
+  const { ventasPorCobrar: cxcCount, comprasPorPagar: cxpCount, ventasVencidas, comprasVencidas } = saldos.resumen;
+  const pendientesTotal = cxcCount + cxpCount;
+  const hayVencidos = ventasVencidas + comprasVencidas > 0;
 
   const isActive = (path: string) => location.pathname === path;
-
-  // Cierra el cajon movil y los menus flotantes al navegar.
-  useEffect(() => {
-    setMobileOpen(false);
-    setShowUserMenu(false);
-    setShowNotificaciones(false);
-    setBusqueda('');
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const cerrarConEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false); };
-    window.addEventListener('keydown', cerrarConEscape);
-    return () => window.removeEventListener('keydown', cerrarConEscape);
-  }, [mobileOpen]);
-
-  // Bloquea el desplazamiento del fondo mientras el cajon movil esta abierto.
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const overflowPrevio = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = overflowPrevio; };
-  }, [mobileOpen]);
-
-  const resultadosBusqueda = useMemo(() => {
-    const termino = busqueda.trim().toLowerCase();
-    if (termino.length < 2) return [];
-    const resultados: { id: string; titulo: string; detalle: string; ruta: string }[] = [];
-    for (const c of clientes) {
-      if (c.nombre?.toLowerCase().includes(termino)) {
-        resultados.push({ id: `cli-${c.id}`, titulo: c.nombre, detalle: 'Cliente', ruta: '/erp/clientes' });
-      }
-    }
-    for (const v of ventas) {
-      if (v.cliente?.toLowerCase().includes(termino)) {
-        resultados.push({ id: `ven-${v.id}`, titulo: v.cliente, detalle: `Venta · $${Math.round(v.monto || 0).toLocaleString('es-CL')}`, ruta: '/erp/ventas' });
-      }
-    }
-    for (const g of gastos) {
-      if (g.proveedor?.toLowerCase().includes(termino)) {
-        resultados.push({ id: `gas-${g.id}`, titulo: g.proveedor, detalle: `Gasto · $${Math.round(g.monto || 0).toLocaleString('es-CL')}`, ruta: '/erp/gastos' });
-      }
-    }
-    for (const p of inventario) {
-      if (p.nombre?.toLowerCase().includes(termino) || p.codigo?.toLowerCase().includes(termino)) {
-        resultados.push({ id: `inv-${p.id}`, titulo: p.nombre, detalle: `Inventario · ${p.stock} ${p.unidadMedida}`, ruta: '/erp/inventario' });
-      }
-    }
-    return resultados.slice(0, 6);
-  }, [busqueda, clientes, ventas, gastos, inventario]);
-
-  const notificaciones = useMemo(() => {
-    const avisos: { id: string; titulo: string; detalle: string; ruta: string }[] = [];
-    for (const v of ventas.filter((x) => x.estado === 'Pendiente')) {
-      avisos.push({ id: `nc-${v.id}`, titulo: `Cobro pendiente: ${v.cliente}`, detalle: `Saldo $${Math.round(v.saldo_pendiente || 0).toLocaleString('es-CL')}`, ruta: '/erp/cobrar' });
-    }
-    for (const g of gastos.filter((x) => x.estado === 'Por Pagar')) {
-      avisos.push({ id: `np-${g.id}`, titulo: `Pago pendiente: ${g.proveedor}`, detalle: `Saldo $${Math.round(g.saldo_pendiente || 0).toLocaleString('es-CL')}`, ruta: '/erp/pagar' });
-    }
-    for (const p of inventario.filter((x) => x.tipo === 'producto' && x.estado === 'activo' && x.stock <= (x.stockMinimo ?? 5))) {
-      avisos.push({ id: `ni-${p.id}`, titulo: `Stock bajo: ${p.nombre}`, detalle: `${p.stock} ${p.unidadMedida || 'unidades'} disponibles`, ruta: '/erp/inventario' });
-    }
-    return avisos.slice(0, 8);
-  }, [ventas, gastos, inventario]);
 
   const navGroups: NavGroup[] = [
     {
@@ -213,22 +167,14 @@ name: 'Mi institución',
           permiso: 'ver_proveedores',
         },
         {
-          name: 'Cuentas por cobrar',
+          // Un solo módulo con dos pestañas (Por cobrar / Por pagar), corrección #17.
+          name: 'Cuentas por cobrar y pagar',
           path: '/erp/cobrar',
           icon: 'payments',
           tag: 'CC',
-          hint: 'Facturas pendientes, vencimientos y seguimiento.',
+          hint: 'Lo que te deben y lo que debes, con vencimientos.',
           permiso: 'ver_caja',
-          badge: () => (cxcCount > 0 ? `${cxcCount}` : null),
-        },
-        {
-          name: 'Cuentas por pagar y cobrar',
-          path: '/erp/pagar',
-          icon: 'account_balance_wallet',
-          tag: 'CP',
-          hint: 'Deudas con proveedores y lo que los clientes deben.',
-          permiso: 'crear_gastos',
-          badge: () => ((cxcCount + cxpCount) > 0 ? `${cxcCount + cxpCount}` : null),
+          badge: () => (pendientesTotal > 0 ? `${pendientesTotal}` : null),
         },
         {
           name: 'Reportes',
@@ -277,13 +223,12 @@ name: 'Mi institución',
           lock: true,
         },
 {
-          name: 'Equipo',
+          name: 'Roles del equipo',
           path: '/erp/equipo',
           icon: 'group',
           tag: 'EQ',
-          hint: 'Altas, roles y gestión del personal.',
-          permiso: 'ver_equipo',
-          lock: true,
+          hint: 'Roles y subroles de tu negocio (las invitaciones llegan pronto).',
+          permiso: 'editar_mi_negocio',
         },
         {
           name: 'Organigrama',
@@ -317,16 +262,14 @@ name: 'Mi institución',
           tag: 'MP',
           hint: 'Licitaciones, requisitos y oportunidades de compra pública.',
           permiso: 'ver_mercados_publicos',
-          requierePremium: true,
         },
         {
           name: 'Portal Municipal',
           path: '/erp/portal-municipal',
           icon: 'location_city',
           tag: 'PM',
-          hint: 'Relacion con municipios y programas de apoyo.',
+          hint: 'Convocatorias y programas de apoyo de tu municipio.',
           permiso: 'ver_mercados_publicos',
-          requierePremium: true,
         },
       ],
     },
@@ -337,7 +280,7 @@ name: 'Mi institución',
       items: [
 {
           name: 'Mentorías',
-          path: '/erp/mentorias',
+          path: '/mentorias',
           icon: 'school',
           tag: 'ME',
           hint: 'Acompañamiento experto para crecer mejor.',
@@ -361,7 +304,7 @@ name: 'Mi institución',
       if (next.has(group)) {
         next.delete(group);
       } else {
-        if (!sidebarExpandido) next.clear();
+        if (!sidebarOpen) next.clear();
         next.add(group);
       }
       return next;
@@ -371,7 +314,7 @@ name: 'Mi institución',
   // Con el sidebar colapsado, el panel de la seccion se alinea verticalmente
   // con el icono que lo abrio en lugar de quedar pegado al borde superior.
   const reposicionarFlyout = useCallback(() => {
-    if (sidebarExpandido) return;
+    if (sidebarOpen) return;
     const key = openGroups.values().next().value as string | undefined;
     const section = key ? gruposRef.current[key] : null;
     const panel = flyoutRef.current;
@@ -380,23 +323,23 @@ name: 'Mi institución',
     const s = section.getBoundingClientRect();
     const alto = panel.offsetHeight;
     setFlyoutTop(Math.max(margen, Math.min(s.top, window.innerHeight - alto - margen)));
-  }, [openGroups, sidebarExpandido]);
+  }, [openGroups, sidebarOpen]);
 
   useLayoutEffect(() => {
     reposicionarFlyout();
-    if (sidebarExpandido) return;
+    if (sidebarOpen) return;
     window.addEventListener('resize', reposicionarFlyout);
     window.addEventListener('scroll', reposicionarFlyout, true);
     return () => {
       window.removeEventListener('resize', reposicionarFlyout);
       window.removeEventListener('scroll', reposicionarFlyout, true);
     };
-  }, [reposicionarFlyout, sidebarExpandido]);
+  }, [reposicionarFlyout, sidebarOpen]);
 
   const membresiaConfig = {
-    free: { label: PLAN_FREE.nombre, cls: 'bg-on-primary-container/15 text-on-primary-container' },
-    pro: { label: PLAN_PRO.nombre, cls: 'bg-on-primary-container/25 text-on-primary-container' },
-    premium: { label: PLAN_PREMIUM.nombre, cls: 'bg-on-primary-container/15 text-on-primary-container' },
+    free: { label: 'Básico', cls: 'bg-on-primary-container/15 text-on-primary-container' },
+    pro: { label: 'Pro', cls: 'bg-on-primary-container/25 text-on-primary-container' },
+    premium: { label: 'Premium', cls: 'bg-on-primary-container/15 text-on-primary-container' },
   }[perfil?.membresia_nivel ?? 'free'];
 
   const negocioNombre = perfil?.negocio_nombre ?? 'Negocio actual';
@@ -404,53 +347,46 @@ name: 'Mi institución',
     [perfil?.negocio_rubro, perfil?.negocio_comuna].filter(Boolean).join(' | ') ||
     'ERP listo para operar';
   const avatarFallback = perfil?.nombre_completo?.[0]?.toUpperCase() ?? '?';
-  const perfilAvatarUrl = !avatarError
-    ? (perfil?.avatar_url?.trim() || `https://i.pravatar.cc/120?u=${encodeURIComponent(perfil?.email ?? perfil?.id ?? 'demo-user')}`)
-    : null;
+  // Sin foto se muestran las iniciales (antes se enviaba el email a un servicio externo de avatares).
+  const perfilAvatarUrl = !avatarError ? (perfil?.avatar_url?.trim() || null) : null;
 
   const handleLogout = async () => {
     await signOut();
-    navigate('/');
+    navigate('/login', { replace: true });
   };
+  const isActivePath = (path: string) => isActive(path) || (path === '/erp/cobrar' && location.pathname === '/erp/pagar');
 
   return (
-    <div className="flex min-h-screen bg-surface text-on-surface overflow-x-hidden">
-      {/* Fondo oscuro del cajon movil */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm md:hidden"
-          onClick={() => setMobileOpen(false)}
-          aria-hidden="true"
-        />
+    <div className="flex min-h-screen bg-surface text-on-surface">
+      {/* Fondo del cajón (móvil y tablet): tocar fuera lo cierra. */}
+      {!esEscritorio && cajonAbierto && (
+        <div className="fixed inset-0 z-[1150] bg-scrim/50 backdrop-blur-[2px]" onClick={() => setCajonAbierto(false)} aria-hidden="true" />
       )}
-
       {/* ── Sidebar ── */}
       <aside
         aria-label="Menú principal"
+        aria-hidden={!esEscritorio && !cajonAbierto ? true : undefined}
+        style={!esEscritorio ? { paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } : undefined}
         className={cn(
-          'fixed inset-y-0 left-0 z-[60] flex h-screen w-[85vw] max-w-[280px] flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-transform duration-300 md:sticky md:top-0 md:z-50 md:translate-x-0 md:transition-all',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full',
-          !sidebarExpandido && openGroups.size > 0 && 'z-[1100]',
-          sidebarOpen ? 'md:w-[248px]' : 'md:w-[64px]'
+          'flex flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300',
+          esEscritorio
+            ? cn('sticky left-0 top-0 z-50 h-screen', !sidebarOpen && openGroups.size > 0 && 'z-[1100]', sidebarOpen ? 'w-[248px]' : 'w-[64px]')
+            : cn('fixed inset-y-0 left-0 z-[1200] h-[100dvh] w-[280px] max-w-[85vw]', cajonAbierto ? 'translate-x-0' : '-translate-x-full invisible')
         )}
       >
         <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-3.5 shrink-0">
           <button
-            onClick={() => {
-              if (window.innerWidth < 768) setMobileOpen(false);
-              else setSidebarOpen((v) => !v);
-            }}
-            aria-label={mobileOpen ? 'Cerrar menú lateral' : 'Alternar menú lateral'}
-            aria-expanded={sidebarExpandido}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label={esEscritorio ? (sidebarOpen ? 'Contraer menú' : 'Expandir menú') : 'Cerrar menú'}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20 lg:h-9 lg:w-9"
           >
-            <span aria-hidden="true" className="material-symbols-outlined text-lg text-white">
-              {sidebarExpandido ? 'menu_open' : 'menu'}
+            <span className="material-symbols-outlined text-lg text-white">
+              {esEscritorio ? (sidebarOpen ? 'menu_open' : 'menu') : 'close'}
             </span>
           </button>
 
-          {sidebarExpandido && (
-            <div className="min-w-0 flex-1">
+          {sidebarOpen && (
+            <div className="min-w-0">
               <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-on-primary-container/60">
                 ERP local
               </p>
@@ -467,19 +403,12 @@ name: 'Mi institución',
               </span>
             </div>
           )}
-          <button
-            onClick={() => setMobileOpen(false)}
-            aria-label="Cerrar menú lateral"
-            className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/20 md:hidden"
-          >
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">close</span>
-          </button>
         </div>
 
         <nav
           className={cn(
             'flex-1',
-            sidebarExpandido ? 'hide-scrollbar overflow-y-auto px-2.5 py-3' : 'px-2 py-3'
+            sidebarOpen ? 'hide-scrollbar overflow-y-auto px-2.5 py-3' : 'px-2 py-3'
           )}
         >
 {navGroups.map((group) => {
@@ -498,33 +427,30 @@ name: 'Mi institución',
                 ref={el => { gruposRef.current[group.key] = el; }}
                 className={cn(
                   'relative mb-2.5 transition-all duration-200',
-                  sidebarExpandido
+                  sidebarOpen
                     ? 'rounded-2xl border border-white/10 bg-white/[0.04] p-2.5 shadow-inner shadow-shadow/10'
                     : 'flex w-full justify-center'
                 )}
               >
                 <button
                   onClick={() => toggleGroup(group.key)}
-                  aria-label={`${group.label}: ${isOpen ? 'ocultar' : 'mostrar'} módulos`}
-                  aria-expanded={isOpen}
                   className={cn(
                     'flex items-center transition-all duration-150 outline-none',
-                    sidebarExpandido ? 'w-full justify-between gap-2' : 'h-11 w-11 justify-center rounded-2xl hover:bg-white/10'
+                    sidebarOpen ? 'w-full justify-between gap-2' : 'h-11 w-11 justify-center rounded-2xl hover:bg-white/10'
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span
-                      aria-hidden="true"
                       className={cn(
                         'material-symbols-outlined shrink-0',
-                        sidebarExpandido ? 'text-[17px] text-white/90' : 'text-xl text-white/80'
+                        sidebarOpen ? 'text-[17px] text-white/90' : 'text-xl text-white/80'
                       )}
                       style={{ fontVariationSettings: isOpen ? "'FILL' 1" : "'FILL' 0" }}
                     >
                       {group.icon}
                     </span>
 
-                    {sidebarExpandido && (
+                    {sidebarOpen && (
                       <div className="min-w-0 text-left">
                         <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-on-primary-container/55">
                           {group.label}
@@ -536,14 +462,14 @@ name: 'Mi institución',
                     )}
                   </div>
 
-                  {sidebarExpandido && (
+                  {sidebarOpen && (
                     <div className="flex items-center gap-2">
                       {anyBadge > 0 && (
                         <span className="min-w-[18px] rounded-full bg-error px-1.5 py-0.5 text-center text-[10px] font-extrabold text-inverse-on-surface">
                           {anyBadge}
                         </span>
                       )}
-                      <span aria-hidden="true" className="material-symbols-outlined text-sm text-on-primary-container/45">
+                      <span className="material-symbols-outlined text-sm text-on-primary-container/45">
                         {isOpen ? 'expand_less' : 'expand_more'}
                       </span>
                     </div>
@@ -552,24 +478,24 @@ name: 'Mi institución',
 
                 {isOpen && (
                   <>
-                    {!sidebarExpandido && (
+                    {!sidebarOpen && (
                       <div
                         className="fixed inset-0 left-[64px] z-[40] bg-black/10 backdrop-blur-[2px] rounded-r-2xl"
                         onClick={() => toggleGroup(group.key)}
                       />
                     )}
                     <div
-                      ref={!sidebarExpandido ? flyoutRef : undefined}
-                      style={!sidebarExpandido ? { top: flyoutTop, maxHeight: 'calc(100vh - 1rem)' } : undefined}
+                      ref={!sidebarOpen ? flyoutRef : undefined}
+                      style={!sidebarOpen ? { top: flyoutTop, maxHeight: 'calc(100vh - 1rem)' } : undefined}
                       className={cn(
-                        sidebarExpandido
+                        sidebarOpen
                           ? 'mt-2.5 space-y-1.5'
                           : 'fixed left-[64px] z-[70] w-72 space-y-2 bg-primary-container p-4 shadow-2xl border border-white/10 overflow-y-auto hide-scrollbar rounded-r-2xl'
                       )}
                     >
-                      {!sidebarExpandido && (
+                      {!sidebarOpen && (
                         <div className="mb-6 mt-2 flex items-center gap-3 border-b border-white/10 pb-4">
-                          <span aria-hidden="true" className="material-symbols-outlined text-2xl text-on-primary-container/80">
+                          <span className="material-symbols-outlined text-2xl text-on-primary-container/80">
                             {group.icon}
                           </span>
                           <div>
@@ -582,21 +508,13 @@ name: 'Mi institución',
                       )}
                       {visibleItems.map(item => {
                         const badge = item.badge?.();
-                        const active = isActive(item.path);
-                        const bloqueadoPorPlan = !!item.requierePremium && !esPremium;
-                        const destino = item.lock ? '#' : bloqueadoPorPlan ? '/erp/suscripcion' : item.path;
+                        const active = isActivePath(item.path);
 
                         return (
                           <Link
                             key={item.path}
-                            to={destino}
-                            onClick={(e) => {
-                              if (item.lock) { e.preventDefault(); return; }
-                              setMobileOpen(false);
-                            }}
-                            aria-current={active ? 'page' : undefined}
-                            aria-disabled={item.lock || undefined}
-                            title={bloqueadoPorPlan ? `Disponible en el plan ${PLAN_PREMIUM.nombre}. Haz clic para mejorar tu plan.` : undefined}
+                            to={item.lock ? '#' : item.path}
+                            onClick={(e) => { if (item.lock) e.preventDefault(); }}
                             className={cn(
                               'group flex items-center gap-3 transition-all duration-150 rounded-2xl border px-3 py-2.5',
                               active
@@ -614,7 +532,6 @@ name: 'Mi institución',
                               )}
                             >
                               <span
-                                aria-hidden="true"
                                 className="material-symbols-outlined text-xl"
                                 style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}
                               >
@@ -627,23 +544,14 @@ name: 'Mi institución',
                                 <span className={cn('truncate text-[13px] font-bold', item.lock && 'text-on-primary-container/70')}>{item.name}</span>
                                 {item.lock && (
                                   <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white/80">
-                                    <span aria-hidden="true" className="material-symbols-outlined text-[10px]">lock</span> Próximamente
-                                  </span>
-                                )}
-                                {bloqueadoPorPlan && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-warning-container px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-on-warning-container">
-                                    <span aria-hidden="true" className="material-symbols-outlined text-[10px]">lock</span> Premium
+                                    <span className="material-symbols-outlined text-[10px]">lock</span> Próximamente
                                   </span>
                                 )}
                                 {badge && !item.lock && (
                                   <span
                                     className={cn(
                                       'min-w-[20px] rounded-full px-2 py-0.5 text-center text-[10px] font-extrabold',
-                                      item.path.includes('cobrar') && cxcUrgente
-                                        ? 'bg-error text-inverse-on-surface'
-                                        : item.path.includes('pagar') && cxpUrgente
-                                          ? 'bg-warning text-inverse-on-surface'
-                                          : 'bg-white/20 text-white'
+                                      hayVencidos ? 'bg-error text-inverse-on-surface' : 'bg-white/20 text-white'
                                     )}
                                   >
                                     {badge}
@@ -651,7 +559,7 @@ name: 'Mi institución',
                                 )}
                               </div>
                               <p className={cn('mt-0.5 text-[11px] leading-4 text-on-primary-container/60', item.lock && 'text-on-primary-container/40')}>
-                                {bloqueadoPorPlan ? 'Mejora a Premium para usarlo.' : item.hint}
+                                {item.hint}
                               </p>
                             </div>
                           </Link>
@@ -664,116 +572,128 @@ name: 'Mi institución',
             );
           })}
         </nav>
+
+        {/* Cerrar sesión siempre visible en el lateral (corrección #24) */}
+        <div className={cn('shrink-0 border-t border-white/10 py-3', sidebarOpen ? 'px-2.5' : 'px-2')}>
+          <button
+            onClick={handleLogout}
+            title={sidebarOpen ? undefined : 'Cerrar sesión'}
+            className={cn(
+              'flex w-full items-center gap-2.5 rounded-xl py-2.5 text-[13px] font-bold text-on-primary-container/70 transition-colors hover:bg-white/10 hover:text-white',
+              sidebarOpen ? 'px-3' : 'justify-center px-0'
+            )}
+          >
+            <span className="material-symbols-outlined text-lg">logout</span>
+            {sidebarOpen && <span>Cerrar sesión</span>}
+          </button>
+        </div>
       </aside>
 
       {/* ── Main content area ── */}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-3 border-b border-outline-variant/60 bg-surface-container-lowest/95 px-3 shadow-sm backdrop-blur-md sm:px-6">
-          <button
-            onClick={() => setMobileOpen(true)}
-            aria-label="Abrir menú lateral"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-on-surface-variant hover:bg-surface-container md:hidden"
-          >
-            <span aria-hidden="true" className="material-symbols-outlined">menu</span>
-          </button>
-
+        <header className="sticky top-0 z-40 flex min-h-14 w-full items-center justify-between gap-2 border-b border-outline-variant/60 bg-surface-container-lowest/95 px-3 shadow-sm backdrop-blur-md sm:gap-3 sm:px-6"
+          style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+          {!esEscritorio && (
+            <div className="flex min-w-0 items-center gap-1">
+              <button type="button" onClick={() => setCajonAbierto(true)} aria-label="Abrir menú" aria-expanded={cajonAbierto}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-on-surface hover:bg-surface-container">
+                <span className="material-symbols-outlined">menu</span>
+              </button>
+              <Link to="/erp/inicio" className="truncate text-base font-black tracking-tight text-primary">PymEdu</Link>
+            </div>
+          )}
           {location.pathname !== '/erp/inicio' && (
-            <div className="flex min-w-0 max-w-md flex-1 items-center">
-              <div className="group relative w-full min-w-0">
-                <span aria-hidden="true" className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-outline transition-colors group-focus-within:text-primary">
+            <div className="hidden max-w-md flex-1 items-center md:flex">
+              <div className="group relative w-full">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-outline transition-colors group-focus-within:text-primary">
                   search
                 </span>
                 <input
-                  type="search"
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  aria-label="Buscar clientes, ventas, gastos o productos"
+                  type="text"
                   placeholder="Buscar clientes, ventas, productos..."
                   className="w-full rounded-full border-none bg-surface-container py-2 pl-10 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
                 />
-                {resultadosBusqueda.length > 0 && (
-                  <div className="absolute left-0 right-0 z-50 mt-2 overflow-hidden rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-xl">
-                    {resultadosBusqueda.map((r) => (
-                      <button
-                        key={r.id}
-                        onClick={() => navigate(r.ruta)}
-                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-container"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-bold text-on-surface">{r.titulo}</span>
-                          <span className="block text-xs text-on-surface-variant">{r.detalle}</span>
-                        </span>
-                        <span aria-hidden="true" className="material-symbols-outlined text-lg text-outline">chevron_right</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {busqueda.trim().length >= 2 && resultadosBusqueda.length === 0 && (
-                  <div className="absolute left-0 right-0 z-50 mt-2 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm text-on-surface-variant shadow-xl">
-                    Sin resultados para “{busqueda.trim()}”.
-                  </div>
-                )}
               </div>
             </div>
           )}
 
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            {(cxcCount + cxpCount) > 0 && (
-              <div className="hidden items-center gap-1.5 rounded-full border border-error/30 bg-error-container px-3 py-1.5 text-xs font-bold text-on-error-container sm:flex">
-                <span aria-hidden="true" className="material-symbols-outlined text-sm">payments</span>
-                {cxcCount + cxpCount} pendientes
-              </div>
+          <div className="ml-auto flex items-center gap-3">
+            {pendientesTotal > 0 && (
+              <Link
+                to="/erp/cobrar"
+                title={`${cxcCount} ventas sin cobrar · ${cxpCount} compras por pagar`}
+                className="hidden items-center gap-1.5 rounded-full border border-error/30 bg-error-container px-3 py-1.5 text-xs font-bold text-on-error-container lg:flex"
+              >
+                <span className="material-symbols-outlined text-sm">payments</span>
+                {pendientesTotal.toLocaleString('es-CL')} pendientes
+              </Link>
             )}
 
             <button
               onClick={toggleTheme}
-              aria-label={theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
-              className="relative rounded-full p-2 transition-colors hover:bg-surface-container"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-surface-container cursor-default"
+              title={theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-xl text-on-surface-variant">
+              <span className="material-symbols-outlined text-xl text-on-surface-variant">
                 {theme === 'light' ? 'dark_mode' : 'light_mode'}
               </span>
             </button>
 
             <div className="relative">
-              <button
-                onClick={() => setShowNotificaciones((v) => !v)}
-                aria-label={`Notificaciones${notificaciones.length ? `: ${notificaciones.length} pendientes` : ''}`}
-                aria-expanded={showNotificaciones}
-                className="relative rounded-full p-2 transition-colors hover:bg-surface-container"
-              >
-                <span aria-hidden="true" className="material-symbols-outlined text-xl text-on-surface-variant">notifications</span>
-                {notificaciones.length > 0 && (
-                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border-2 border-surface-container-lowest bg-error" />
+              <button type="button" onClick={() => setCampanaAbierta(v => !v)} aria-expanded={campanaAbierta} aria-haspopup="dialog"
+                aria-label={nuevasCampana > 0 ? `Alertas: ${nuevasCampana} nuevas` : 'Alertas'}
+                className="relative flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-surface-container">
+                <span className="material-symbols-outlined text-xl text-on-surface-variant">notifications</span>
+                {nuevasCampana > 0 && (
+                  <span className="absolute right-0.5 top-0.5 min-w-[18px] rounded-full border-2 border-surface-container-lowest bg-error px-1 text-center text-[10px] font-black leading-[14px] text-inverse-on-surface">
+                    {nuevasCampana > 9 ? '9+' : nuevasCampana}
+                  </span>
                 )}
               </button>
-              {showNotificaciones && (
+              {campanaAbierta && createPortal(
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowNotificaciones(false)} aria-hidden="true" />
-                  <div className="fixed inset-x-3 top-16 z-20 origin-top rounded-2xl bg-surface-container-lowest p-2 shadow-xl ring-1 ring-black/5 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 sm:origin-top-right">
-                    <p className="px-3 py-2 text-xs font-extrabold uppercase tracking-widest text-outline">Notificaciones</p>
-                    {notificaciones.length === 0 ? (
-                      <p className="px-3 py-4 text-sm text-on-surface-variant">No tienes avisos pendientes.</p>
-                    ) : (
-                      notificaciones.map((n) => (
-                        <button
-                          key={n.id}
-                          onClick={() => navigate(n.ruta)}
-                          className="flex w-full flex-col rounded-xl px-3 py-2 text-left transition-colors hover:bg-surface-container"
-                        >
-                          <span className="text-sm font-bold text-on-surface">{n.titulo}</span>
-                          <span className="text-xs text-on-surface-variant">{n.detalle}</span>
-                        </button>
-                      ))
-                    )}
-                    <Link
-                      to="/erp/alertas"
-                      className="mt-1 block rounded-xl px-3 py-2 text-center text-xs font-bold text-primary transition-colors hover:bg-surface-container"
-                    >
-                      Ver centro de alertas
+                  <div className="fixed inset-0 z-[1250] bg-scrim/40 sm:bg-transparent" onClick={() => setCampanaAbierta(false)} />
+                  {/* Portal en body: el backdrop-blur del encabezado volvía relativo a él todo lo «fixed». Hoja inferior en móvil; panel bajo la campana desde sm. */}
+                  <div role="dialog" aria-label="Alertas principales"
+                    className="fixed inset-x-0 bottom-0 z-[1260] flex max-h-[80dvh] flex-col rounded-t-3xl bg-surface-container-lowest shadow-2xl ring-1 ring-black/5 sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[4.25rem] sm:max-h-[70vh] sm:w-96 sm:rounded-2xl"
+                    style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                    <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-outline-variant sm:hidden" />
+                    <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
+                      <p className="text-sm font-black text-on-surface">{nuevasCampana > 0 ? `${nuevasCampana} nueva${nuevasCampana === 1 ? '' : 's'}` : 'Alertas'}</p>
+                      {nuevasCampana > 0 && (
+                        <button type="button" onClick={() => marcarAlertas(alertas.filter(a => a.estado === 'nueva').flatMap(a => a.grupo ? a.grupo.map(g => g.clave) : [a.clave]), 'vista')}
+                          className="min-h-9 rounded-full px-3 text-xs font-bold text-primary hover:bg-primary/10">Marcar todo como visto</button>
+                      )}
+                    </div>
+                    <ul className="min-h-0 flex-1 divide-y divide-outline-variant/20 overflow-y-auto">
+                      {principales.length === 0 && <li className="px-4 py-8 text-center text-sm text-on-surface-variant">Todo al día.</li>}
+                      {principales.map(a => (
+                        <li key={a.id}>
+                          <button type="button" className="flex min-h-14 w-full items-start gap-3 px-4 py-3 text-left hover:bg-surface-container-low"
+                            onClick={() => {
+                              marcarAlertas(a.grupo ? a.grupo.map(g => g.clave) : [a.clave], 'vista');
+                              setCampanaAbierta(false);
+                              navigate(a.acciones[0]?.url ?? '/erp/alertas');
+                            }}>
+                            <span className={cn('material-symbols-outlined shrink-0 rounded-xl p-1.5 text-lg', COLOR_ALERTA[a.tipo])}>{a.icono}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1 text-sm font-bold text-on-surface">
+                                {a.estado === 'nueva' && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="nueva" />}
+                                <span className="truncate">{a.titulo}</span>
+                              </span>
+                              <span className="line-clamp-2 text-xs text-on-surface-variant">{a.detalle}</span>
+                              <span className="text-[10px] font-bold text-outline">{horaRelativa(a.creadaEn)}</span>
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link to="/erp/alertas" onClick={() => setCampanaAbierta(false)}
+                      className="flex min-h-12 items-center justify-center border-t border-outline-variant/20 text-sm font-bold text-primary hover:bg-primary/5">
+                      Ver todas las alertas
                     </Link>
                   </div>
-                </>
+                </>, document.body
               )}
             </div>
 
@@ -782,9 +702,7 @@ name: 'Mi institución',
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                aria-label="Abrir menú de mi cuenta"
-                aria-expanded={showUserMenu}
-                className="flex items-center gap-2 rounded-full p-1 pr-2 transition-colors hover:bg-surface-container sm:pr-3"
+                className="flex items-center gap-2 rounded-full p-1 pr-3 transition-colors hover:bg-surface-container"
               >
                 <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-primary text-[10px] font-extrabold text-inverse-on-surface">
                   {perfilAvatarUrl ? (
@@ -798,10 +716,10 @@ name: 'Mi institución',
                     avatarFallback
                   )}
                 </div>
-                <span className="hidden text-sm font-bold text-on-surface sm:block">
+                <span className="hidden max-w-[10rem] truncate text-sm font-bold text-on-surface sm:block">
                   {perfil?.nombre_completo ?? 'Mi cuenta'}
                 </span>
-                <span aria-hidden="true" className="material-symbols-outlined text-lg text-outline">
+                <span className="material-symbols-outlined text-lg text-outline">
                   {showUserMenu ? 'expand_less' : 'expand_more'}
                 </span>
               </button>
@@ -809,20 +727,19 @@ name: 'Mi institución',
               {showUserMenu && (
                 <>
                   <div
-                    className="fixed inset-0 z-10"
+                    className="fixed inset-0 z-[60]"
                     onClick={() => setShowUserMenu(false)}
-                    aria-hidden="true"
                   />
-                  <div className="absolute right-0 z-20 mt-2 w-56 origin-top-right rounded-2xl bg-surface-container-lowest p-2 shadow-xl ring-1 ring-black/5">
+                  <div className="absolute right-0 z-[70] mt-2 w-56 origin-top-right rounded-2xl bg-surface-container-lowest p-2 shadow-xl ring-1 ring-black/5">
                     <div className="px-3 py-2 mb-1">
                       <p className="text-xs font-extrabold uppercase tracking-widest text-outline">Mi Cuenta</p>
                     </div>
                     <Link to="/erp/configuracion" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-low cursor-pointer">
-                      <span aria-hidden="true" className="material-symbols-outlined text-xl">settings</span>
+                      <span className="material-symbols-outlined text-xl">settings</span>
 Configuración
                     </Link>
                     <Link to="/erp/suscripcion" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-warning transition-colors hover:bg-warning-container cursor-pointer">
-                      <span aria-hidden="true" className="material-symbols-outlined text-xl">workspace_premium</span>
+                      <span className="material-symbols-outlined text-xl">workspace_premium</span>
                       Mi plan y suscripción
                     </Link>
                     <div className="my-2 border-t border-surface-container-high" />
@@ -830,7 +747,7 @@ Configuración
                       onClick={handleLogout}
                       className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-error transition-colors hover:bg-error-container hover:text-on-error-container"
                     >
-                      <span aria-hidden="true" className="material-symbols-outlined text-xl">logout</span>
+                      <span className="material-symbols-outlined text-xl">logout</span>
 Cerrar sesión
                     </button>
                   </div>
@@ -840,25 +757,11 @@ Cerrar sesión
           </div>
         </header>
 
-        {errorPersistencia && (
-          <div role="alert" className="flex flex-col gap-2 border-b border-error/30 bg-error/10 px-4 py-3 text-sm font-semibold text-error sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <span className="flex items-start gap-2">
-              <span aria-hidden="true" className="material-symbols-outlined text-lg leading-none">error</span>
-              <span>{errorPersistencia}</span>
-            </span>
-            <button
-              onClick={() => (falloCarga ? recargarErp() : reintentarGuardado())}
-              className="shrink-0 self-start rounded-full border border-error/40 px-4 py-1.5 text-xs font-bold hover:bg-error/10 sm:self-auto"
-            >
-              Reintentar
-            </button>
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <Outlet />
         </div>
       </main>
+      <Toaster />
     </div>
   );
 }

@@ -1,515 +1,689 @@
-import { useMemo, useState } from 'react';
-import { useERP } from '../../1.-ERP/context/ERPContext';
+import { stockDisponible } from '../../1.-ERP/services/inventarioFraccionado';
+import { Fragment, useDeferredValue, useMemo, useState, type ReactNode } from 'react';
+import { useERP, type Gasto, type Venta } from '../../1.-ERP/context/ERPContext';
 import { useAuth } from '../../context/AuthContext';
-import { useColoresTema } from '../../lib/useColoresTema';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line,
-} from 'recharts';
-import * as XLSX from 'xlsx';
-import { aIsoLocal } from '@/lib/fecha';
+import SelectorDesplegable, { type OpcionDesplegable } from '../../components/SelectorDesplegable';
+import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
+import { DOCUMENT_LABELS, normalizeDocumentType } from '../../1.-ERP/services/documentCompliance';
+import { formatCLP, formatFecha, hoyISO, isoLocal, nombrePeriodo, nombrePeriodoCorto, periodoActual, rangoUltimosMeses } from '../../lib/fechas';
+import { agruparSerie, nombreRango, rangoAnterior, totalesPor, NOMBRE_GRANULARIDAD, type RangoFechas } from '../../lib/series';
+import { cn } from '../../lib/utils';
+import GraficoSerie from '../../components/graficos/GraficoSerie';
+import GraficoDona from '../../components/graficos/GraficoDona';
+import GraficoBarras from '../../components/graficos/GraficoBarras';
+import { METODO_PAGO, TarjetaGrafico } from '../../components/graficos/comunes';
+import { usePaletaGraficos } from '../../components/graficos/paleta';
 
-const PALETA_CATEGORIAS = ['#6750A4', '#006A6A', '#B3261E', '#7D5260', '#38693C', '#8B5000', '#00639A', '#9C4173'];
+type Modo = 'mes' | 'trimestre' | 'anio' | 'rango';
+const MODOS: Array<{ valor: Modo; etiqueta: string }> = [
+  { valor: 'mes', etiqueta: 'Mes' },
+  { valor: 'trimestre', etiqueta: 'Trimestre' },
+  { valor: 'anio', etiqueta: 'Año' },
+  { valor: 'rango', etiqueta: 'Rango' },
+];
+
+const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
+const mesCorto = (periodo: string) => nombrePeriodoCorto(periodo).split(' ')[0];
+const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-CL')} ${n === 1 ? uno : varios}`;
+const fmtPct = (n: number | null) => (n == null ? '—' : `${n.toLocaleString('es-CL', { maximumFractionDigits: 1 })}%`);
+const claveTrimestre = (periodo: string) => `${periodo.slice(0, 4)}-T${Math.floor((Number(periodo.slice(5, 7)) - 1) / 3) + 1}`;
+
+function rangoDeMes(periodo: string): RangoFechas {
+  const [y, m] = periodo.split('-').map(Number);
+  return { inicio: isoLocal(new Date(y, m - 1, 1)), fin: isoLocal(new Date(y, m, 0)) };
+}
+
+function rangoDeTrimestre(clave: string): RangoFechas {
+  const [y, t] = clave.split('-T').map(Number);
+  return { inicio: isoLocal(new Date(y, (t - 1) * 3, 1)), fin: isoLocal(new Date(y, t * 3, 0)) };
+}
+
+const nombreTrimestre = (clave: string) => {
+  const { inicio, fin } = rangoDeTrimestre(clave);
+  return `T${clave.slice(-1)} ${clave.slice(0, 4)} · ${mesCorto(inicio.slice(0, 7))} a ${mesCorto(fin.slice(0, 7))}`;
+};
+
+/** Totales de un periodo en una sola pasada (10k+ registros sin O(n²)). */
+function resumir(ventas: Venta[], gastos: Gasto[]) {
+  let ingresos = 0, netos = 0, costo = 0, egresos = 0;
+  for (const v of ventas) {
+    ingresos += v.monto || 0;
+    netos += v.subtotal || (v.monto || 0) - (v.iva || 0);
+    for (const p of v.productos ?? []) costo += (p.costoUnitario || 0) * (p.cantidad || 0);
+  }
+  for (const g of gastos) egresos += g.monto || 0;
+  return {
+    ingresos, egresos, neto: ingresos - egresos, margen: netos - costo,
+    margenPct: netos > 0 ? ((netos - costo) / netos) * 100 : null,
+    ticket: ventas.length ? ingresos / ventas.length : null,
+    nVentas: ventas.length, nGastos: gastos.length,
+  };
+}
+
+/** Variación contra el periodo anterior: % (o puntos porcentuales para márgenes). */
+function variacion(actual: number | null, anterior: number | null, puntos = false): { delta: number | null; texto: string } {
+  if (actual == null || anterior == null) return { delta: null, texto: 'sin comparación' };
+  if (!puntos && !anterior) return { delta: null, texto: actual ? 'sin datos previos' : 'sin cambio' };
+  const delta = puntos ? actual - anterior : ((actual - anterior) / Math.abs(anterior)) * 100;
+  const n = Math.abs(delta).toLocaleString('es-CL', { maximumFractionDigits: 1 });
+  return { delta, texto: `${delta > 0 ? '+' : delta < 0 ? '-' : ''}${n}${puntos ? ' pp' : '%'}` };
+}
+
+function Variacion({ v, invertir }: { v: { delta: number | null; texto: string }; invertir?: boolean }) {
+  if (v.delta == null || Math.abs(v.delta) < 0.05) return <span className="text-on-surface-variant">{v.delta == null ? v.texto : '= sin cambio'}</span>;
+  const sube = v.delta > 0;
+  return (
+    <span className={cn('font-bold', sube !== Boolean(invertir) ? 'text-success' : 'text-error')}>
+      {sube ? '▲' : '▼'} {v.texto.replace(/^[+-]/, '')}
+    </span>
+  );
+}
+
+function Kpi({ titulo, icono, valor, pie, detalle, negativo }: {
+  titulo: string; icono: string; valor: string; pie?: ReactNode; detalle?: string; negativo?: boolean;
+}) {
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/20 p-3 sm:p-4 min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant truncate">{titulo}</p>
+        <span className="material-symbols-outlined text-base text-outline">{icono}</span>
+      </div>
+      <p className={cn('text-lg sm:text-xl font-black mt-1 tabular-nums truncate', negativo ? 'text-error' : 'text-on-surface')} title={valor}>{valor}</p>
+      {pie && <p className="text-[11px] mt-1 truncate">{pie}</p>}
+      {detalle && <p className="text-[11px] text-on-surface-variant mt-0.5 truncate" title={detalle}>{detalle}</p>}
+    </div>
+  );
+}
 
 export default function ERPReportes() {
-  const { ventas, gastos, inventario, abonos, getF29Preparador, getSaldoPendienteVenta, getSaldoPendienteGasto } = useERP();
+  const { ventas, gastos, inventario, abonos, documentosTributarios, saldos, getF29Preparador, movimientosInventario, envases } = useERP();
   const { perfil } = useAuth();
-  const c = useColoresTema();
-  const [periodo, setPeriodo] = useState(aIsoLocal().slice(0, 7));
+  const paleta = usePaletaGraficos();
 
-  const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+  /* ══ Periodo: mes, trimestre, año o rango libre. Lo elegido es exactamente lo consultado ══ */
+  const [modo, setModo] = useState<Modo>('mes');
+  const [mes, setMes] = useState(periodoActual);
+  const [trimestre, setTrimestre] = useState(() => claveTrimestre(periodoActual()));
+  const [anio, setAnio] = useState(() => periodoActual().slice(0, 4));
+  const [rangoManual, setRangoManual] = useState<RangoFechas>(() => rangoUltimosMeses(3));
 
-  const datosEmisorPdf = {
-    nombre: perfil?.negocio_nombre,
-    rut: perfil?.negocio_rut,
-  };
+  const mesesConDatos: Set<string> = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of ventas) set.add((r.fecha ?? '').slice(0, 7));
+    for (const r of gastos) set.add((r.fecha ?? '').slice(0, 7));
+    return new Set([...set].filter(p => /^\d{4}-\d{2}$/.test(p)));
+  }, [ventas, gastos]);
 
-  const ventasPeriodo = useMemo(() => ventas.filter(v => v.fecha.slice(0, 7) === periodo), [ventas, periodo]);
-  const gastosPeriodo = useMemo(() => gastos.filter(g => g.fecha.slice(0, 7) === periodo), [gastos, periodo]);
-  const abonosPeriodo = useMemo(() => abonos.filter(a => (a.fecha ?? '').slice(0, 7) === periodo), [abonos, periodo]);
+  /** Mes actual + últimos 24 + cualquier mes con datos (y siempre el elegido). */
+  const { opcionesMes, opcionesTrimestre, opcionesAnio } = useMemo(() => {
+    const meses = new Set(mesesConDatos);
+    const hoy = new Date();
+    for (let i = 0; i <= 24; i++) meses.add(isoLocal(new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)).slice(0, 7));
+    meses.add(mes);
+    const orden = [...meses].sort().reverse();
+    const trimestres = [...new Set([...orden.map(claveTrimestre), trimestre])].sort().reverse();
+    const anios = [...new Set([...orden.map(p => p.slice(0, 4)), anio])].sort().reverse();
+    const conDatos = (ok: boolean) => (ok ? undefined : 'Sin movimientos');
+    return {
+      opcionesMes: orden.map<OpcionDesplegable>(p => ({ valor: p, etiqueta: nombrePeriodo(p), descripcion: conDatos(mesesConDatos.has(p)) })),
+      opcionesTrimestre: trimestres.map<OpcionDesplegable>(t => ({ valor: t, etiqueta: nombreTrimestre(t) })),
+      opcionesAnio: anios.map<OpcionDesplegable>(a => ({ valor: a, etiqueta: a })),
+    };
+  }, [mesesConDatos, mes, trimestre, anio]);
 
-  const ingresos = ventasPeriodo.reduce((a, v) => a + v.monto, 0);
-  const egresos = gastosPeriodo.reduce((a, g) => a + g.monto, 0);
-  const neto = ingresos - egresos;
-  const netosVentas = ventasPeriodo.reduce((a, v) => a + (v.subtotal ?? v.monto), 0);
-  const costoVendido = ventasPeriodo.reduce((a, v) => a + v.productos.reduce((s, p) => s + (p.costoUnitario ?? 0) * (p.cantidad ?? 0), 0), 0);
-  const margenBruto = netosVentas - costoVendido;
-  const margenPct = netosVentas > 0 ? Math.round((margenBruto / netosVentas) * 100) : 0;
-  const valorInventario = inventario.reduce((a, p) => a + p.costo * p.stock, 0);
-  const cobradoMes = abonosPeriodo.filter(a => a.tipo === 'cobro').reduce((a, x) => a + (x.monto_abono ?? x.monto), 0);
-  const pagadoMes = abonosPeriodo.filter(a => a.tipo === 'pago').reduce((a, x) => a + (x.monto_abono ?? x.monto), 0);
-  const porCobrar = ventasPeriodo.reduce((a, v) => a + getSaldoPendienteVenta(v.id), 0);
-  const porPagar = gastosPeriodo.reduce((a, g) => a + getSaldoPendienteGasto(g.id), 0);
+  const rangoElegido = useMemo<RangoFechas>(() => {
+    if (modo === 'mes') return rangoDeMes(mes);
+    if (modo === 'trimestre') return rangoDeTrimestre(trimestre);
+    if (modo === 'anio') return { inicio: `${anio}-01-01`, fin: `${anio}-12-31` };
+    const inicio = rangoManual.inicio || rangoManual.fin || hoyISO();
+    const fin = rangoManual.fin || rangoManual.inicio || hoyISO();
+    return inicio <= fin ? { inicio, fin } : { inicio: fin, fin: inicio };
+  }, [modo, mes, trimestre, anio, rangoManual]);
 
-  const f29 = getF29Preparador(periodo);
+  // El cálculo pesado sigue al rango diferido: el selector responde al instante.
+  const rango = useDeferredValue(rangoElegido);
+  const actualizando = rango !== rangoElegido;
+  const anterior = useMemo(() => rangoAnterior(rango), [rango]);
+  const etiquetaRango = nombreRango(rango);
+  const etiquetaAnterior = nombreRango(anterior);
+  const enCurso = rango.inicio <= hoyISO() && rango.fin > hoyISO();
 
-  const periodosDisponibles = Array.from(new Set([...ventas, ...gastos].map(r => r.fecha.slice(0, 7))))
-    .sort().reverse().slice(0, 24);
-
-  const etiquetaPeriodo = useMemo(() => {
-    const [anio, mes] = periodo.split('-');
-    const nombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    return `${nombres[Number(mes) - 1]} ${anio}`;
-  }, [periodo]);
-
-  /* ── Movimiento por día ── */
-  const datosPorDia = useMemo(() => {
-    const [anio, mes] = periodo.split('-').map(Number);
-    const dias = new Date(anio, mes, 0).getDate();
-    const ingresosPorDia = new Array(dias + 1).fill(0);
-    const egresosPorDia = new Array(dias + 1).fill(0);
-    ventasPeriodo.forEach(v => { const d = Number(v.fecha.slice(8, 10)); if (d >= 1 && d <= dias) ingresosPorDia[d] += v.monto; });
-    gastosPeriodo.forEach(g => { const d = Number(g.fecha.slice(8, 10)); if (d >= 1 && d <= dias) egresosPorDia[d] += g.monto; });
-    return Array.from({ length: dias }, (_, i) => ({
-      dia: String(i + 1).padStart(2, '0'),
-      ingresos: ingresosPorDia[i + 1],
-      egresos: egresosPorDia[i + 1],
-    }));
-  }, [ventasPeriodo, gastosPeriodo, periodo]);
-
-  /* ── Serie acumulada (efectivo proyectado) ── */
-  const datosAcumulados = useMemo(() => {
-    let saldo = 0;
-    return datosPorDia.map(d => { saldo += d.ingresos - d.egresos; return { dia: d.dia, saldo }; });
-  }, [datosPorDia]);
-
-  /* ── Categorías ── */
-  const ventasPorCategoria = useMemo(() => {
-    const map = new Map<string, number>();
-    ventasPeriodo.forEach(v => v.productos.forEach(p => {
-      const cat = p.categoria || 'Sin categoría';
-      map.set(cat, (map.get(cat) ?? 0) + (p.total ?? 0));
-    }));
-    return Array.from(map, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
-  }, [ventasPeriodo]);
-
-  const gastosPorCategoria = useMemo(() => {
-    const map = new Map<string, number>();
-    gastosPeriodo.forEach(g => map.set(g.categoria || 'Sin categoría', (map.get(g.categoria || 'Sin categoría') ?? 0) + g.monto));
-    return Array.from(map, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
-  }, [gastosPeriodo]);
-
-  /* ── Métodos de pago ── */
-  const metodosPago = useMemo(() => {
-    const etiquetas: Record<string, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia', debito: 'Débito', credito: 'Crédito', cheque: 'Cheque' };
-    const map = new Map<string, number>();
-    ventasPeriodo.forEach(v => {
-      const m = v.metodo_pago ?? 'efectivo';
-      map.set(m, (map.get(m) ?? 0) + v.monto);
+  /* ══ Filtrado único: periodo y periodo anterior en la misma pasada ══ */
+  const datos = useMemo(() => {
+    const ventasP: Venta[] = [], ventasA: Venta[] = [], gastosP: Gasto[] = [], gastosA: Gasto[] = [];
+    const ubicar = <T,>(fecha: string | undefined, r: T, p: T[], a: T[]) => {
+      const f = (fecha ?? '').slice(0, 10);
+      if (f >= rango.inicio && f <= rango.fin) p.push(r);
+      else if (f >= anterior.inicio && f <= anterior.fin) a.push(r);
+    };
+    for (const v of ventas) ubicar(v.fecha, v, ventasP, ventasA);
+    for (const g of gastos) ubicar(g.fecha, g, gastosP, gastosA);
+    let cobrado = 0, pagado = 0;
+    const abonosP = abonos.filter(a => {
+      const f = (a.fecha ?? '').slice(0, 10);
+      if (f < rango.inicio || f > rango.fin) return false;
+      if (a.tipo === 'cobro') cobrado += a.monto_abono ?? a.monto; else pagado += a.monto_abono ?? a.monto;
+      return true;
     });
-    return Array.from(map, ([key, value]) => ({ name: etiquetas[key] ?? key, value })).sort((a, b) => b.value - a.value);
-  }, [ventasPeriodo]);
+    // Mermas valorizadas al costo de los lotes consumidos: van a gasto, no a costo de venta.
+    let mermas = 0, nMermas = 0;
+    for (const m of movimientosInventario) {
+      if (m.tipo !== 'merma') continue;
+      const f = (m.fecha ?? '').slice(0, 10);
+      if (f < rango.inicio || f > rango.fin) continue;
+      mermas += Math.abs(m.cantidad) * (m.costoUnitario ?? 0);
+      nMermas++;
+    }
+    return { ventasP, ventasA, gastosP, gastosA, abonosP, cobrado, pagado, mermas: Math.round(mermas), nMermas };
+  }, [ventas, gastos, abonos, movimientosInventario, rango, anterior]);
+  const { ventasP, gastosP, abonosP, cobrado, pagado, mermas, nMermas } = datos;
 
-  /* ── Top productos y clientes ── */
-  const topProductos = useMemo(() => {
-    const map = new Map<string, { cantidad: number; total: number }>();
-    ventasPeriodo.forEach(v => v.productos.forEach(p => {
-      const prev = map.get(p.productoNombre) ?? { cantidad: 0, total: 0 };
-      map.set(p.productoNombre, { cantidad: prev.cantidad + (p.cantidad ?? 0), total: prev.total + (p.total ?? 0) });
+  const actual = useMemo(() => resumir(datos.ventasP, datos.gastosP), [datos]);
+  const previo = useMemo(() => resumir(datos.ventasA, datos.gastosA), [datos]);
+  const { resumen } = saldos;
+
+  /* ══ Series: granularidad automática según el largo del rango (nunca > ~35 tramos) ══ */
+  const movimientos = useMemo<Array<Venta | Gasto>>(() => [...ventasP, ...gastosP], [ventasP, gastosP]);
+
+  const flujo = useMemo(() => {
+    const s = agruparSerie(movimientos, rango, x => x.fecha,
+      x => ('productos' in x ? { ingresos: x.monto || 0, egresos: 0 } : { ingresos: 0, egresos: x.monto || 0 }));
+    let saldo = 0;
+    return {
+      ...s,
+      puntos: s.puntos.map(p => {
+        const neto = p.ingresos - p.egresos;
+        saldo += neto;
+        return { ...p, neto, saldo };
+      }),
+    };
+  }, [movimientos, rango]);
+
+  const resumenMensual = useMemo(() => {
+    const s = agruparSerie(movimientos, rango, x => x.fecha, x => {
+      if (!('productos' in x)) return { ingresos: 0, netos: 0, costo: 0, ventas: 0, egresos: x.monto || 0 };
+      let costo = 0;
+      for (const p of x.productos ?? []) costo += (p.costoUnitario || 0) * (p.cantidad || 0);
+      return { ingresos: x.monto || 0, netos: x.subtotal || (x.monto || 0) - (x.iva || 0), costo, ventas: 1, egresos: 0 };
+    }, { granularidad: 'mes' });
+    return s.puntos.map(p => ({
+      periodo: p.clave.slice(0, 7),
+      etiqueta: p.etiquetaLarga,
+      ingresos: p.ingresos, egresos: p.egresos, neto: p.ingresos - p.egresos, ventas: p.ventas,
+      margenPct: p.netos > 0 ? ((p.netos - p.costo) / p.netos) * 100 : null,
     }));
-    return Array.from(map, ([name, d]) => ({ name, ...d })).sort((a, b) => b.total - a.total).slice(0, 6);
-  }, [ventasPeriodo]);
+  }, [movimientos, rango]);
+  const variosMeses = resumenMensual.length > 1;
+
+  /* ══ Rankings y composición ══ */
+  const categoriaProducto = useMemo(() => new Map(inventario.map(p => [p.id, p.categoria])), [inventario]);
+  const ventasPorCategoria = useMemo(
+    () => totalesPor(ventasP.flatMap(v => v.productos ?? []), p => p.categoria || categoriaProducto.get(p.productoId), p => p.total),
+    [ventasP, categoriaProducto]
+  );
+  const gastosPorCategoria = useMemo(() => totalesPor(gastosP, g => g.categoria, g => g.monto), [gastosP]);
+  const metodosPago = useMemo(
+    () => totalesPor(ventasP, v => METODO_PAGO[v.metodo_pago ?? 'efectivo'] ?? v.metodo_pago, v => v.monto),
+    [ventasP]
+  );
+
+  const topProductos = useMemo(() => {
+    const mapa = new Map<string, { valor: number; cantidad: number }>();
+    for (const v of ventasP) for (const p of v.productos ?? []) {
+      const k = p.productoNombre?.trim() || 'Sin nombre';
+      const a = mapa.get(k) ?? { valor: 0, cantidad: 0 };
+      a.valor += p.total || 0;
+      a.cantidad += p.cantidad || 0;
+      mapa.set(k, a);
+    }
+    return Array.from(mapa, ([nombre, a]) => ({ nombre, valor: a.valor, cantidad: a.cantidad, detalle: plural(a.cantidad, 'unidad', 'unidades') }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [ventasP]);
 
   const topClientes = useMemo(() => {
-    const map = new Map<string, { total: number; documentos: number }>();
-    ventasPeriodo.forEach(v => {
-      const nombre = v.cliente || 'Sin cliente';
-      const prev = map.get(nombre) ?? { total: 0, documentos: 0 };
-      map.set(nombre, { total: prev.total + v.monto, documentos: prev.documentos + 1 });
-    });
-    return Array.from(map, ([name, d]) => ({ name, ...d })).sort((a, b) => b.total - a.total).slice(0, 5);
-  }, [ventasPeriodo]);
+    const mapa = new Map<string, { valor: number; n: number }>();
+    for (const v of ventasP) {
+      const k = v.cliente?.trim() || 'Sin cliente';
+      const a = mapa.get(k) ?? { valor: 0, n: 0 };
+      a.valor += v.monto || 0;
+      a.n += 1;
+      mapa.set(k, a);
+    }
+    return Array.from(mapa, ([nombre, a]) => ({ nombre, valor: a.valor, n: a.n, detalle: plural(a.n, 'venta', 'ventas') }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [ventasP]);
 
-  const mejorDia = useMemo(() => datosPorDia.reduce((mejor, d) => (d.ingresos > mejor.ingresos ? d : mejor), { dia: '01', ingresos: 0, egresos: 0 }), [datosPorDia]);
+  /* ══ F29: es mensual, así que un rango de varios meses lleva una fila por mes ══ */
+  const f29Meses = useMemo(
+    () => resumenMensual.map(m => ({ etiqueta: nombrePeriodo(m.periodo), ...getF29Preparador(m.periodo) })),
+    [resumenMensual, getF29Preparador]
+  );
+  const f29Total = useMemo(() => f29Meses.reduce((t, f) => ({
+    ivaDebito: t.ivaDebito + f.ivaDebito, ivaCredito: t.ivaCredito + f.ivaCredito, ivaNotasCredito: t.ivaNotasCredito + f.ivaNotasCredito,
+    diferenciaIva: t.diferenciaIva + f.diferenciaIva, ppm: t.ppm + f.ppm, totalEstimado: t.totalEstimado + f.totalEstimado,
+    documentosPendientes: t.documentosPendientes + f.documentosPendientes, ventasPOSConciliadas: t.ventasPOSConciliadas + f.ventasPOSConciliadas,
+  }), { ivaDebito: 0, ivaCredito: 0, ivaNotasCredito: 0, diferenciaIva: 0, ppm: 0, totalEstimado: 0, documentosPendientes: 0, ventasPOSConciliadas: 0 }), [f29Meses]);
+  const alertasF29 = useMemo(
+    () => f29Meses.flatMap(f => f.alertas.map(a => (variosMeses ? `${f.etiqueta}: ${a}` : a))),
+    [f29Meses, variosMeses]
+  );
 
-  /* ════════ Descargas ════════ */
+  /* ══ Detalle: folio legible, nunca el id interno ══ */
+  const folioPorDocumento = useMemo(
+    () => new Map(documentosTributarios.map(d => [d.id, d.folioTributario || d.folioInterno])),
+    [documentosTributarios]
+  );
+  const folio = (documentoId?: string, nota?: string) =>
+    (documentoId && folioPorDocumento.get(documentoId))
+    || nota?.match(/Folio masiva:\s*(.+)$/i)?.[1]?.trim()
+    || (documentoId && !ES_UUID.test(documentoId) ? documentoId : '');
+  const tipoDoc = (v: Venta) => DOCUMENT_LABELS[normalizeDocumentType(v.tipo_documento)] ?? 'Documento';
 
-  const descargarExcel = () => {
-    const resumen = [
-      ['Resumen del periodo', etiquetaPeriodo],
-      [],
-      ['Indicador', 'Valor'],
-      ['Ingresos', ingresos],
-      ['Egresos', egresos],
-      ['Neto', neto],
-      ['Margen bruto', margenBruto],
-      ['Margen %', `${margenPct}%`],
-      ['Cobrado en el mes', cobradoMes],
-      ['Pagado en el mes', pagadoMes],
-      ['Por cobrar (saldo)', porCobrar],
-      ['Por pagar (saldo)', porPagar],
-      ['Valor de inventario', valorInventario],
-      [],
-      ['IVA débito', f29.ivaDebito],
-      ['IVA crédito', f29.ivaCredito],
-      ['Diferencia IVA a pagar', f29.diferenciaIva],
-      ['PPM estimado', f29.ppm],
-      ['Total estimado', f29.totalEstimado],
-    ];
-    const hojaVentas = [
-      ['ID', 'Fecha', 'Cliente', 'Documento', 'Método pago', 'Neto', 'IVA', 'Total', 'Estado'],
-      ...ventasPeriodo.map(v => [v.id, v.fecha, v.cliente, v.tipo_documento ?? '', v.metodo_pago ?? '', v.subtotal ?? 0, v.iva ?? 0, v.monto, v.estado]),
-    ];
-    const hojaGastos = [
-      ['ID', 'Fecha', 'Proveedor', 'Categoría', 'Método pago', 'Neto', 'IVA', 'Total', 'Estado'],
-      ...gastosPeriodo.map(g => [g.id, g.fecha, g.proveedor, g.categoria, g.metodo_pago ?? '', g.subtotal ?? 0, g.iva ?? 0, g.monto, g.estado]),
-    ];
-    const hojaAbonos = [
-      ['Fecha', 'Tipo', 'Cliente/Proveedor', 'Método pago', 'Monto'],
-      ...abonosPeriodo.map(a => [a.fecha, a.tipo === 'cobro' ? 'Cobro' : 'Pago', a.cliente_proveedor ?? '', a.metodo_pago, a.monto_abono ?? a.monto]),
-    ];
+  const recientes = useMemo(() => ({
+    ventas: [...ventasP].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 30),
+    gastos: [...gastosP].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 30),
+  }), [ventasP, gastosP]);
 
+  // Stock real (con envases = suma de sus envases) × costo por unidad base.
+  const valorInventario = useMemo(() => inventario.reduce((a, p) => a + (p.costo || 0) * stockDisponible(p, envases), 0), [inventario, envases]);
+  const mayorTramo = useMemo(
+    () => flujo.puntos.reduce<(typeof flujo.puntos)[number] | null>((m, p) => (p.ingresos > (m?.ingresos ?? 0) ? p : m), null),
+    [flujo]
+  );
+
+  /* ══ Indicadores (pantalla y descargas comparten la misma lista) ══ */
+  const indicadores = [
+    { titulo: 'Ingresos', icono: 'trending_up', tipo: 'clp', a: actual.ingresos, b: previo.ingresos, valor: formatCLP(actual.ingresos), detalle: plural(actual.nVentas, 'venta', 'ventas') },
+    { titulo: 'Egresos', icono: 'trending_down', tipo: 'clp', a: actual.egresos, b: previo.egresos, valor: formatCLP(actual.egresos), detalle: plural(actual.nGastos, 'gasto', 'gastos'), invertir: true },
+    { titulo: 'Resultado neto', icono: 'account_balance', tipo: 'clp', a: actual.neto, b: previo.neto, valor: formatCLP(actual.neto), detalle: 'Ingresos − egresos', negativo: actual.neto < 0 },
+    { titulo: 'Margen bruto', icono: 'percent', tipo: 'pct', a: actual.margenPct, b: previo.margenPct, valor: fmtPct(actual.margenPct), detalle: `${formatCLP(actual.margen)} sobre ventas netas` },
+    { titulo: 'Ticket promedio', icono: 'receipt', tipo: 'clp', a: actual.ticket, b: previo.ticket, valor: actual.ticket == null ? '—' : formatCLP(actual.ticket), detalle: 'Ingreso por venta' },
+    { titulo: 'N.º de ventas', icono: 'shopping_bag', tipo: 'n', a: actual.nVentas, b: previo.nVentas, valor: actual.nVentas.toLocaleString('es-CL'), detalle: `${previo.nVentas.toLocaleString('es-CL')} en el periodo anterior` },
+  ].map(k => ({ ...k, v: variacion(k.a, k.b, k.tipo === 'pct') }));
+  /** Valor de un indicador para las descargas, según su tipo. */
+  const valorIndicador = (tipo: string, n: number | null) => (tipo === 'pct' ? fmtPct(n) : tipo === 'n' ? (n ?? 0).toLocaleString('es-CL') : n == null ? '—' : formatCLP(n));
+
+  const textoCobrar = `${plural(resumen.ventasPorCobrar, 'venta', 'ventas')} sin cobrar${resumen.vencidoCobrar > 0 ? ` · ${formatCLP(resumen.vencidoCobrar)} vencido` : ''}`;
+  const textoPagar = `${plural(resumen.comprasPorPagar, 'compra', 'compras')} sin pagar${resumen.vencidoPagar > 0 ? ` · ${formatCLP(resumen.vencidoPagar)} vencido` : ''}`;
+
+  /* ══ Descargas ══ */
+  const claveArchivo = modo === 'mes' ? mes : modo === 'trimestre' ? trimestre : modo === 'anio' ? anio : `${rango.inicio}_${rango.fin}`;
+
+  const descargarExcel = async () => {
+    const XLSX = await import('xlsx');
+    const $ = (n: number | null) => (n == null ? '—' : { v: Math.round(n), t: 'n', z: '"$"#,##0' });
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(resumen), 'Resumen');
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(hojaVentas), 'Ventas');
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(hojaGastos), 'Gastos');
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(hojaAbonos), 'Cobros y pagos');
-    const datos = XLSX.write(libro, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
-    const blob = new Blob([datos], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `reporte-${periodo}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const agregar = (nombre: string, filas: unknown[][]) => XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(filas), nombre);
+
+    agregar('Resumen', [
+      ['Reporte', perfil?.negocio_nombre || 'Mi negocio'],
+      ['Periodo', etiquetaRango, `${formatFecha(rango.inicio)} al ${formatFecha(rango.fin)}`],
+      ['Comparado con', etiquetaAnterior, `${formatFecha(anterior.inicio)} al ${formatFecha(anterior.fin)}`],
+      [],
+      ['Indicador', 'Periodo', 'Periodo anterior', 'Variación'],
+      ...indicadores.map(k => [k.titulo, ...[k.a, k.b].map(n => (k.tipo === 'clp' ? $(n) : k.tipo === 'pct' ? fmtPct(n) : n)), k.v.texto]),
+      ['Cobrado en el periodo', $(cobrado)],
+      ['Pagado en el periodo', $(pagado)],
+      ['Mermas de inventario (gasto)', $(mermas)],
+      [],
+      ['Saldos a hoy (globales)', 'Monto', 'Detalle'],
+      ['Por cobrar', $(resumen.porCobrar), textoCobrar],
+      ['Por pagar', $(resumen.porPagar), textoPagar],
+      ['Valor de inventario (a costo)', $(valorInventario)],
+      [],
+      ['IVA (F29) del periodo', 'Monto'],
+      ['IVA débito', $(f29Total.ivaDebito)],
+      ['IVA crédito', $(f29Total.ivaCredito)],
+      ['Diferencia IVA a pagar', $(f29Total.diferenciaIva)],
+      ['PPM estimado', $(f29Total.ppm)],
+      ['Total estimado', $(f29Total.totalEstimado)],
+    ]);
+    if (variosMeses) {
+      agregar('Resumen por mes', [
+        ['Mes', 'Ingresos', 'Egresos', 'Neto', 'Margen bruto', 'N.º de ventas'],
+        ...resumenMensual.map(m => [m.etiqueta, $(m.ingresos), $(m.egresos), $(m.neto), fmtPct(m.margenPct), m.ventas]),
+        ['Total', $(actual.ingresos), $(actual.egresos), $(actual.neto), fmtPct(actual.margenPct), actual.nVentas],
+      ]);
+    }
+    agregar('F29', [
+      ['Mes', 'IVA débito', 'IVA crédito', 'Notas de crédito', 'Diferencia IVA', 'PPM', 'Total estimado', 'Documentos pendientes'],
+      ...f29Meses.map(f => [f.etiqueta, $(f.ivaDebito), $(f.ivaCredito), $(f.ivaNotasCredito), $(f.diferenciaIva), $(f.ppm), $(f.totalEstimado), f.documentosPendientes]),
+      ...(variosMeses ? [['Total', $(f29Total.ivaDebito), $(f29Total.ivaCredito), $(f29Total.ivaNotasCredito), $(f29Total.diferenciaIva), $(f29Total.ppm), $(f29Total.totalEstimado), f29Total.documentosPendientes]] : []),
+    ]);
+    agregar('Ventas', [
+      ['Fecha', 'Folio', 'Documento', 'Cliente', 'Método de pago', 'Neto', 'IVA', 'Total', 'Estado'],
+      ...ventasP.map(v => [formatFecha(v.fecha), folio(v.documento_id, v.nota), tipoDoc(v), v.cliente, METODO_PAGO[v.metodo_pago ?? ''] ?? '', $(v.subtotal ?? 0), $(v.iva ?? 0), $(v.monto), v.estado]),
+    ]);
+    agregar('Gastos', [
+      ['Fecha', 'Folio', 'Proveedor', 'Categoría', 'Método de pago', 'Neto', 'IVA', 'Total', 'Estado'],
+      ...gastosP.map(g => [formatFecha(g.fecha), folio(g.documento_id), g.proveedor, g.categoria, METODO_PAGO[g.metodo_pago ?? ''] ?? '', $(g.subtotal ?? 0), $(g.iva ?? 0), $(g.monto), g.estado]),
+    ]);
+    agregar('Cobros y pagos', [
+      ['Fecha', 'Tipo', 'Cliente / proveedor', 'Método de pago', 'Monto'],
+      ...abonosP.map(a => [formatFecha(a.fecha), a.tipo === 'cobro' ? 'Cobro' : 'Pago', a.cliente_proveedor ?? '', METODO_PAGO[a.metodo_pago] ?? a.metodo_pago, $(a.monto_abono ?? a.monto)]),
+    ]);
+    XLSX.writeFile(libro, `reporte-${claveArchivo}.xlsx`);
   };
 
   const descargarPdf = async () => {
-    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-      import('jspdf'),
-      import('jspdf-autotable'),
-    ]);
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
     const doc = new jsPDF();
     const ancho = doc.internal.pageSize.getWidth();
+    const despues = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+    const cabecera = { fillColor: [27, 48, 34] as [number, number, number], textColor: 255 };
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.setTextColor(103, 80, 164);
-    doc.text(datosEmisorPdf.nombre || 'Mi negocio', 14, 18);
-    doc.setFontSize(11);
+    doc.setTextColor(27, 48, 34);
+    doc.text(perfil?.negocio_nombre || 'Mi negocio', 14, 18);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(80, 80, 80);
-    doc.text(`Resumen mensual — ${etiquetaPeriodo}`, 14, 26);
-    if (datosEmisorPdf.rut) doc.text(`RUT: ${datosEmisorPdf.rut}`, ancho - 14, 26, { align: 'right' });
+    doc.text(`Reporte: ${etiquetaRango} (${formatFecha(rango.inicio)} al ${formatFecha(rango.fin)})`, 14, 25);
+    doc.text(`Comparado con: ${etiquetaAnterior} · Generado el ${formatFecha(hoyISO())}`, 14, 30);
+    if (perfil?.negocio_rut) doc.text(`RUT: ${perfil.negocio_rut}`, ancho - 14, 25, { align: 'right' });
 
     autoTable(doc, {
-      startY: 34,
-      theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 2 },
+      startY: 36, headStyles: cabecera, styles: { fontSize: 9 },
+      head: [['Indicador', 'Periodo', 'Anterior', 'Variación']],
       body: [
-        ['Ingresos', fmt(ingresos), 'Egresos', fmt(egresos)],
-        ['Neto', fmt(neto), 'Margen bruto', `${fmt(margenBruto)} (${margenPct}%)`],
-        ['Cobrado en el mes', fmt(cobradoMes), 'Pagado en el mes', fmt(pagadoMes)],
-        ['Por cobrar', fmt(porCobrar), 'Por pagar', fmt(porPagar)],
-        ['Mejor día', `${mejorDia.dia} (${fmt(mejorDia.ingresos)})`, 'Valor inventario', fmt(valorInventario)],
+        ...indicadores.map(k => [k.titulo, k.valor, valorIndicador(k.tipo, k.b), k.v.texto]),
+        ['Cobrado / pagado en el periodo', `${formatCLP(cobrado)} / ${formatCLP(pagado)}`, '', ''],
+        ['Mayor venta en', mayorTramo ? `${mayorTramo.etiquetaLarga} (${formatCLP(mayorTramo.ingresos)})` : '—', '', ''],
       ],
     });
-
     autoTable(doc, {
-      startY: (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6,
-      head: [['Producto más vendido', 'Unidades', 'Total']],
-      body: topProductos.map(p => [p.name, String(p.cantidad), fmt(p.total)]),
-      headStyles: { fillColor: [103, 80, 164] },
-      styles: { fontSize: 9 },
-    });
-
-    autoTable(doc, {
-      startY: (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6,
-      head: [['Top cliente', 'Documentos', 'Total']],
-      body: topClientes.map(t => [t.name, String(t.documentos), fmt(t.total)]),
-      headStyles: { fillColor: [0, 106, 106] },
-      styles: { fontSize: 9 },
-    });
-
-    autoTable(doc, {
-      startY: (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6,
-      head: [['IVA mensual (F29)', 'Valor']],
+      startY: despues(), headStyles: cabecera, styles: { fontSize: 9 },
+      head: [['Saldos a hoy', 'Monto', 'Detalle']],
       body: [
-        ['IVA débito', fmt(f29.ivaDebito)],
-        ['IVA crédito', fmt(f29.ivaCredito)],
-        ['Diferencia a pagar', fmt(f29.diferenciaIva)],
-        ['PPM estimado', fmt(f29.ppm)],
-        ['Total estimado', fmt(f29.totalEstimado)],
+        ['Por cobrar', formatCLP(resumen.porCobrar), textoCobrar],
+        ['Por pagar', formatCLP(resumen.porPagar), textoPagar],
+        ['Valor de inventario (a costo)', formatCLP(valorInventario), ''],
       ],
-      headStyles: { fillColor: [56, 105, 60] },
-      styles: { fontSize: 9 },
     });
-
+    if (variosMeses) {
+      autoTable(doc, {
+        startY: despues(), headStyles: cabecera, styles: { fontSize: 8 },
+        head: [['Mes', 'Ingresos', 'Egresos', 'Neto', 'Margen', 'Ventas']],
+        body: resumenMensual.map(m => [m.etiqueta, formatCLP(m.ingresos), formatCLP(m.egresos), formatCLP(m.neto), fmtPct(m.margenPct), String(m.ventas)]),
+        foot: [['Total', formatCLP(actual.ingresos), formatCLP(actual.egresos), formatCLP(actual.neto), fmtPct(actual.margenPct), String(actual.nVentas)]],
+        footStyles: { fillColor: [235, 235, 235], textColor: 30 },
+      });
+    }
     autoTable(doc, {
-      startY: (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6,
-      head: [['Ventas del periodo']],
-      body: ventasPeriodo.slice(0, 30).map(v => [`${v.fecha} · ${v.cliente} · ${fmt(v.monto)}`]),
-      styles: { fontSize: 8, textColor: [90, 90, 90] },
-      theme: 'plain',
+      startY: despues(), headStyles: cabecera, styles: { fontSize: 9 },
+      head: [['Productos más vendidos', 'Unidades', 'Total']],
+      body: topProductos.slice(0, 10).map(p => [p.nombre, p.cantidad.toLocaleString('es-CL'), formatCLP(p.valor)]),
     });
-
-    doc.save(`reporte-${periodo}.pdf`);
+    autoTable(doc, {
+      startY: despues(), headStyles: cabecera, styles: { fontSize: 9 },
+      head: [['Mejores clientes', 'Ventas', 'Total']],
+      body: topClientes.slice(0, 10).map(c => [c.nombre, c.n.toLocaleString('es-CL'), formatCLP(c.valor)]),
+    });
+    autoTable(doc, {
+      startY: despues(), headStyles: cabecera, styles: { fontSize: 8 },
+      head: [['IVA mensual (F29)', 'IVA débito', 'IVA crédito', 'Diferencia', 'PPM', 'Total estimado']],
+      body: f29Meses.map(f => [f.etiqueta, formatCLP(f.ivaDebito), formatCLP(f.ivaCredito), formatCLP(f.diferenciaIva), formatCLP(f.ppm), formatCLP(f.totalEstimado)]),
+      foot: variosMeses ? [['Total', formatCLP(f29Total.ivaDebito), formatCLP(f29Total.ivaCredito), formatCLP(f29Total.diferenciaIva), formatCLP(f29Total.ppm), formatCLP(f29Total.totalEstimado)]] : undefined,
+      footStyles: { fillColor: [235, 235, 235], textColor: 30 },
+    });
+    autoTable(doc, {
+      startY: despues(), styles: { fontSize: 8, textColor: [90, 90, 90] }, theme: 'plain',
+      head: [['Ventas recientes del periodo', 'Folio', 'Cliente', 'Total']],
+      body: recientes.ventas.map(v => [formatFecha(v.fecha), folio(v.documento_id, v.nota) || '—', v.cliente, formatCLP(v.monto)]),
+    });
+    doc.save(`reporte-${claveArchivo}.pdf`);
   };
 
-  const kpis = [
-    { label: 'Ingresos del periodo', value: fmt(ingresos), sub: `${ventasPeriodo.length} ventas`, color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20' },
-    { label: 'Egresos del periodo', value: fmt(egresos), sub: `${gastosPeriodo.length} gastos`, color: 'text-error', bg: 'bg-error/5', border: 'border-error/20' },
-    { label: 'Neto del periodo', value: fmt(neto), sub: neto >= 0 ? 'Resultado positivo' : 'Resultado negativo', color: neto >= 0 ? 'text-success' : 'text-error', bg: neto >= 0 ? 'bg-success/5' : 'bg-error/5', border: neto >= 0 ? 'border-success/20' : 'border-error/20' },
-    { label: 'Margen bruto', value: fmt(margenBruto), sub: `${margenPct}% · costo ${fmt(costoVendido)}`, color: 'text-info', bg: 'bg-info/5', border: 'border-info/20' },
-    { label: 'Cobrado / Pagado', value: `${fmt(cobradoMes)} / ${fmt(pagadoMes)}`, sub: 'Del mes en curso', color: 'text-secondary', bg: 'bg-secondary/5', border: 'border-secondary/20' },
-    { label: 'Por cobrar / Por pagar', value: `${fmt(porCobrar)} / ${fmt(porPagar)}`, sub: 'Saldos pendientes', color: 'text-warning', bg: 'bg-warning/5', border: 'border-warning/20' },
-  ];
-
-  const tooltipStyle = { borderRadius: '12px', border: `1px solid ${c.outlineVariant}`, background: c.surfaceLowest, color: c.onSurface, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' };
+  /* ══ Pantalla ══ */
+  const botonModo = (m: Modo) => cn(
+    'flex-1 sm:flex-none min-h-11 sm:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+    modo === m ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+  );
 
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span aria-hidden="true" className="material-symbols-outlined text-4xl">bar_chart</span>
+    <div className="p-4 sm:p-6 md:p-8 space-y-6">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-primary flex items-center gap-3">
+            <span className="material-symbols-outlined text-3xl sm:text-4xl">bar_chart</span>
             Reportes y Tributos
           </h2>
-          <p className="text-on-surface-variant mt-1 text-sm">Movimientos del mes, IVA mensual (F29), márgenes y descargas.</p>
+          <p className="text-on-surface-variant mt-1 text-sm">Resultados del periodo, comparación, IVA mensual (F29) y descargas.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <select value={periodo} onChange={e => setPeriodo(e.target.value)}
-            className="px-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm font-bold text-on-surface outline-none focus:border-primary bg-surface-container-lowest">
-            {periodosDisponibles.length === 0 && <option value={periodo}>{periodo}</option>}
-            {periodosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <button onClick={descargarPdf}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-error text-inverse-on-surface text-sm font-bold hover:bg-error/80 transition-colors">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">picture_as_pdf</span>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex w-full sm:w-auto p-1 bg-surface-container-high rounded-xl" role="tablist" aria-label="Tipo de periodo">
+            {MODOS.map(m => (
+              <button key={m.valor} type="button" role="tab" aria-selected={modo === m.valor} onClick={() => setModo(m.valor)} className={botonModo(m.valor)}>
+                {m.etiqueta}
+              </button>
+            ))}
+          </div>
+          {modo === 'mes' && <SelectorDesplegable className="w-full sm:w-52" icono="calendar_month" valor={mes} opciones={opcionesMes} onChange={setMes} />}
+          {modo === 'trimestre' && <SelectorDesplegable className="w-full sm:w-60" icono="date_range" valor={trimestre} opciones={opcionesTrimestre} onChange={setTrimestre} />}
+          {modo === 'anio' && <SelectorDesplegable className="w-full sm:w-36" icono="event" valor={anio} opciones={opcionesAnio} onChange={setAnio} />}
+          {modo === 'rango' && (
+            <>
+              <div className="flex flex-1 sm:flex-none min-w-0 flex-col text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Desde
+                <SelectorFecha className="w-full sm:w-40 mt-1" value={rangoManual.inicio} onChange={inicio => setRangoManual(r => ({ ...r, inicio }))} />
+              </div>
+              <div className="flex flex-1 sm:flex-none min-w-0 flex-col text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Hasta
+                <SelectorFecha className="w-full sm:w-40 mt-1" value={rangoManual.fin} onChange={fin => setRangoManual(r => ({ ...r, fin }))} />
+              </div>
+            </>
+          )}
+          <button onClick={descargarPdf} className="flex flex-1 sm:flex-none min-h-11 items-center justify-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/50 bg-surface-container-lowest text-on-surface text-sm font-bold hover:border-primary/40 transition-colors">
+            <span className="material-symbols-outlined text-lg text-error">picture_as_pdf</span>
             PDF
           </button>
-          <button onClick={descargarExcel}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success text-inverse-on-surface text-sm font-bold hover:bg-success/80 transition-colors">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">table_view</span>
+          <button onClick={descargarExcel} className="flex flex-1 sm:flex-none min-h-11 items-center justify-center gap-2 px-4 py-2 rounded-xl border border-outline-variant/50 bg-surface-container-lowest text-on-surface text-sm font-bold hover:border-primary/40 transition-colors">
+            <span className="material-symbols-outlined text-lg text-success">table_view</span>
             Excel
           </button>
         </div>
       </div>
 
-      {/* ── KPIs ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        {kpis.map(k => (
-          <div key={k.label} className={`${k.bg} p-5 rounded-2xl border ${k.border}`}>
-            <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">{k.label}</p>
-            <p className={`text-xl font-black ${k.color} mt-1`}>{k.value}</p>
-            <p className="text-[10px] font-bold text-on-surface-variant mt-1">{k.sub}</p>
-          </div>
-        ))}
-      </div>
+      <p className="text-xs text-on-surface-variant">
+        Mostrando <span className="font-bold text-on-surface">{etiquetaRango}</span>
+        {modo !== 'rango' && <> ({formatFecha(rango.inicio)} al {formatFecha(rango.fin)})</>}
+        {' · '}comparado con <span className="font-bold text-on-surface">{etiquetaAnterior}</span>
+        {enCurso && ' (a la misma altura del periodo)'}
+      </p>
 
-      {/* ── Movimiento por día + acumulado ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/20 shadow-sm">
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Movimiento por día — {etiquetaPeriodo}</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={datosPorDia} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval={Math.floor(datosPorDia.length / 15)} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} />
-                <RechartsTooltip contentStyle={tooltipStyle} formatter={(value: number) => fmt(value)} />
-                <Legend wrapperStyle={{ fontSize: 11, color: c.onSurfaceVariant }} />
-                <Bar dataKey="ingresos" name="Ingresos" fill={c.primary} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="egresos" name="Egresos" fill={c.error} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+      <div className={cn('space-y-6 transition-opacity', actualizando && 'opacity-60')}>
+        {/* ── Indicadores con comparación ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+          {indicadores.map(k => (
+            <Fragment key={k.titulo}>
+              <Kpi titulo={k.titulo} icono={k.icono} valor={k.valor} negativo={k.negativo}
+                pie={<Variacion v={k.v} invertir={k.invertir} />} detalle={k.detalle} />
+            </Fragment>
+          ))}
         </div>
-        <div className="bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/20 shadow-sm">
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Saldo acumulado</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={datosAcumulados}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.outlineVariant} />
-                <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} interval={Math.floor(datosAcumulados.length / 6)} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} />
-                <RechartsTooltip contentStyle={tooltipStyle} formatter={(value: number) => [fmt(value), 'Saldo']} />
-                <Line type="monotone" dataKey="saldo" stroke={c.success} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
 
-      {/* ── Categorías y métodos de pago ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/20 shadow-sm">
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Ventas por categoría</h3>
-          <div className="h-64">
-            {ventasPorCategoria.length === 0 ? (
-              <p className="h-full flex items-center justify-center text-sm text-on-surface-variant">Sin ventas en {etiquetaPeriodo}.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={ventasPorCategoria} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={5} dataKey="value">
-                    {ventasPorCategoria.map((_, i) => <Cell key={i} fill={PALETA_CATEGORIAS[i % PALETA_CATEGORIAS.length]} />)}
-                  </Pie>
-                  <RechartsTooltip contentStyle={tooltipStyle} formatter={(value: number) => fmt(value)} />
-                  <Legend wrapperStyle={{ fontSize: 10, color: c.onSurfaceVariant }} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+        {/* ── Caja del periodo y saldos globales a hoy ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+          <Kpi titulo="Mermas de inventario" icono="delete_sweep" valor={formatCLP(mermas)}
+            detalle={nMermas ? plural(nMermas, 'ajuste por merma', 'ajustes por merma') + ' · gasto, no costo de venta' : 'Sin mermas en el periodo'} />
+          <Kpi titulo="Cobrado en el periodo" icono="call_received" valor={formatCLP(cobrado)} detalle="Abonos recibidos de clientes" />
+          <Kpi titulo="Pagado en el periodo" icono="call_made" valor={formatCLP(pagado)} detalle="Abonos pagados a proveedores" />
+          <Kpi titulo="Por cobrar · saldo a hoy" icono="request_quote" valor={formatCLP(resumen.porCobrar)} detalle={textoCobrar}
+            pie={resumen.ventasVencidas > 0 ? <span className="font-bold text-error">{plural(resumen.ventasVencidas, 'venta vencida', 'ventas vencidas')}</span> : <span className="text-on-surface-variant">Sin ventas vencidas</span>} />
+          <Kpi titulo="Por pagar · saldo a hoy" icono="payments" valor={formatCLP(resumen.porPagar)} detalle={textoPagar}
+            pie={resumen.comprasVencidas > 0 ? <span className="font-bold text-error">{plural(resumen.comprasVencidas, 'compra vencida', 'compras vencidas')}</span> : <span className="text-on-surface-variant">Sin compras vencidas</span>} />
         </div>
-        <div className="bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/20 shadow-sm">
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Gastos por categoría</h3>
-          <div className="h-64">
-            {gastosPorCategoria.length === 0 ? (
-              <p className="h-full flex items-center justify-center text-sm text-on-surface-variant">Sin gastos en {etiquetaPeriodo}.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={gastosPorCategoria} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={5} dataKey="value">
-                    {gastosPorCategoria.map((_, i) => <Cell key={i} fill={PALETA_CATEGORIAS[i % PALETA_CATEGORIAS.length]} />)}
-                  </Pie>
-                  <RechartsTooltip contentStyle={tooltipStyle} formatter={(value: number) => fmt(value)} />
-                  <Legend wrapperStyle={{ fontSize: 10, color: c.onSurfaceVariant }} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-        <div className="bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/20 shadow-sm">
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Métodos de pago</h3>
-          <div className="h-64">
-            {metodosPago.length === 0 ? (
-              <p className="h-full flex items-center justify-center text-sm text-on-surface-variant">Sin ventas en {etiquetaPeriodo}.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metodosPago} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.outlineVariant} />
-                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} />
-                  <YAxis type="category" dataKey="name" width={90} axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 11 }} />
-                  <RechartsTooltip contentStyle={tooltipStyle} formatter={(value: number) => fmt(value)} />
-                  <Bar dataKey="value" fill={c.info} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* ── Top productos y clientes ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant/20 shadow-sm">
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Productos más vendidos</h3>
-          <div className="h-64">
-            {topProductos.length === 0 ? (
-              <p className="h-full flex items-center justify-center text-sm text-on-surface-variant">Sin ventas en {etiquetaPeriodo}.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProductos} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={c.outlineVariant} />
-                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} />
-                  <YAxis type="category" dataKey="name" width={130} axisLine={false} tickLine={false} tick={{ fill: c.onSurfaceVariant, fontSize: 10 }} />
-                  <RechartsTooltip contentStyle={tooltipStyle} formatter={(value: number) => fmt(value)} />
-                  <Bar dataKey="total" fill={c.primary} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+        {/* ── Flujo del periodo + saldo acumulado ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <TarjetaGrafico
+            className="lg:col-span-2" icono="stacked_bar_chart" titulo="Ingresos, egresos y resultado"
+            subtitulo={`${NOMBRE_GRANULARIDAD[flujo.granularidad].replace(/^p/, 'P')} · ${etiquetaRango}`}
+          >
+            <GraficoSerie
+              puntos={flujo.puntos} alto={280}
+              series={[
+                { clave: 'ingresos', nombre: 'Ingresos', color: paleta.ingresos, tipo: 'barra' },
+                { clave: 'egresos', nombre: 'Egresos', color: paleta.egresos, tipo: 'barra' },
+                { clave: 'neto', nombre: 'Resultado neto', color: paleta.neto, tipo: 'linea' },
+              ]}
+            />
+          </TarjetaGrafico>
+          <TarjetaGrafico icono="show_chart" titulo="Saldo acumulado" subtitulo="Ingresos − egresos acumulados en el periodo">
+            <GraficoSerie puntos={flujo.puntos} alto={280} series={[{ clave: 'saldo', nombre: 'Saldo acumulado', color: paleta.neto, tipo: 'area' }]} />
+          </TarjetaGrafico>
         </div>
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-outline-variant/20">
-            <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">Top clientes del periodo</h3>
-          </div>
-          {topClientes.length === 0 ? (
-            <p className="p-6 text-sm text-on-surface-variant">Sin ventas en {etiquetaPeriodo}.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-surface-container-low">
-                <tr>
-                  {['Cliente', 'Documentos', 'Total'].map(h => (
-                    <th key={h} className="p-4 text-left text-xs font-bold text-outline uppercase tracking-wider">{h}</th>
+
+        {/* ── Composición ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+          <TarjetaGrafico icono="donut_large" titulo="Ventas por categoría" subtitulo="Top 6 y el resto en «Otros»">
+            <GraficoDona items={ventasPorCategoria} vacio="Sin ventas en el periodo" />
+          </TarjetaGrafico>
+          <TarjetaGrafico icono="donut_small" titulo="Gastos por categoría" subtitulo="Top 6 y el resto en «Otros»">
+            <GraficoDona items={gastosPorCategoria} vacio="Sin gastos en el periodo" />
+          </TarjetaGrafico>
+          <TarjetaGrafico className="md:col-span-2 xl:col-span-1" icono="credit_card" titulo="Métodos de pago" subtitulo="Ventas del periodo por medio de pago">
+            <GraficoBarras items={metodosPago} color={paleta.ingresos} mostrarPct vacio="Sin ventas en el periodo" />
+          </TarjetaGrafico>
+        </div>
+
+        {/* ── Rankings ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <TarjetaGrafico icono="inventory_2" titulo="Productos más vendidos" subtitulo="Por monto vendido">
+            <GraficoBarras items={topProductos} max={8} color={paleta.categorias[0]} vacio="Sin ventas en el periodo" />
+          </TarjetaGrafico>
+          <TarjetaGrafico icono="groups" titulo="Mejores clientes" subtitulo="Por monto comprado">
+            <GraficoBarras items={topClientes} max={8} color={paleta.categorias[2]} vacio="Sin ventas en el periodo" />
+          </TarjetaGrafico>
+        </div>
+
+        {/* ── Resumen por mes (rangos de más de un mes): reporte denso de cifras, se queda como tabla con scroll horizontal propio ── */}
+        {variosMeses && (
+          <TarjetaGrafico icono="table_chart" titulo="Resumen por mes" subtitulo={etiquetaRango}>
+            <div className="overflow-x-auto -mx-5">
+              <table className="w-full min-w-[36rem] text-sm">
+                <thead className="bg-surface-container-low text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                  <tr>{['Mes', 'Ingresos', 'Egresos', 'Neto', 'Margen', 'Ventas'].map((h, i) => <th key={h} className={cn('px-5 py-2.5', i ? 'text-right' : 'text-left')}>{h}</th>)}</tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/10 tabular-nums">
+                  {resumenMensual.map(m => (
+                    <tr key={m.periodo} className="hover:bg-surface-container-low/50">
+                      <td className="px-5 py-2.5 font-semibold text-on-surface">{m.etiqueta}</td>
+                      <td className="px-5 py-2.5 text-right text-on-surface">{formatCLP(m.ingresos)}</td>
+                      <td className="px-5 py-2.5 text-right text-on-surface">{formatCLP(m.egresos)}</td>
+                      <td className={cn('px-5 py-2.5 text-right font-bold', m.neto < 0 ? 'text-error' : 'text-on-surface')}>{formatCLP(m.neto)}</td>
+                      <td className="px-5 py-2.5 text-right text-on-surface-variant">{fmtPct(m.margenPct)}</td>
+                      <td className="px-5 py-2.5 text-right text-on-surface-variant">{m.ventas.toLocaleString('es-CL')}</td>
+                    </tr>
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/10">
-                {topClientes.map((t, i) => (
-                  <tr key={t.name} className="hover:bg-surface-container-low/50 transition-colors">
-                    <td className="p-4 font-bold text-on-surface">
-                      <span className="inline-flex items-center justify-center w-6 h-6 mr-2 rounded-full bg-primary/10 text-primary text-xs font-black">{i + 1}</span>
-                      {t.name}
-                    </td>
-                    <td className="p-4 text-on-surface-variant">{t.documentos}</td>
-                    <td className="p-4 font-extrabold text-primary">{fmt(t.total)}</td>
+                </tbody>
+                <tfoot className="border-t-2 border-outline-variant/30 font-black tabular-nums">
+                  <tr>
+                    <td className="px-5 py-2.5 text-on-surface">Total</td>
+                    <td className="px-5 py-2.5 text-right text-on-surface">{formatCLP(actual.ingresos)}</td>
+                    <td className="px-5 py-2.5 text-right text-on-surface">{formatCLP(actual.egresos)}</td>
+                    <td className={cn('px-5 py-2.5 text-right', actual.neto < 0 ? 'text-error' : 'text-on-surface')}>{formatCLP(actual.neto)}</td>
+                    <td className="px-5 py-2.5 text-right text-on-surface-variant">{fmtPct(actual.margenPct)}</td>
+                    <td className="px-5 py-2.5 text-right text-on-surface-variant">{actual.nVentas.toLocaleString('es-CL')}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+                </tfoot>
+              </table>
+            </div>
+          </TarjetaGrafico>
+        )}
 
-      {/* ── F29 ── */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-outline-variant/20 flex items-center gap-3">
-          <span aria-hidden="true" className="material-symbols-outlined text-primary">account_balance_wallet</span>
-          <div>
-            <h3 className="font-bold text-on-surface">Liquidación IVA Mensual (F29) — {periodo}</h3>
-            <p className="text-xs text-on-surface-variant">Estimación interna del formulario 29. No reemplaza la declaración oficial.</p>
-          </div>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            {[
-              { label: 'IVA débito', value: f29.ivaDebito },
-              { label: 'IVA crédito', value: f29.ivaCredito },
-              { label: 'Notas de crédito', value: f29.ivaNotasCredito },
-              { label: 'Diferencia a pagar', value: f29.diferenciaIva },
-              { label: 'PPM estimado', value: f29.ppm },
-              { label: 'Total estimado', value: f29.totalEstimado },
-              { label: 'Ventas POS conciliadas', value: f29.ventasPOSConciliadas, count: true },
-              { label: 'Documentos pendientes', value: f29.documentosPendientes, count: true },
-            ].map(item => (
-              <div key={item.label} className="rounded-2xl bg-surface-container-low p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">{item.label}</p>
-                <p className="text-xl font-black text-on-surface mt-1">{item.count ? item.value : fmt(item.value)}</p>
-              </div>
-            ))}
-          </div>
-          {f29.alertas.length > 0 && (
-            <div className="mt-4 space-y-2">
-              {f29.alertas.map(a => (
-                <p key={a} className="flex items-center gap-2 text-sm text-secondary bg-secondary/10 rounded-xl px-3 py-2">
-                  <span aria-hidden="true" className="material-symbols-outlined text-base">warning</span>{a}
-                </p>
+        {/* ── F29: una fila por mes cuando el rango cubre varios (tabla densa con scroll horizontal propio) ── */}
+        <TarjetaGrafico
+          icono="account_balance_wallet"
+          titulo={variosMeses ? 'Liquidación IVA mensual (F29) por mes' : `Liquidación IVA mensual (F29) — ${f29Meses[0]?.etiqueta ?? etiquetaRango}`}
+          subtitulo="Estimación interna del formulario 29. No reemplaza la declaración oficial."
+        >
+          {variosMeses ? (
+            <div className="overflow-x-auto -mx-5">
+              <table className="w-full min-w-[44rem] text-sm">
+                <thead className="bg-surface-container-low text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                  <tr>{['Mes', 'IVA débito', 'IVA crédito', 'Notas de crédito', 'Diferencia', 'PPM', 'Total estimado', 'Pendientes'].map((h, i) => <th key={h} className={cn('px-4 py-2.5', i ? 'text-right' : 'text-left')}>{h}</th>)}</tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/10 tabular-nums">
+                  {f29Meses.map(f => (
+                    <tr key={f.periodo} className="hover:bg-surface-container-low/50">
+                      <td className="px-4 py-2.5 font-semibold text-on-surface">{f.etiqueta}</td>
+                      {[f.ivaDebito, f.ivaCredito, f.ivaNotasCredito, f.diferenciaIva, f.ppm, f.totalEstimado].map((n, i) => (
+                        <td key={i} className={cn('px-4 py-2.5 text-right', i === 5 ? 'font-bold text-on-surface' : 'text-on-surface-variant')}>{formatCLP(n)}</td>
+                      ))}
+                      <td className="px-4 py-2.5 text-right text-on-surface-variant">{f.documentosPendientes}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t-2 border-outline-variant/30 font-black tabular-nums">
+                  <tr>
+                    <td className="px-4 py-2.5 text-on-surface">Total</td>
+                    {[f29Total.ivaDebito, f29Total.ivaCredito, f29Total.ivaNotasCredito, f29Total.diferenciaIva, f29Total.ppm, f29Total.totalEstimado].map((n, i) => (
+                      <td key={i} className="px-4 py-2.5 text-right text-on-surface">{formatCLP(n)}</td>
+                    ))}
+                    <td className="px-4 py-2.5 text-right text-on-surface">{f29Total.documentosPendientes}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 text-sm">
+              {[
+                { label: 'IVA débito', value: f29Total.ivaDebito },
+                { label: 'IVA crédito', value: f29Total.ivaCredito },
+                { label: 'Notas de crédito', value: f29Total.ivaNotasCredito },
+                { label: 'Diferencia a pagar', value: f29Total.diferenciaIva },
+                { label: 'PPM estimado', value: f29Total.ppm },
+                { label: 'Total estimado', value: f29Total.totalEstimado },
+                { label: 'Ventas POS conciliadas', value: f29Total.ventasPOSConciliadas, cantidad: true },
+                { label: 'Documentos pendientes', value: f29Total.documentosPendientes, cantidad: true },
+              ].map(item => (
+                <div key={item.label} className="rounded-xl bg-surface-container-low p-3 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant truncate">{item.label}</p>
+                  <p className="text-base sm:text-lg font-black text-on-surface mt-1 tabular-nums break-words">{item.cantidad ? item.value.toLocaleString('es-CL') : formatCLP(item.value)}</p>
+                </div>
               ))}
             </div>
           )}
-        </div>
-      </div>
+          {alertasF29.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {alertasF29.slice(0, 8).map(a => (
+                <li key={a} className="flex items-start gap-2 text-sm text-on-surface bg-secondary/10 rounded-xl px-3 py-2">
+                  <span className="material-symbols-outlined text-base text-secondary shrink-0">warning</span>{a}
+                </li>
+              ))}
+              {alertasF29.length > 8 && <li className="text-xs text-on-surface-variant">y {alertasF29.length - 8} alertas más</li>}
+            </ul>
+          )}
+        </TarjetaGrafico>
 
-      {/* ── Detalle ventas y gastos ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-outline-variant/20 font-bold text-on-surface">Ventas del periodo</div>
-          <div className="divide-y divide-outline-variant/10 max-h-80 overflow-y-auto">
-            {ventasPeriodo.length === 0 && <p className="p-5 text-sm text-on-surface-variant">Sin ventas en {etiquetaPeriodo}.</p>}
-            {ventasPeriodo.slice(0, 30).map(v => (
-              <div key={v.id} className="px-5 py-3 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-on-surface text-sm">{v.cliente}</p>
-                  <p className="text-[10px] text-on-surface-variant">{v.fecha} · {v.tipo_documento ?? 'Documento'}</p>
-                </div>
-                <span className="font-extrabold text-primary">{fmt(v.monto)}</span>
+        {/* ── Detalle reciente ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          {[
+            { titulo: 'Ventas del periodo', total: ventasP.length, vacio: 'Sin ventas en el periodo', color: 'text-on-surface',
+              filas: recientes.ventas.map(v => ({ id: v.id, nombre: v.cliente || 'Sin cliente', sub: [formatFecha(v.fecha), tipoDoc(v), folio(v.documento_id, v.nota)].filter(Boolean).join(' · '), monto: v.monto })) },
+            { titulo: 'Gastos del periodo', total: gastosP.length, vacio: 'Sin gastos en el periodo', color: 'text-error',
+              filas: recientes.gastos.map(g => ({ id: g.id, nombre: g.proveedor || 'Sin proveedor', sub: [formatFecha(g.fecha), g.categoria, folio(g.documento_id)].filter(Boolean).join(' · '), monto: g.monto })) },
+          ].map(bloque => (
+            <Fragment key={bloque.titulo}>
+            <TarjetaGrafico titulo={bloque.titulo}
+              extra={bloque.total > bloque.filas.length ? `Últimas ${bloque.filas.length} de ${bloque.total.toLocaleString('es-CL')}` : plural(bloque.total, 'registro', 'registros')}>
+              <div className="-mx-5 -mb-5 divide-y divide-outline-variant/10 max-h-80 overflow-y-auto">
+                {bloque.filas.length === 0 && <p className="px-5 py-4 text-sm text-on-surface-variant">{bloque.vacio}</p>}
+                {bloque.filas.map(f => (
+                  <div key={f.id} className="px-5 py-2.5 flex justify-between items-center gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-on-surface text-sm truncate">{f.nombre}</p>
+                      <p className="text-[11px] text-on-surface-variant truncate">{f.sub}</p>
+                    </div>
+                    <span className={cn('font-extrabold tabular-nums shrink-0', bloque.color)}>{formatCLP(f.monto)}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-outline-variant/20 font-bold text-on-surface">Gastos del periodo</div>
-          <div className="divide-y divide-outline-variant/10 max-h-80 overflow-y-auto">
-            {gastosPeriodo.length === 0 && <p className="p-5 text-sm text-on-surface-variant">Sin gastos en {etiquetaPeriodo}.</p>}
-            {gastosPeriodo.slice(0, 30).map(g => (
-              <div key={g.id} className="px-5 py-3 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-on-surface text-sm">{g.proveedor}</p>
-                  <p className="text-[10px] text-on-surface-variant">{g.fecha} · {g.categoria}</p>
-                </div>
-                <span className="font-extrabold text-error">{fmt(g.monto)}</span>
-              </div>
-            ))}
-          </div>
+            </TarjetaGrafico>
+            </Fragment>
+          ))}
         </div>
       </div>
     </div>

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
 const logs = [
-  { id: 'l1', fecha: '25 Jul 2026 14:32:18', usuario: 'Carlos Mendoza', accion: 'login', modulo: 'Auth', detalle: 'Inicio de sesion exitoso', ip: '190.45.12.34', nivel: 'info' as const },
-  { id: 'l2', fecha: '25 Jul 2026 14:28:05', usuario: 'María González', accion: 'crear_usuario', modulo: 'Usuarios', detalle: 'Creó cuenta de emprendedor: Pedro Martinez', ip: '190.45.12.34', nivel: 'info' as const },
-  { id: 'l3', fecha: '25 Jul 2026 14:15:42', usuario: 'Sistema', accion: 'backup', modulo: 'Sistema', detalle: 'Backup automatico completado (2.4GB)', ip: '—', nivel: 'info' as const },
+  { id: 'l1', fecha: '25 Jul 2026 14:32:18', usuario: 'Carlos Mendoza', accion: 'login', modulo: 'Auth', detalle: 'Inicio de sesión exitoso', ip: '190.45.12.34', nivel: 'info' as const },
+  { id: 'l2', fecha: '25 Jul 2026 14:28:05', usuario: 'María González', accion: 'crear_usuario', modulo: 'Usuarios', detalle: 'Creó cuenta de emprendedor: Pedro Martínez', ip: '190.45.12.34', nivel: 'info' as const },
+  { id: 'l3', fecha: '25 Jul 2026 14:15:42', usuario: 'Sistema', accion: 'backup', modulo: 'Sistema', detalle: 'Backup automático completado (2.4GB)', ip: '—', nivel: 'info' as const },
   { id: 'l4', fecha: '25 Jul 2026 13:55:11', usuario: 'Carlos Mendoza', accion: 'modificar_plan', modulo: 'Planes', detalle: 'Plan de U. Católica actualizado: Profesional → Premium', ip: '190.45.12.34', nivel: 'warning' as const },
   { id: 'l5', fecha: '25 Jul 2026 13:20:30', usuario: 'Sistema', accion: 'error', modulo: 'API', detalle: 'Rate limit excedido por IP 200.34.56.78 (500 req/min)', ip: '200.34.56.78', nivel: 'error' as const },
-  { id: 'l6', fecha: '25 Jul 2026 12:45:00', usuario: 'Ana Silva', accion: 'login', modulo: 'Auth', detalle: 'Inicio de sesion exitoso', ip: '190.45.12.50', nivel: 'info' as const },
+  { id: 'l6', fecha: '25 Jul 2026 12:45:00', usuario: 'Ana Silva', accion: 'login', modulo: 'Auth', detalle: 'Inicio de sesión exitoso', ip: '190.45.12.50', nivel: 'info' as const },
   { id: 'l7', fecha: '25 Jul 2026 12:10:22', usuario: 'Carlos Mendoza', accion: 'suspender_org', modulo: 'Organizaciones', detalle: 'Municipalidad de Temuco suspendida por pago vencido', ip: '190.45.12.34', nivel: 'warning' as const },
   { id: 'l8', fecha: '25 Jul 2026 11:30:00', usuario: 'Sistema', accion: 'alerta', modulo: 'Monitoreo', detalle: 'Uso de CPU superó 80% por 5 minutos', ip: '—', nivel: 'error' as const },
   { id: 'l9', fecha: '25 Jul 2026 10:15:45', usuario: 'Carlos Mendoza', accion: 'habilitar_modulo', modulo: 'Módulos', detalle: 'Módulo Laboratorio habilitado para Universidad Católica', ip: '190.45.12.34', nivel: 'info' as const },
@@ -95,7 +95,7 @@ export default function SuperAdminAuditoria() {
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="text"
-            placeholder="Buscar por usuario o accion..."
+            placeholder="Buscar por usuario o acción…"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             className="flex-1 min-w-[200px] p-3 rounded-xl border-2 border-surface-container-high focus:border-primary/50 outline-none transition-all text-sm"

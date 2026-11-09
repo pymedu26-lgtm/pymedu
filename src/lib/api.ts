@@ -1,36 +1,38 @@
 // Cliente HTTP hacia la API PymEdu (Express + PostgreSQL en Railway).
-// La sesion viaja en una cookie HttpOnly: el JavaScript del sitio nunca ve el JWT.
 // En desarrollo usa el proxy de vite.config.ts; en produccion VITE_API_URL
 // (o el mismo origen, que es como Railway sirve el SPA + la API).
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-const COOKIE_PISTA = 'pymedu_sesion';
+const TOKEN_KEY = 'pymedu_token';
 
-/** Indica si el navegador ya tiene una sesion (cookie no sensible puesta por la API). */
-export function hayPistaSesion(): boolean {
-  return document.cookie.split('; ').some((parte) => parte.startsWith(`${COOKIE_PISTA}=`));
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export function setToken(token: string | null) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
   };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const res = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers,
-      credentials: 'include',
-      signal: controller.signal,
-    });
+    const res = await fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal });
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(body.error || `Error ${res.status}`);
+      throw Object.assign(new Error(body.error || `Error ${res.status}`), { status: res.status, detalle: body.detalle });
     }
 
     return res.json();
@@ -46,24 +48,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 const json = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
 
+export interface PermisoApi { codigo: string; app: string; modulo: string; accion: string; descripcion: string }
+export interface RolApi {
+  id: string; codigo: string | null; nombre: string; descripcion: string | null;
+  ambito: 'plataforma' | 'institucion' | 'negocio' | 'proveedor';
+  organizacion_id: string | null; organizacion_nombre?: string | null; rol_padre_id: string | null;
+  es_sistema: boolean; es_plantilla: boolean; activo: boolean; usuarios: number; permisos: string[];
+}
+
 export const api = {
   // ── Auth ──────────────────────────────────────────────
   login: (email: string, password: string) =>
-    request<{ perfil: Record<string, unknown> }>('/api/auth/login', json({ email, password })),
+    request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/login', json({ email, password })),
 
   forgotPassword: (email: string) =>
     request<{ ok: boolean; resetUrl?: string }>('/api/auth/forgot-password', json({ email })),
   resetPassword: (token: string, password: string) =>
     request<{ ok: boolean }>('/api/auth/reset-password', json({ token, password })),
   register: (email: string, password: string, full_name: string, extra: Record<string, unknown> = {}) =>
-    request<{ perfil: Record<string, unknown> }>('/api/auth/register', json({ email, password, full_name, ...extra })),
-
-  // Siempre responde 200: { perfil: null } cuando no hay sesion.
-  session: () =>
-    request<{ perfil: Record<string, unknown> | null }>('/api/auth/session'),
-
-  logout: () =>
-    request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+    request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/register', json({ email, password, full_name, ...extra })),
 
   me: () =>
     request<{ perfil: Record<string, unknown> }>('/api/auth/me'),
@@ -163,11 +166,26 @@ export const api = {
   getErp: () =>
     request<{ data: { coleccion: string; id: string; data: unknown }[] }>('/api/erp'),
 
-  upsertErp: (rows: { coleccion: string; id: string; data: unknown }[]) =>
-    request<{ ok: boolean }>('/api/erp/upsert', json({ rows })),
+  /** `keepalive` (cuerpos < 60 KB) deja terminar el guardado aunque se cierre la pestaña. */
+  upsertErp: (rows: { coleccion: string; id: string; data: unknown }[]) => {
+    const opciones = json({ rows });
+    return request<{ ok: boolean }>('/api/erp/upsert', { ...opciones, keepalive: String(opciones.body).length < 60000 });
+  },
 
   deleteErp: (coleccion: string, ids: string[]) =>
     request<{ ok: boolean }>('/api/erp/delete', json({ coleccion, ids })),
+
+  // ── Roles dinámicos (núcleo Cuentas: server/src/cuentas/rutas.js) ──
+  rolesCatalogo: () =>
+    request<{ data: PermisoApi[]; modulos: Record<string, { label: string; icon: string }>; mios: string[] }>('/api/roles/permisos'),
+  roles: () => request<{ data: RolApi[]; organizacion: { id: string; nombre: string; tipo: string } | null }>('/api/roles'),
+  crearRol: (datos: { nombre: string; descripcion?: string; ambito: RolApi['ambito']; rol_padre_id?: string | null; permisos: string[]; plantilla?: boolean }) =>
+    request<{ data: RolApi }>('/api/roles', json(datos)),
+  actualizarRol: (id: string, datos: Partial<Pick<RolApi, 'nombre' | 'descripcion' | 'permisos' | 'activo'>>) =>
+    request<{ data: RolApi }>(`/api/roles/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(datos) }),
+  desactivarRol: (id: string) => request<{ ok: boolean }>(`/api/roles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  auditoriaRol: (id: string) =>
+    request<{ data: { id: number; accion: string; usuario: string | null; creado_en: string; antes: unknown; despues: unknown }[] }>(`/api/roles/${encodeURIComponent(id)}/auditoria`),
 
   // ── Pagos Webpay ──────────────────────────────────────
   crearPagoWebpay: (plan: string, usuario_id: string, email: string) =>

@@ -1,15 +1,18 @@
 import { readFileSync, existsSync } from 'fs';
+import { gzip } from 'zlib';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
-import db, { inicializar } from './db.js';
+import db, { inicializar, modoBD } from './db.js';
 import authRouter, { requireAuth, sanitizarPerfil } from './auth.js';
 import webpayRouter from './webpay.js';
 import vinculacionRouter from './vinculacion.js';
 import erpRouter from './erp.js';
 import membresiaRouter from './membresia.js';
 import adminRouter from './admin.js';
+import rolesRouter from './cuentas/rutas.js';
+import mentoriasRouter from './mentorias/rutas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,65 +34,25 @@ try {
 }
 
 const app = express();
-app.disable('x-powered-by');
-app.set('trust proxy', 1);
+app.use(cors());
 
-/** Origenes propios autorizados para llamar a la API desde el navegador. */
-const ORIGENES_PERMITIDOS = new Set(
-  [
-    process.env.FRONTEND_URL,
-    ...(process.env.CORS_ORIGINS || '').split(','),
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173',
-    'https://pymedu.cl',
-    'https://www.pymedu.cl',
-    'https://pymedu-p52u.vercel.app',
-  ]
-    .map((origen) => (origen || '').trim().replace(/\/$/, ''))
-    .filter(Boolean)
-);
-
-app.use(cors({
-  origin(origin, callback) {
-    // Sin Origin = mismo origen, curl o health check del hosting.
-    if (!origin || ORIGENES_PERMITIDOS.has(origin.replace(/\/$/, ''))) return callback(null, true);
-    return callback(null, false);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400,
-}));
-
-// Cabeceras de seguridad estandar. El SPA usa estilos y un script inline para
-// el tema, ademas de Google Fonts, por eso se permite 'unsafe-inline' y esos hosts.
+// Compresión gzip de respuestas JSON grandes (corrección #1: /api/erp pesaba ~23 MB).
+// Sin dependencias: zlib nativo y asíncrono para no bloquear el proceso.
 app.use((req, res, next) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https:",
-      "connect-src 'self' https:",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; ')
-  );
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  if (process.env.NODE_ENV === 'production') {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  }
+  if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return next();
+  const enviarJson = res.json.bind(res);
+  res.json = (cuerpo) => {
+    const texto = JSON.stringify(cuerpo);
+    if (texto.length < 4096) return enviarJson(cuerpo);
+    gzip(texto, { level: 6 }, (error, comprimido) => {
+      if (error || res.headersSent) return error ? res.type('application/json').send(texto) : undefined;
+      res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' });
+      res.end(comprimido);
+    });
+    return res;
+  };
   next();
 });
-
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
 
@@ -99,9 +62,11 @@ app.use('/api/vinculacion', vinculacionRouter);
 app.use('/api/erp', erpRouter);
 app.use('/api/membresia', membresiaRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/roles', rolesRouter);          // Núcleo: roles dinámicos
+app.use('/api/mentorias', mentoriasRouter);  // App Mentorías
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, servicio: 'PymEdu API', ts: Date.now() });
+  res.json({ ok: true, servicio: 'PymEdu API', entorno: process.env.RAILWAY_ENV || 'local', baseDatos: modoBD(), ts: Date.now() });
 });
 
 app.get('/api/instituciones', async (req, res) => {

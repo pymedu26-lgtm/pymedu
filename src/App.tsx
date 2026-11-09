@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import PublicLayout from './layouts/PublicLayout';
 import ERPLayout from './layouts/ERPLayout';
@@ -7,60 +7,76 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ERPProvider } from './1.-ERP/context/ERPContext';
 import AuthGuard from './components/AuthGuard';
 import RequireRole from './components/RequireRole';
-import RequirePremium from './components/RequirePremium';
+import { rolLabel } from './lib/roles';
 
 import Landing from './pages/Landing';
 import Login from './pages/Login';
-import Register from './pages/Register';
-import ResetPassword from './pages/ResetPassword';
-import Dashboard from './pages/Dashboard';
-import PlaceholderPage from './pages/erp/PlaceholderPage';
-import Suscripcion from './pages/erp/Suscripcion';
-import SuscripcionResultado from './pages/erp/SuscripcionResultado';
-import MiInstitucion from './pages/MiInstitucion';
-import Ventas from './1.-ERP/pages/ERPVentas';
-import Gastos from './1.-ERP/pages/ERPGastos';
-import Inventario from './1.-ERP/pages/ERPInventario';
-import ERPClientes from './pages/erp/ERPClientes';
-import ERPProveedores from './pages/erp/ERPProveedores';
-import ERPCobrar from './pages/erp/ERPCobrar';
-import ERPPagar from './pages/erp/ERPPagar';
-import ERPCaja from './pages/erp/ERPCaja';
-import ERPIVAMensual from './pages/erp/ERPIVAMensual';
-import ERPReportes from './pages/erp/ERPReportes';
-import ERPPromociones from './pages/erp/ERPPromociones';
-import ERPConfiguracion from './pages/erp/ERPConfiguracion';
-import ERPAlertas from './pages/erp/ERPAlertas';
+const Register = lazy(() => import('./pages/Register'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const PlaceholderPage = lazy(() => import('./pages/erp/PlaceholderPage'));
+const Suscripcion = lazy(() => import('./pages/erp/Suscripcion'));
+const SuscripcionResultado = lazy(() => import('./pages/erp/SuscripcionResultado'));
+const MiInstitucion = lazy(() => import('./pages/MiInstitucion'));
+const Ventas = lazy(() => import('./1.-ERP/pages/ERPVentas'));
+const Gastos = lazy(() => import('./1.-ERP/pages/ERPGastos'));
+const Inventario = lazy(() => import('./1.-ERP/pages/ERPInventario'));
+const ERPClientes = lazy(() => import('./pages/erp/ERPClientes'));
+const ERPProveedores = lazy(() => import('./pages/erp/ERPProveedores'));
+const ERPCobrar = lazy(() => import('./pages/erp/ERPCobrar'));
+const ERPPagar = lazy(() => import('./pages/erp/ERPPagar'));
+const ERPCaja = lazy(() => import('./pages/erp/ERPCaja'));
+const ERPIVAMensual = lazy(() => import('./pages/erp/ERPIVAMensual'));
+const ERPReportes = lazy(() => import('./pages/erp/ERPReportes'));
+const ERPPromociones = lazy(() => import('./pages/erp/ERPPromociones'));
+const ERPConfiguracion = lazy(() => import('./pages/erp/ERPConfiguracion'));
+const ERPAlertas = lazy(() => import('./pages/erp/ERPAlertas'));
 
-import SuperAdminDashboard from './modules/admin/pages/SuperAdminDashboard';
-import InstitucionesList from './modules/admin/pages/InstitucionesList';
-import UsuariosGlobales from './modules/admin/pages/UsuariosGlobales';
-import SuperAdminPlanes from './modules/admin/pages/SuperAdminPlanes';
-import SuperAdminRoles from './modules/admin/pages/SuperAdminRoles';
-import SuperAdminConfig from './modules/admin/pages/SuperAdminConfig';
-import SuperAdminAuditoria from './modules/admin/pages/SuperAdminAuditoria';
-import SuperAdminSoporte from './modules/admin/pages/SuperAdminSoporte';
+const SuperAdminDashboard = lazy(() => import('./modules/admin/pages/SuperAdminDashboard'));
+const InstitucionesList = lazy(() => import('./modules/admin/pages/InstitucionesList'));
+const UsuariosGlobales = lazy(() => import('./modules/admin/pages/UsuariosGlobales'));
+const SuperAdminPlanes = lazy(() => import('./modules/admin/pages/SuperAdminPlanes'));
+const SuperAdminRoles = lazy(() => import('./modules/admin/pages/SuperAdminRoles'));
+const SuperAdminConfig = lazy(() => import('./modules/admin/pages/SuperAdminConfig'));
+const SuperAdminAuditoria = lazy(() => import('./modules/admin/pages/SuperAdminAuditoria'));
+const SuperAdminSoporte = lazy(() => import('./modules/admin/pages/SuperAdminSoporte'));
 
-import AdminInstDashboard from './modules/institucion/pages/AdminInstDashboard';
-import InstUsuarios from './modules/institucion/pages/InstUsuarios';
-import InstProgramas from './modules/institucion/pages/InstProgramas';
-import InstComunidad from './modules/institucion/pages/InstComunidad';
-import InstReportes from './modules/institucion/pages/InstReportes';
-import InstConfiguracion from './modules/institucion/pages/InstConfiguracion';
+const AdminInstDashboard = lazy(() => import('./modules/institucion/pages/AdminInstDashboard'));
+const InstUsuarios = lazy(() => import('./modules/institucion/pages/InstUsuarios'));
+const InstProgramas = lazy(() => import('./modules/institucion/pages/InstProgramas'));
+const InstComunidad = lazy(() => import('./modules/institucion/pages/InstComunidad'));
+const InstReportes = lazy(() => import('./modules/institucion/pages/InstReportes'));
+const InstConfiguracion = lazy(() => import('./modules/institucion/pages/InstConfiguracion'));
 
-import CoordDashboard from './modules/programa/pages/CoordDashboard';
-import CoordMentores from './modules/programa/pages/CoordMentores';
-import CoordEmprendedores from './modules/programa/pages/CoordEmprendedores';
+const CoordDashboard = lazy(() => import('./modules/programa/pages/CoordDashboard'));
+const CoordMentores = lazy(() => import('./modules/programa/pages/CoordMentores'));
+const CoordEmprendedores = lazy(() => import('./modules/programa/pages/CoordEmprendedores'));
 
-import MentorDashboard from './modules/mentor/pages/MentorDashboard';
-import MentorAlumnos from './modules/mentor/pages/MentorAlumnos';
-import MentorSeguimiento from './modules/mentor/pages/MentorSeguimiento';
+const MentorDashboard = lazy(() => import('./modules/mentor/pages/MentorDashboard'));
+const MentorAlumnos = lazy(() => import('./modules/mentor/pages/MentorAlumnos'));
+const MentorSeguimiento = lazy(() => import('./modules/mentor/pages/MentorSeguimiento'));
 
-import ERPAcademia from './2.-ACADEMIA/pages/ERPAcademia';
-import ERPCursoDetalle from './2.-ACADEMIA/pages/ERPCursoDetalle';
+const ERPAcademia = lazy(() => import('./2.-ACADEMIA/pages/ERPAcademia'));
+const ERPCursoDetalle = lazy(() => import('./2.-ACADEMIA/pages/ERPCursoDetalle'));
 
-import MercadosPublicos from './3.-MERCADOS PUBLICOS/pages/ERPMercadosPublicos';
-import PortalMunicipal from './3.-MERCADOS PUBLICOS/pages/PortalMunicipal';
+const MercadosPublicos = lazy(() => import('./3.-MERCADOS PUBLICOS/pages/ERPMercadosPublicos'));
+const PortalMunicipal = lazy(() => import('./3.-MERCADOS PUBLICOS/pages/PortalMunicipal'));
+
+// App Mentorías (carga diferida: no pesa en el ERP). Ver src/4.-MENTORIAS/tipos.ts
+const MentoriasLayout = lazy(() => import('./4.-MENTORIAS/layout/MentoriasLayout'));
+const MentoriasInicio = lazy(() => import('./4.-MENTORIAS/pages/MentoriasInicio'));
+const MentoriaDetalle = lazy(() => import('./4.-MENTORIAS/pages/MentoriaDetalle'));
+const MentoriasGestion = lazy(() => import('./4.-MENTORIAS/pages/MentoriasGestion'));
+const MentoriasRevision = lazy(() => import('./4.-MENTORIAS/pages/MentoriasRevision'));
+const MentoriasPanel = lazy(() => import('./4.-MENTORIAS/pages/MentoriasPanel'));
+const GestorRolesLazy = lazy(() => import('./components/GestorRoles'));
+const MentoriasEditor = lazy(() => import('./4.-MENTORIAS/pages/MentoriasEditor'));
+const MentoriasGrupos = lazy(() => import('./4.-MENTORIAS/pages/MentoriasGrupos'));
+const VerificarCertificado = lazy(() => import('./4.-MENTORIAS/pages/VerificarCertificado'));
+
+function Cargando() {
+  return <div className="flex min-h-screen items-center justify-center bg-surface text-on-surface-variant text-sm">Cargando…</div>;
+}
 
 function ERPWrapper() {
   return (
@@ -77,6 +93,7 @@ const roleNavItems: Record<string, { label: string; path: string; icon: string }
     { label: 'Usuarios', path: '/admin/usuarios', icon: 'group' },
     { label: 'Planes', path: '/admin/planes', icon: 'workspace_premium' },
     { label: 'Roles', path: '/admin/roles', icon: 'admin_panel_settings' },
+    { label: 'Mentorías', path: '/mentorias/revision', icon: 'cast_for_education' },
     { label: 'Configuración', path: '/admin/config', icon: 'settings' },
     { label: 'Auditoría', path: '/admin/auditoria', icon: 'fact_check' },
     { label: 'Soporte', path: '/admin/soporte', icon: 'support_agent' },
@@ -87,17 +104,20 @@ const roleNavItems: Record<string, { label: string; path: string; icon: string }
     { label: 'Programas', path: '/institucion/programas', icon: 'school' },
     { label: 'Usuarios', path: '/institucion/usuarios', icon: 'group' },
     { label: 'Reportes', path: '/institucion/reportes', icon: 'analytics' },
+    { label: 'Mentorías', path: '/mentorias', icon: 'cast_for_education' },
     { label: 'Configuración', path: '/institucion/config', icon: 'settings' },
   ],
   coordinador: [
     { label: 'Dashboard', path: '/programa/inicio', icon: 'group_work' },
     { label: 'Mentores', path: '/programa/mentores', icon: 'school' },
     { label: 'Emprendedores', path: '/programa/emprendedores', icon: 'storefront' },
+    { label: 'Mentorías', path: '/mentorias', icon: 'cast_for_education' },
   ],
   mentor: [
     { label: 'Dashboard', path: '/mentor/inicio', icon: 'school' },
     { label: 'Mis Alumnos', path: '/mentor/alumnos', icon: 'groups' },
     { label: 'Seguimiento', path: '/mentor/seguimiento/1', icon: 'assignment' },
+    { label: 'Mentorías', path: '/mentorias', icon: 'cast_for_education' },
   ],
   demo: [
     { label: 'SuperAdmin', path: '/admin/inicio', icon: 'shield' },
@@ -105,116 +125,76 @@ const roleNavItems: Record<string, { label: string; path: string; icon: string }
     { label: 'Coordinador', path: '/programa/inicio', icon: 'group_work' },
     { label: 'Mentor', path: '/mentor/inicio', icon: 'school' },
     { label: 'Emprendedor', path: '/erp/inicio', icon: 'storefront' },
+    { label: 'Mentorías', path: '/mentorias', icon: 'cast_for_education' },
   ],
 };
 
-function RoleNavSidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
+function RoleNavSidebar() {
   const { perfil, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const items = roleNavItems[perfil?.rol ?? ''] ?? [];
   const [collapsed, setCollapsed] = useState(false);
-  const expandido = !collapsed || mobileOpen;
 
   const handleLogout = async () => {
     await signOut();
     navigate('/login', { replace: true });
   };
 
-  useEffect(() => {
-    onClose();
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const cerrarConEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', cerrarConEscape);
-    return () => window.removeEventListener('keydown', cerrarConEscape);
-  }, [mobileOpen, onClose]);
-
-  // Bloquea el desplazamiento del fondo mientras el cajon movil esta abierto.
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const overflowPrevio = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = overflowPrevio; };
-  }, [mobileOpen]);
-
   return (
-    <aside
-      aria-label="Menú de navegación"
-      className={`fixed inset-y-0 left-0 z-[60] flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-transform duration-300 md:sticky md:top-0 md:z-50 md:translate-x-0 md:transition-all ${
-        mobileOpen ? 'translate-x-0' : '-translate-x-full'
-      } ${expandido ? 'w-[85vw] max-w-[280px] md:w-[216px]' : 'w-[64px]'}`}
-    >
+    <aside className={`sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300 ${collapsed ? 'w-[64px]' : 'w-[216px]'}`}>
       <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-3.5 shrink-0">
         <button
-          onClick={() => {
-            if (window.innerWidth < 768) onClose();
-            else setCollapsed(!collapsed);
-          }}
-          aria-label={mobileOpen ? 'Cerrar menú lateral' : 'Alternar menú lateral'}
-          aria-expanded={expandido}
+          onClick={() => setCollapsed(!collapsed)}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20"
         >
-          <span aria-hidden="true" className="material-symbols-outlined text-lg text-white">
-            {expandido ? 'menu_open' : 'menu'}
+          <span className="material-symbols-outlined text-lg text-white">
+            {collapsed ? 'menu' : 'menu_open'}
           </span>
         </button>
-        {expandido && (
-          <div className="min-w-0 flex-1">
+        {!collapsed && (
+          <div className="min-w-0">
             <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-on-primary-container/60">PymEdu</p>
             <h1 className="text-base font-black leading-none tracking-tight text-white capitalize truncate">
-              {perfil?.rol?.replace('_', ' ')}
+              {rolLabel(perfil?.rol ?? '')}
             </h1>
           </div>
         )}
-        <button
-          onClick={onClose}
-          aria-label="Cerrar menú lateral"
-          className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/20 md:hidden"
-        >
-          <span aria-hidden="true" className="material-symbols-outlined text-lg">close</span>
-        </button>
       </div>
 
-      <nav className={`flex-1 py-3 space-y-1.5 ${expandido ? 'px-2.5' : 'px-2'}`}>
+      <nav className={`flex-1 py-3 space-y-1.5 ${collapsed ? 'px-2' : 'px-2.5'}`}>
         {items.map((item) => {
           const active = location.pathname.startsWith(item.path.split('/').slice(0, 3).join('/'));
           return (
             <Link
               key={item.path}
               to={item.path}
-              onClick={onClose}
-              title={!expandido ? item.label : undefined}
-              aria-label={item.label}
-              aria-current={active ? 'page' : undefined}
+              title={collapsed ? item.label : undefined}
               className={`flex items-center gap-2.5 rounded-xl transition-all ${
-                expandido ? 'px-3 py-2.5' : 'justify-center px-0 py-2.5'
+                collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
               } text-[13px] font-bold ${
                 active
                   ? 'bg-white/15 text-white border border-white/20'
                   : 'text-on-primary-container/70 hover:bg-white/10 hover:text-white border border-transparent'
               }`}
             >
-              <span aria-hidden="true" className="material-symbols-outlined text-lg shrink-0">{item.icon}</span>
-              {expandido && <span className="truncate">{item.label}</span>}
+              <span className="material-symbols-outlined text-lg shrink-0">{item.icon}</span>
+              {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      <div className={`border-t border-white/10 py-3 shrink-0 ${expandido ? 'px-2.5' : 'px-2'}`}>
+      <div className={`border-t border-white/10 py-3 shrink-0 ${collapsed ? 'px-2' : 'px-2.5'}`}>
         <button
           onClick={handleLogout}
-          title={!expandido ? 'Cerrar sesión' : undefined}
-          aria-label="Cerrar sesión"
+          title={collapsed ? 'Cerrar sesión' : undefined}
           className={`flex w-full items-center gap-2.5 rounded-xl text-[13px] font-bold text-on-primary-container/60 hover:bg-white/10 hover:text-white transition-all ${
-            expandido ? 'px-3 py-2.5' : 'justify-center px-0 py-2.5'
+            collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
           }`}
         >
-          <span aria-hidden="true" className="material-symbols-outlined text-lg shrink-0">logout</span>
-          {expandido && <span>Cerrar sesión</span>}
+          <span className="material-symbols-outlined text-lg shrink-0">logout</span>
+          {!collapsed && <span>Cerrar sesión</span>}
         </button>
       </div>
     </aside>
@@ -222,31 +202,11 @@ function RoleNavSidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
 }
 
 function RoleProtectedLayout() {
-  const [mobileOpen, setMobileOpen] = useState(false);
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-surface text-on-surface">
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm md:hidden"
-          onClick={() => setMobileOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-      <RoleNavSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
-      <main className="flex min-w-0 flex-1 flex-col">
-        <div className="sticky top-0 z-40 flex items-center gap-3 border-b border-outline-variant/60 bg-surface-container-lowest/95 px-4 py-2 shadow-sm backdrop-blur-md md:hidden">
-          <button
-            onClick={() => setMobileOpen(true)}
-            aria-label="Abrir menú lateral"
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-variant hover:bg-surface-container"
-          >
-            <span aria-hidden="true" className="material-symbols-outlined">menu</span>
-          </button>
-          <span className="text-sm font-bold text-on-surface">Menú</span>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <Outlet />
-        </div>
+    <div className="flex min-h-screen bg-surface text-on-surface">
+      <RoleNavSidebar />
+      <main className="flex-1 overflow-y-auto">
+        <Outlet />
       </main>
     </div>
   );
@@ -257,6 +217,7 @@ export default function App() {
     <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
+        <Suspense fallback={<Cargando />}>
         <Routes>
           {/* ── Public Routes ── */}
         <Route element={<PublicLayout />}>
@@ -266,8 +227,23 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
         </Route>
 
+          {/* ── Verificación pública de certificados de Mentorías (sin sesión) ── */}
+          <Route path="/verificar/:codigo" element={<VerificarCertificado />} />
+
           {/* ── Protected Routes ── */}
           <Route element={<AuthGuard />}>
+
+            {/* ── PymEdu Mentorías: app propia, abierta a todos los roles (cada pantalla filtra por permisos) ── */}
+            <Route element={<Suspense fallback={<Cargando />}><MentoriasLayout /></Suspense>}>
+              <Route path="/mentorias" element={<MentoriasInicio />} />
+              <Route path="/mentorias/curso/:id" element={<MentoriaDetalle />} />
+              <Route path="/mentorias/gestion" element={<MentoriasGestion />} />
+              <Route path="/mentorias/gestion/:id" element={<MentoriasEditor />} />
+              <Route path="/mentorias/grupos" element={<MentoriasGrupos />} />
+              <Route path="/mentorias/revision" element={<MentoriasRevision />} />
+              <Route path="/mentorias/panel" element={<MentoriasPanel />} />
+              <Route path="/mentorias/*" element={<Navigate to="/mentorias" replace />} />
+            </Route>
 
             {/* ── SuperAdmin ── */}
             <Route element={<RequireRole roles={['superadmin']} />}>
@@ -346,17 +322,16 @@ export default function App() {
                   <Route path="/erp/iva-mensual" element={<ERPIVAMensual />} />
                   <Route path="/erp/reportes" element={<ERPReportes />} />
 
-                  <Route path="/erp/remuneraciones" element={<PlaceholderPage title="Remuneraciones" icon="badge" description="Gestion de liquidaciones, contratos y roles de tu equipo. Este modulo se habilita al contratar el complemento RR.HH. y requiere los permisos correspondientes." />} />
-                  <Route path="/erp/equipo" element={<PlaceholderPage title="Equipo" icon="group" description="Miembros de tu equipo, roles y permisos de acceso al ERP. Los usuarios se gestionan desde Administracion de tu institucion." />} />
-                  <Route path="/erp/organigrama" element={<PlaceholderPage title="Organigrama" icon="account_tree" description="Visualizacion jerarquica de tu equipo (jefaturas y reportes directos). Se completara automaticamente con los reportes de la institucion." />} />
-                  <Route path="/erp/documentos" element={<PlaceholderPage title="Documentos Laborales" icon="description" description="Contratos, anexos y plantillas para postulaciones y equipo. Sube y organiza tus documentos desde el modulo de Documentos." />} />
+                  <Route path="/erp/remuneraciones" element={<PlaceholderPage title="Remuneraciones" icon="badge" description="Gestión de liquidaciones, contratos y roles de tu equipo. Este módulo se habilita al contratar el complemento RR.HH. y requiere los permisos correspondientes." />} />
+                  {/* Configuración → Equipo: roles y subroles del negocio (Vendedor → Cajero, Gestor → Bodeguero) */}
+                  <Route path="/erp/equipo" element={<Suspense fallback={<Cargando />}><GestorRolesLazy ambitoInicial="negocio" titulo="Roles de tu equipo" /></Suspense>} />
+                  <Route path="/erp/organigrama" element={<PlaceholderPage title="Organigrama" icon="account_tree" description="Visualización jerárquica de tu equipo (jefaturas y reportes directos). Se completará automáticamente con los reportes de la institución." />} />
+                  <Route path="/erp/documentos" element={<PlaceholderPage title="Documentos Laborales" icon="description" description="Contratos, anexos y plantillas para postulaciones y equipo. Sube y organiza tus documentos desde el módulo de Documentos." />} />
 
-                  <Route element={<RequirePremium />}>
-                    <Route path="/erp/mercados-publicos" element={<MercadosPublicos />} />
-                    <Route path="/erp/portal-municipal" element={<PortalMunicipal />} />
-                  </Route>
+                  <Route path="/erp/mercados-publicos" element={<MercadosPublicos />} />
+                  <Route path="/erp/portal-municipal" element={<PortalMunicipal />} />
 
-                  <Route path="/erp/mentorias" element={<PlaceholderPage title="Mentorias" icon="school" description="Agenda y seguimiento de mentorias con tu mentor asignado. Gestiona sesiones desde el espacio Mentor." />} />
+                  <Route path="/erp/mentorias" element={<Navigate to="/mentorias" replace />} />
                   <Route path="/erp/academia" element={<ERPAcademia />} />
                   <Route path="/erp/academia/:category/:id" element={<ERPCursoDetalle />} />
 
@@ -374,6 +349,7 @@ export default function App() {
           {/* ── Catch-all ── */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
     </ThemeProvider>

@@ -8,79 +8,8 @@ import { registrarVinculacionTrasRegistro } from './vinculacionServicio.js';
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'pymedu-secret-key-change-in-production';
 const JWT_EXPIRA = '24h';
-const COOKIE_SESION = 'pymedu_session';
-const COOKIE_PISTA = 'pymedu_sesion';
-const ES_PRODUCCION = process.env.NODE_ENV === 'production';
-const COOKIE_CRUZADA = process.env.COOKIE_CROSS_SITE === '1';
-
-/** Opciones de la cookie HttpOnly que guarda el JWT de sesion. */
-function opcionesCookie(maxAge = 24 * 60 * 60 * 1000) {
-  return {
-    httpOnly: true,
-    secure: ES_PRODUCCION || COOKIE_CRUZADA,
-    sameSite: COOKIE_CRUZADA ? 'none' : 'lax',
-    path: '/',
-    maxAge,
-  };
-}
-
-function leerCookies(req) {
-  const cabecera = req.headers.cookie;
-  if (!cabecera) return {};
-  return cabecera.split(';').reduce((acc, parte) => {
-    const igual = parte.indexOf('=');
-    if (igual === -1) return acc;
-    const clave = parte.slice(0, igual).trim();
-    const valor = parte.slice(igual + 1).trim();
-    if (clave) acc[clave] = decodeURIComponent(valor);
-    return acc;
-  }, {});
-}
-
-/** Guarda la sesion en cookie HttpOnly y deja una pista no sensible para el cliente. */
-function emitirSesion(res, perfil) {
-  const token = generarToken(perfil);
-  res.cookie(COOKIE_SESION, token, opcionesCookie());
-  res.cookie(COOKIE_PISTA, '1', { ...opcionesCookie(), httpOnly: false });
-  return token;
-}
-
-function limpiarSesion(res) {
-  res.clearCookie(COOKIE_SESION, { ...opcionesCookie(0), maxAge: undefined });
-  res.clearCookie(COOKIE_PISTA, { ...opcionesCookie(0), httpOnly: false, maxAge: undefined });
-}
-
-// Limite simple de intentos de ingreso por cuenta + IP (5 intentos / 15 min).
-const INTENTOS_MAX = 5;
-const VENTANA_INTENTOS_MS = 15 * 60 * 1000;
-const intentosFallidos = new Map();
-
-function claveIntento(req, email) {
-  return `${String(email || '').toLowerCase()}|${req.ip || ''}`;
-}
-
-function bloqueado(clave) {
-  const registro = intentosFallidos.get(clave);
-  if (!registro) return false;
-  if (Date.now() - registro.primero > VENTANA_INTENTOS_MS) {
-    intentosFallidos.delete(clave);
-    return false;
-  }
-  return registro.cantidad >= INTENTOS_MAX;
-}
-
-function registrarFallo(clave) {
-  const registro = intentosFallidos.get(clave);
-  if (!registro || Date.now() - registro.primero > VENTANA_INTENTOS_MS) {
-    intentosFallidos.set(clave, { primero: Date.now(), cantidad: 1 });
-  } else {
-    registro.cantidad += 1;
-  }
-}
-
-function limpiarIntentos(clave) {
-  intentosFallidos.delete(clave);
-}
+/** Largo mínimo de contraseña (corrección #7). */
+export const MIN_CONTRASENA = 8;
 
 function sanitizarPerfil(p) {
   return {
@@ -123,14 +52,12 @@ function generarToken(perfil) {
 }
 
 // Middleware async: valida el JWT firmado por /login contra la tabla perfiles.
-// Acepta la cookie HttpOnly (preferida) y, por compatibilidad, el header Bearer.
 async function requireAuth(req, res, next) {
-  const cookies = leerCookies(req);
   const header = req.headers.authorization;
-  const token = cookies[COOKIE_SESION] || (header && header.startsWith('Bearer ') ? header.slice(7) : null);
-  if (!token) {
+  if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Token requerido' });
   }
+  const token = header.split(' ')[1];
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -159,56 +86,23 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email y contrasena requeridos' });
     }
 
-    const clave = claveIntento(req, email);
-    if (bloqueado(clave)) {
-      return res.status(429).json({ error: 'Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.' });
-    }
-
     const perfil = await db.prepare('SELECT * FROM perfiles WHERE email = ? AND activo = 1').get(email);
     if (!perfil) {
-      registrarFallo(clave);
       return res.status(401).json({ error: 'Credenciales invalidas' });
     }
     if (perfil.acceso_revocado_at) {
       return res.status(403).json({ error: 'Acceso revocado' });
     }
     if (!bcrypt.compareSync(password, perfil.password_hash)) {
-      registrarFallo(clave);
       return res.status(401).json({ error: 'Credenciales invalidas' });
     }
 
-    limpiarIntentos(clave);
-    emitirSesion(res, perfil);
-    res.json({ perfil: sanitizarPerfil(perfil) });
+    const token = generarToken(perfil);
+    res.json({ token, perfil: sanitizarPerfil(perfil) });
   } catch (error) {
     console.error('[auth] Error en login:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
-});
-
-// Devuelve la sesion actual sin generar errores cuando no hay sesion.
-router.get('/session', async (req, res) => {
-  const cookies = leerCookies(req);
-  if (!cookies[COOKIE_SESION]) {
-    return res.json({ perfil: null });
-  }
-  try {
-    const decoded = jwt.verify(cookies[COOKIE_SESION], JWT_SECRET);
-    const perfil = await db.prepare('SELECT * FROM perfiles WHERE id = ? AND activo = 1').get(decoded.id);
-    if (!perfil || perfil.acceso_revocado_at) {
-      limpiarSesion(res);
-      return res.json({ perfil: null });
-    }
-    return res.json({ perfil: sanitizarPerfil(perfil) });
-  } catch {
-    limpiarSesion(res);
-    return res.json({ perfil: null });
-  }
-});
-
-router.post('/logout', (req, res) => {
-  limpiarSesion(res);
-  res.json({ ok: true });
 });
 
 router.post('/register', async (req, res) => {
@@ -217,8 +111,8 @@ router.post('/register', async (req, res) => {
     if (!email || !password || !full_name) {
       return res.status(400).json({ error: 'Email, contrasena y nombre son requeridos' });
     }
-    if (String(password).length < 8) {
-      return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+    if (String(password).length < MIN_CONTRASENA) {
+      return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres` });
     }
 
     const existente = await db.prepare('SELECT id FROM perfiles WHERE email = ?').get(email);
@@ -242,9 +136,9 @@ router.post('/register', async (req, res) => {
     });
 
     const perfil = await db.prepare('SELECT * FROM perfiles WHERE id = ?').get(id);
-    emitirSesion(res, perfil);
+    const token = generarToken(perfil);
 
-    res.status(201).json({ perfil: sanitizarPerfil(perfil) });
+    res.status(201).json({ token, perfil: sanitizarPerfil(perfil) });
   } catch (error) {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'El email ya esta registrado' });
@@ -287,8 +181,8 @@ router.post('/reset-password', async (req, res) => {
     if (!token || !password) {
       return res.status(400).json({ error: 'Token y contraseña requeridos' });
     }
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+    if (password.length < MIN_CONTRASENA) {
+      return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres` });
     }
 
     let decoded;
@@ -351,12 +245,16 @@ router.put('/mi', requireAuth, async (req, res) => {
       parametros.push(body[campo] ? 1 : 0);
     }
 
-    // Cambio de contrasena opcional
+    // Cambio de contraseña opcional: exige la contraseña actual (corrección #7).
     if (body.nueva_contrasena !== undefined || body.confirmar_contrasena !== undefined) {
       const nueva = body.nueva_contrasena ?? '';
       const confirmar = body.confirmar_contrasena ?? '';
-      if (nueva.length < 8) return res.status(400).json({ error: 'La contrasena debe tener al menos 8 caracteres' });
-      if (nueva !== confirmar) return res.status(400).json({ error: 'Las contrasenas no coinciden' });
+      if (!body.contrasena_actual || !bcrypt.compareSync(String(body.contrasena_actual), req.perfil.password_hash)) {
+        return res.status(400).json({ error: 'La contraseña actual no es correcta' });
+      }
+      if (nueva.length < MIN_CONTRASENA) return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres` });
+      if (nueva !== confirmar) return res.status(400).json({ error: 'Las contraseñas no coinciden' });
+      if (nueva === body.contrasena_actual) return res.status(400).json({ error: 'La nueva contraseña debe ser distinta de la actual' });
       asignaciones.push('password_hash = ?');
       parametros.push(bcrypt.hashSync(nueva, 10));
     }

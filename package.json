@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "server": "cd server && npm run dev",
     "postinstall": "npm --prefix server install --no-audit --no-fund",
-    "start": "node server/src/index.js"
+    "start": "node server/src/index.js",
+    "test": "vitest run",
+    "capturas": "node scripts/capturas-responsive.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -28,7 +30,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "playwright": "^1.65.0",
     "tailwindcss": "^4.1.14",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "vitest": "^3.2.4"
   }
 }

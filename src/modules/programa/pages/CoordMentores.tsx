@@ -14,16 +14,16 @@ interface Mentor {
 }
 
 const mentoresIniciales: Mentor[] = [
-  { id: '1', nombre: 'Carlos Ruiz', email: 'carlos@inst.cl', especialidad: 'Finanzas y Formalizacion', emprendedoresAsignados: 4, maxEmprendedores: 6, emprendedores: ['Pedro Martinez', 'Camila Rojas', 'Juan Carlos Vega', 'Maria Lopez'], estado: 'activo', sesionesMes: 8 },
-  { id: '2', nombre: 'Ana Morales', email: 'ana.m@inst.cl', especialidad: 'Marketing Digital', emprendedoresAsignados: 3, maxEmprendedores: 6, emprendedores: ['Roberto Sanchez', 'Maria Lopez', 'Felipe Torres'], estado: 'activo', sesionesMes: 6 },
-  { id: '3', nombre: 'Jorge Pena', email: 'jorge@inst.cl', especialidad: 'Gestion Operacional', emprendedoresAsignados: 2, maxEmprendedores: 6, emprendedores: ['Maria Lopez', 'Camila Rojas'], estado: 'activo', sesionesMes: 4 },
-  { id: '4', nombre: 'Sofia Reyes', email: 'sofia@inst.cl', especialidad: 'E-Commerce', emprendedoresAsignados: 1, maxEmprendedores: 6, emprendedores: ['Juan Carlos Vega'], estado: 'activo', sesionesMes: 2 },
+  { id: '1', nombre: 'Carlos Ruiz', email: 'carlos@inst.cl', especialidad: 'Finanzas y Formalización', emprendedoresAsignados: 4, maxEmprendedores: 6, emprendedores: ['Pedro Martínez', 'Camila Rojas', 'Juan Carlos Vega', 'María López'], estado: 'activo', sesionesMes: 8 },
+  { id: '2', nombre: 'Ana Morales', email: 'ana.m@inst.cl', especialidad: 'Marketing Digital', emprendedoresAsignados: 3, maxEmprendedores: 6, emprendedores: ['Roberto Sánchez', 'María López', 'Felipe Torres'], estado: 'activo', sesionesMes: 6 },
+  { id: '3', nombre: 'Jorge Peña', email: 'jorge@inst.cl', especialidad: 'Gestión Operacional', emprendedoresAsignados: 2, maxEmprendedores: 6, emprendedores: ['María López', 'Camila Rojas'], estado: 'activo', sesionesMes: 4 },
+  { id: '4', nombre: 'Sofía Reyes', email: 'sofia@inst.cl', especialidad: 'E-Commerce', emprendedoresAsignados: 1, maxEmprendedores: 6, emprendedores: ['Juan Carlos Vega'], estado: 'activo', sesionesMes: 2 },
 ];
 
 const cohortes = [
-  { id: 'c1', nombre: 'Emprendimiento Juvenil 2026', emprendedores: 15, mentorAsignados: 3, avance: 68, estado: 'activa' as const, ruta: 'Ruta Basica: Finanzas + Legal' },
-  { id: 'c2', nombre: 'Innovacion Digital', emprendedores: 22, mentorAsignados: 4, avance: 45, estado: 'activa' as const, ruta: 'Ruta Completa: 3 niveles' },
-  { id: 'c3', nombre: 'Sostenibilidad Local', emprendedores: 8, mentorAsignados: 2, avance: 90, estado: 'activa' as const, ruta: 'Ruta Basica: Legal' },
+  { id: 'c1', nombre: 'Emprendimiento Juvenil 2026', emprendedores: 15, mentorAsignados: 3, avance: 68, estado: 'activa' as const, ruta: 'Ruta Básica: Finanzas + Legal' },
+  { id: 'c2', nombre: 'Innovación Digital', emprendedores: 22, mentorAsignados: 4, avance: 45, estado: 'activa' as const, ruta: 'Ruta Completa: 3 niveles' },
+  { id: 'c3', nombre: 'Sostenibilidad Local', emprendedores: 8, mentorAsignados: 2, avance: 90, estado: 'activa' as const, ruta: 'Ruta Básica: Legal' },
 ];
 
 export default function CoordMentores() {
@@ -34,7 +34,7 @@ export default function CoordMentores() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-teal">school</span>
+          <span className="material-symbols-outlined text-3xl text-teal">school</span>
           <h1 className="text-2xl font-extrabold text-on-surface">Gestión de mentores y cohortes</h1>
         </div>
       </div>
@@ -54,7 +54,7 @@ export default function CoordMentores() {
                 : 'text-on-surface-variant hover:bg-primary/5'
             }`}
           >
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">{t.icon}</span>
+            <span className="material-symbols-outlined text-lg">{t.icon}</span>
             {t.label}
           </button>
         ))}
@@ -65,7 +65,7 @@ export default function CoordMentores() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
-              <span aria-hidden="true" className="material-symbols-outlined text-lg">person_add</span>
+              <span className="material-symbols-outlined text-lg">person_add</span>
               Asignar Mentor
             </button>
           </div>
@@ -124,7 +124,7 @@ export default function CoordMentores() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
-              <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
+              <span className="material-symbols-outlined text-lg">add</span>
               Nueva Cohorte
             </button>
           </div>
@@ -157,7 +157,7 @@ export default function CoordMentores() {
                   </div>
                   <div className="bg-surface-container-low rounded-xl p-3 text-center">
                     <p className="text-2xl font-extrabold text-info">3</p>
-                    <p className="text-xs text-on-surface-variant">Módulos activos</p>
+                    <p className="text-xs text-on-surface-variant">Modulos activos</p>
                   </div>
                 </div>
 

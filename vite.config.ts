@@ -31,7 +31,8 @@ function servidorApi(): Plugin {
       console.log(`[api] Iniciando servidor API en http://localhost:${PUERTO_API} ...`);
       proceso = spawn(process.execPath, ['--watch', 'src/index.js'], {
         cwd: path.resolve(__dirname, 'server'),
-        env: process.env,
+        // PORT fijo: si el entorno trae PORT=3000 (el del frontend) la API chocaría con Vite.
+        env: { ...process.env, PORT: String(PUERTO_API) },
         stdio: 'inherit',
       });
 

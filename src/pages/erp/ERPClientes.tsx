@@ -1,11 +1,16 @@
 import { useState, lazy, Suspense, useMemo } from 'react';
+import { useDeferredValue } from 'react';
+import { formatCLP, formatFecha } from '../../lib/fechas';
+import { normalizarNombre, normalizarRut } from '../../1.-ERP/context/ERPContext';
+import Paginacion, { usePaginacion } from '../../components/Paginacion';
 import { Cliente, useERP } from '../../1.-ERP/context/ERPContext';
 import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import CampoMoneda from '../../components/CampoMoneda';
 import { cn } from '@/lib/utils';
 import { Plus, Search, Edit, Trash2, Upload, FileText } from "lucide-react";
 import ModalHistorialCliente from "../../1.-ERP/components/ModalHistorialCliente";
-import { hoyIso, parseFechaLocal } from '@/lib/fecha';
+import TablaResponsiva, { type ColumnaTabla } from '../../components/TablaResponsiva';
+import ModalResponsivo from '../../components/ModalResponsivo';
 
 const ModalCargaMasivaClientes = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaClientes'));
 
@@ -36,7 +41,7 @@ const formatearRUT = (valor: string): string => {
 };
 
 export default function ERPClientes() {
-  const { clientes, addCliente, updateCliente, deleteCliente, getSaldoPendienteVenta, ventas, abonos } = useERP();
+  const { clientes, addCliente, updateCliente, deleteCliente, getSaldoPendienteVenta, ventas, abonos, saldos, fusionarClientesDuplicados } = useERP();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
@@ -47,16 +52,46 @@ export default function ERPClientes() {
   const [nuevo, setNuevo] = useState({ nombre: '', rut: '', telefono: '', email: '', direccion: '', comuna: '', notas: '', limite_credito: '' });
   const [rutError, setRutError] = useState('');
 
-  const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
+  const fmt = (n: number) => formatCLP(Math.abs(n));
 
-  const clientesFiltrados = clientes.filter(c =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (c.rut || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.email.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.telefono.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const busquedaDiferida = useDeferredValue(busqueda);
+  const clientesFiltrados = useMemo(() => {
+    const q = busquedaDiferida.toLowerCase();
+    return q ? clientes.filter(c =>
+      c.nombre.toLowerCase().includes(q) || (c.rut || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) || (c.telefono || '').toLowerCase().includes(q)) : clientes;
+  }, [clientes, busquedaDiferida]);
+  const paginacion = usePaginacion(clientesFiltrados, 25, [busquedaDiferida]);
 
-  const totalDeuda = clientes.reduce((a, c) => a + c.deuda, 0);
+  // Deuda real por cliente desde la fuente única de saldos (corrección #4); c.deuda podía desfasarse.
+  const deudaPorCliente = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const v of ventas) {
+      const saldo = saldos.porVenta.get(v.id) ?? 0;
+      if (saldo <= 0) continue;
+      const clave = v.cliente_id || `nom:${normalizarNombre(v.cliente)}`;
+      mapa.set(clave, (mapa.get(clave) ?? 0) + saldo);
+    }
+    return mapa;
+  }, [ventas, saldos]);
+  const deudaDe = (c: Cliente) => deudaPorCliente.get(c.id) ?? deudaPorCliente.get(`nom:${normalizarNombre(c.nombre)}`) ?? 0;
+  const totalDeuda = saldos.resumen.porCobrar;
+
+  // Clientes repetidos por RUT o nombre (corrección #12).
+  const duplicados = useMemo(() => {
+    const vistos = new Set<string>();
+    let repetidos = 0;
+    for (const c of clientes) {
+      const clave = c.rut ? `rut:${normalizarRut(c.rut)}` : `nom:${normalizarNombre(c.nombre)}`;
+      if (vistos.has(clave)) repetidos++; else vistos.add(clave);
+    }
+    return repetidos;
+  }, [clientes]);
+  const fusionar = () => {
+    if (!window.confirm(`Se unirán ${duplicados} cliente(s) repetidos con su registro principal (mismo RUT o nombre). Las ventas quedarán asociadas al cliente unido. ¿Continuar?`)) return;
+    const n = fusionarClientesDuplicados();
+    window.alert(`${n} cliente(s) fusionados.`);
+  };
 
   const resumenVentas = useMemo(() => {
     const norm = (s: string) => (s || '').trim().toLowerCase();
@@ -83,17 +118,12 @@ export default function ERPClientes() {
     return { cantidad: c.ventas, total: 0, ultima: '' };
   };
 
-  const fechaCorta = (iso: string) => {
-    if (!iso) return '';
-    const d = parseFechaLocal(iso);
-    if (!d) return '';
-    return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' });
-  };
+  const fechaCorta = (iso: string) => (iso ? formatFecha(iso) : '');
 
   const recenciaDe = (iso: string) => {
     if (!iso) return null;
-    const d = parseFechaLocal(iso);
-    if (!d) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
     const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
     const texto = dias <= 0 ? 'Compró hoy' : dias === 1 ? 'Hace 1 día' : dias < 30 ? `Hace ${dias} días` : dias < 60 ? 'Hace 1 mes' : `Hace ${Math.floor(dias / 30)} meses`;
     const clase = dias <= 30 ? 'bg-success/10 text-success' : dias <= 90 ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error';
@@ -196,208 +226,223 @@ export default function ERPClientes() {
         rv.total,
         ticket,
         rv.ultima ? rv.ultima.split('T')[0] : '',
-        c.deuda,
+        deudaDe(c),
         c.limite_credito ?? '',
         c.notas || '',
       ];
     });
-    descargarCSV(`clientes_${hoyIso()}.csv`, headers, rows);
+    descargarCSV(`clientes_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
   };
 
-  return (
-    <div className="p-8 space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+  const chipLimite = (c: Cliente, saldoReal: number) => {
+    if (!c.limite_credito || c.limite_credito <= 0) return null;
+    if (saldoReal >= c.limite_credito) {
+      return <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-error/10 px-2 py-0.5 text-[10px] font-black text-error uppercase tracking-wide">Límite alcanzado</span>;
+    }
+    if (saldoReal >= c.limite_credito * 0.85) {
+      return <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-black text-warning uppercase tracking-wide">Cerca del límite</span>;
+    }
+    return null;
+  };
+  const chipSegmento = (c: Cliente) => {
+    const seg = segmentoDe(resumenDe(c), 0);
+    return (
+      <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide whitespace-nowrap', seg.clase)}>
+        {seg.nombre}
+      </span>
+    );
+  };
+  const textoVentas = (n: number) => `${n} venta${n === 1 ? '' : 's'}`;
+
+  const columnasClientes: ColumnaTabla<Cliente>[] = [
+    {
+      clave: 'cliente', titulo: 'Cliente', celda: c => (
+        <>
+          <p className="font-bold text-on-surface">{c.nombre}</p>
+          {c.rut && <p className="text-xs text-on-surface-variant">{c.rut}</p>}
+        </>
+      ),
+    },
+    {
+      clave: 'contacto', titulo: 'Contacto', celda: c => (
+        <div className="text-on-surface-variant text-xs">
+          <p>{c.email || '—'}</p>
+          <p>{c.telefono || '—'}</p>
+        </div>
+      ),
+    },
+    {
+      clave: 'compras', titulo: 'Compras', celda: c => (
+        <>
+          {chipSegmento(c)}
+          <p className="text-xs text-on-surface-variant mt-1">{textoVentas(resumenDe(c).cantidad)}</p>
+        </>
+      ),
+    },
+    {
+      clave: 'deuda', titulo: 'Deuda pendiente', celda: c => {
+        const saldoReal = deudaDe(c);
+        return <span className={cn('font-extrabold whitespace-nowrap', saldoReal > 0 ? 'text-secondary' : 'text-success')}>{fmt(saldoReal)}</span>;
+      },
+    },
+    {
+      clave: 'limite', titulo: 'Límite de crédito', celda: c => c.limite_credito ? (
         <div>
-          <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span aria-hidden="true" className="material-symbols-outlined text-4xl">groups</span>
+          <p className="text-on-surface-variant whitespace-nowrap">{fmt(c.limite_credito)}</p>
+          {chipLimite(c, deudaDe(c))}
+        </div>
+      ) : '—',
+    },
+  ];
+
+  const botonEncabezado = 'flex min-h-11 grow sm:grow-0 items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full font-bold text-sm transition-all';
+  const claseCampo = 'w-full min-h-11 px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface';
+
+  return (
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-primary flex items-center gap-3">
+            <span className="material-symbols-outlined text-3xl sm:text-4xl">groups</span>
             Clientes
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus clientes y su deuda pendiente.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {duplicados > 0 && (
+            <button onClick={fusionar} title="Une clientes con el mismo RUT o nombre"
+              className={cn(botonEncabezado, 'bg-warning-container text-on-warning-container shadow-sm hover:opacity-90')}>
+              <span className="material-symbols-outlined text-lg">merge</span>
+              Fusionar duplicados ({duplicados.toLocaleString('es-CL')})
+            </button>
+          )}
           <button onClick={() => setShowCargaMasiva(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">upload_file</span>
+            className={cn(botonEncabezado, 'bg-surface-container-lowest text-primary border border-primary/30 shadow-sm hover:bg-primary/5')}>
+            <span className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportarClientesCSV}
-            className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
+            className={cn(botonEncabezado, 'bg-surface-container-lowest text-primary border border-primary/30 shadow-sm hover:bg-primary/5')}>
+            <span className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
           <button onClick={abrirNuevo}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
-            <span aria-hidden="true" className="material-symbols-outlined text-lg">person_add</span>
+            className={cn(botonEncabezado, 'bg-primary text-inverse-on-surface shadow-lg shadow-primary/20 hover:scale-105 transition-transform')}>
+            <span className="material-symbols-outlined text-lg">person_add</span>
             Nuevo Cliente
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20 min-w-0">
           <p className="text-[10px] font-black uppercase tracking-widest text-primary">Total clientes</p>
-          <p className="text-3xl font-black text-primary mt-1">{clientes.length}</p>
+          <p className="text-2xl xl:text-3xl font-black text-primary mt-1 break-words">{clientes.length.toLocaleString('es-CL')}</p>
         </div>
-        <div className="bg-secondary/10 p-5 rounded-2xl border border-secondary/20">
-          <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Deuda total</p>
-          <p className="text-3xl font-black text-secondary mt-1">{fmt(totalDeuda)}</p>
+        <div className="bg-secondary/10 p-5 rounded-2xl border border-secondary/20 min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-widest text-secondary">Por cobrar (saldo a hoy)</p>
+          <p className="text-2xl xl:text-3xl font-black text-secondary mt-1 break-words">{fmt(totalDeuda)}</p>
+          <p className="text-[11px] text-on-surface-variant mt-1">{saldos.resumen.ventasPorCobrar.toLocaleString('es-CL')} ventas sin cobrar</p>
         </div>
-        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20">
-          <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Con saldo pendiente</p>
-          <p className="text-3xl font-black text-on-surface mt-1">
-            {clientes.filter(c => c.deuda > 0).length}
-          </p>
+        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20 min-w-0 sm:col-span-2 lg:col-span-1">
+          <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Clientes con saldo pendiente</p>
+          <p className="text-2xl xl:text-3xl font-black text-on-surface mt-1 break-words">{saldos.resumen.clientesConDeuda.toLocaleString('es-CL')}</p>
         </div>
       </div>
 
       <div className="relative">
-        <span aria-hidden="true" className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
-        <input type="text" placeholder="Buscar por nombre, RUT o correo..." value={busqueda}
+        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
+        <input type="text" enterKeyHint="search" placeholder="Buscar por nombre, RUT o correo..." value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
+          className="w-full min-h-11 pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
       </div>
 
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-container-low border-b border-outline-variant/20">
-              <tr>
-                {['Cliente', 'Contacto', 'Compras', 'Deuda pendiente', 'Límite de crédito', 'Acciones'].map(h => (
-                  <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/10">
-              {clientesFiltrados.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-on-surface-variant">No se encontraron clientes.</td></tr>
-              )}
-              {clientesFiltrados.map(c => {
-                const saldoReal = c.deuda;
-                const rv = resumenDe(c);
-                const seg = segmentoDe(rv, 0);
-                return (
-                  <tr key={c.id} className="hover:bg-surface-container-low/50 transition-colors">
-                    <td className="p-4">
-                      <p className="font-bold text-on-surface">{c.nombre}</p>
-                      {c.rut && <p className="text-xs text-on-surface-variant">{c.rut}</p>}
-                    </td>
-                    <td className="p-4 text-on-surface-variant text-xs">
-                      <p>{c.email || '—'}</p>
-                      <p>{c.telefono || '—'}</p>
-                    </td>
-                    <td className="p-4">
-                      <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide', seg.clase)}>
-                        {seg.nombre}
-                      </span>
-                      <p className="text-xs text-on-surface-variant mt-1">{rv.cantidad} venta{rv.cantidad === 1 ? '' : 's'}</p>
-                    </td>
-                    <td className="p-4">
-                      <span className={cn('font-extrabold', saldoReal > 0 ? 'text-secondary' : 'text-success')}>
-                        {fmt(saldoReal)}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      {c.limite_credito ? (
-                        <div>
-                          <p className="text-on-surface-variant">{fmt(c.limite_credito)}</p>
-                          {c.deuda >= c.limite_credito && c.limite_credito > 0 ? (
-                            <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-error/10 px-2 py-0.5 text-[10px] font-black text-error uppercase tracking-wide">Límite alcanzado</span>
-                          ) : c.deuda >= c.limite_credito * 0.85 && c.limite_credito > 0 ? (
-                            <span className="inline-flex mt-1 items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-black text-warning uppercase tracking-wide">Cerca del límite</span>
-                          ) : null}
-                        </div>
-                      ) : '—'}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => abrirEditar(c)}
-                          aria-label={`Editar cliente ${c.nombre}`}
-                          className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
-                          title="Editar">
-                          <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
-                        </button>
-                        <button
-                          onClick={() => setHistorialCliente(c)}
-                          aria-label={`Ver historial de ${c.nombre}`}
-                          className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
-                          title="Historial de pagos/deudas">
-                          <span aria-hidden="true" className="material-symbols-outlined text-base">history</span>
-                        </button>
-                        <button
-                          onClick={() => { setItemToDelete(c.id); setDeleteModalOpen(true); }}
-                          aria-label={`Eliminar cliente ${c.nombre}`}
-                          className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
-                          title="Eliminar">
-                          <span aria-hidden="true" className="material-symbols-outlined text-base">delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {/* Sin overflow-hidden bajo md: el menú ⋯ de la última tarjeta no debe quedar recortado. */}
+      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm md:overflow-hidden">
+        <TablaResponsiva
+          filas={paginacion.visibles}
+          clave={c => c.id}
+          columnas={columnasClientes}
+          tituloTarjeta={c => c.nombre}
+          subtituloTarjeta={c => [c.rut, textoVentas(resumenDe(c).cantidad)].filter(Boolean).join(' · ')}
+          insigniaTarjeta={chipSegmento}
+          datosTarjeta={c => {
+            const saldoReal = deudaDe(c);
+            return [
+              { etiqueta: 'Deuda pendiente', valor: <span className={saldoReal > 0 ? 'text-secondary' : 'text-success'}>{fmt(saldoReal)}</span> },
+              { etiqueta: 'Límite de crédito', valor: c.limite_credito ? <>{fmt(c.limite_credito)}{chipLimite(c, saldoReal) && <span className="block">{chipLimite(c, saldoReal)}</span>}</> : '—' },
+              { etiqueta: 'Teléfono', valor: c.telefono || '—' },
+              { etiqueta: 'Email', valor: <span className="break-all">{c.email || '—'}</span> },
+            ];
+          }}
+          acciones={c => [
+            { etiqueta: 'Editar', icono: 'edit', onClick: () => abrirEditar(c) },
+            { etiqueta: 'Historial de pagos/deudas', icono: 'history', onClick: () => setHistorialCliente(c) },
+            { etiqueta: 'Eliminar', icono: 'delete', peligro: true, onClick: () => { setItemToDelete(c.id); setDeleteModalOpen(true); } },
+          ]}
+          vacio={<p className="p-8 text-center text-on-surface-variant">No se encontraron clientes.</p>}
+        />
+        <Paginacion {...paginacion} />
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-primary">{editandoId ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
-              <button onClick={cerrarModal} aria-label="Cerrar formulario de cliente" className="text-on-surface-variant hover:text-on-surface">
-                <span aria-hidden="true" className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto">
-              {[
-                { key: 'nombre' as const, label: 'Nombre / Razón social' },
-                { key: 'rut' as const, label: 'RUT (opcional)' },
-                { key: 'telefono' as const, label: 'Teléfono' },
-                { key: 'email' as const, label: 'Email' },
-                { key: 'direccion' as const, label: 'Dirección (opcional)' },
-                { key: 'comuna' as const, label: 'Comuna (opcional)' },
-                { key: 'notas' as const, label: 'Notas (opcional)' },
-                { key: 'limite_credito' as const, label: 'Límite de crédito (opcional)' },
-              ].map(f => (
-                <div key={f.key} className={f.key === 'notas' ? 'md:col-span-2' : ''}>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">{f.label}</label>
-                  {f.key === 'limite_credito' ? (
-                    <CampoMoneda
-                      valor={nuevo.limite_credito}
-                      onChange={monto => setNuevo({ ...nuevo, limite_credito: monto ? String(monto) : '' })}
-                      placeholder="$0"
-                      className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={nuevo[f.key]}
-                      onChange={e => {
-                        const valor = f.key === 'rut' ? formatearRUT(e.target.value) : e.target.value;
-                        setNuevo({ ...nuevo, [f.key]: valor });
-                        if (f.key === 'rut' && rutError) setRutError('');
-                      }}
-                      className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
-                    />
-                  )}
-                </div>
-              ))}
-              {rutError && (
-                <p className="md:col-span-2 flex items-center gap-1.5 text-xs font-bold text-error">
-                  <span aria-hidden="true" className="material-symbols-outlined text-sm">error</span> {rutError}
-                </p>
-              )}
-            </div>
-            <div className="px-6 pb-6 flex gap-3 shrink-0">
-              <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50">
+        <ModalResponsivo
+          titulo={editandoId ? 'Editar Cliente' : 'Nuevo Cliente'}
+          onCerrar={cerrarModal}
+          ancho="sm:max-w-5xl"
+          pie={
+            <>
+              <button type="button" onClick={cerrarModal} className="flex-1 min-h-11 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+              <button type="button" onClick={guardar} disabled={!nuevo.nombre.trim()} className="flex-1 min-h-11 py-3 rounded-2xl bg-primary text-inverse-on-surface font-bold shadow-lg shadow-primary/20 disabled:opacity-50">
                 {editandoId ? 'Guardar Cambios' : 'Guardar Cliente'}
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              { key: 'nombre' as const, label: 'Nombre / Razón social', tipo: 'text', modo: undefined, autocompletar: 'organization' },
+              { key: 'rut' as const, label: 'RUT (opcional)', tipo: 'text', modo: undefined, autocompletar: 'off' },
+              { key: 'telefono' as const, label: 'Teléfono', tipo: 'tel', modo: 'tel' as const, autocompletar: 'tel' },
+              { key: 'email' as const, label: 'Email', tipo: 'email', modo: 'email' as const, autocompletar: 'email' },
+              { key: 'direccion' as const, label: 'Dirección (opcional)', tipo: 'text', modo: undefined, autocompletar: 'street-address' },
+              { key: 'comuna' as const, label: 'Comuna (opcional)', tipo: 'text', modo: undefined, autocompletar: 'address-level2' },
+              { key: 'notas' as const, label: 'Notas (opcional)', tipo: 'text', modo: undefined, autocompletar: 'off' },
+              { key: 'limite_credito' as const, label: 'Límite de crédito (opcional)', tipo: 'text', modo: undefined, autocompletar: 'off' },
+            ].map(f => (
+              <div key={f.key} className={f.key === 'notas' ? 'md:col-span-2' : ''}>
+                <label htmlFor={f.key === 'limite_credito' ? undefined : `cliente-${f.key}`} className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">{f.label}</label>
+                {f.key === 'limite_credito' ? (
+                  <CampoMoneda
+                    valor={nuevo.limite_credito}
+                    onChange={monto => setNuevo({ ...nuevo, limite_credito: monto ? String(monto) : '' })}
+                    placeholder="$0"
+                    className="min-h-11 px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-base sm:text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface"
+                  />
+                ) : (
+                  <input
+                    id={`cliente-${f.key}`}
+                    type={f.tipo}
+                    inputMode={f.modo}
+                    autoComplete={f.autocompletar}
+                    value={nuevo[f.key]}
+                    onChange={e => {
+                      const valor = f.key === 'rut' ? formatearRUT(e.target.value) : e.target.value;
+                      setNuevo({ ...nuevo, [f.key]: valor });
+                      if (f.key === 'rut' && rutError) setRutError('');
+                    }}
+                    className={claseCampo}
+                  />
+                )}
+              </div>
+            ))}
+            {rutError && (
+              <p className="md:col-span-2 flex items-center gap-1.5 text-xs font-bold text-error">
+                <span className="material-symbols-outlined text-sm">error</span> {rutError}
+              </p>
+            )}
           </div>
-        </div>
+        </ModalResponsivo>
       )}
 
       {showCargaMasiva && (

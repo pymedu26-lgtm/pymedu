@@ -1,51 +1,15 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
-import { PLANES as PLANES_BASE, formatearPrecio, type PlanId } from '../../lib/planes';
+import { formatCLP } from '../../lib/fechas';
+import { PLANES, periodoPlan, planPorId, WEBPAY_MODO_PRUEBA, type PlanId } from '../../lib/planes';
 
-interface PlanUI {
-  id: PlanId;
-  nombre: string;
-  precio: number;
-  destacado?: boolean;
-  icon: string;
-  color: string;
-  bg: string;
-  iconBg: string;
-  border: string;
-  features: string[];
-}
-
-const ESTILOS_PLAN: Record<PlanId, Omit<PlanUI, 'id' | 'nombre' | 'precio' | 'destacado' | 'features'>> = {
-  free: {
-    icon: 'storefront',
-    color: 'text-on-surface',
-    bg: 'bg-surface-container-low',
-    iconBg: 'bg-primary/15 text-primary',
-    border: 'border-outline-variant/30',
-  },
-  pro: {
-    icon: 'trending_up',
-    color: 'text-success',
-    bg: 'bg-success/5',
-    iconBg: 'bg-success/15 text-success',
-    border: 'border-success/30',
-  },
-  premium: {
-    icon: 'workspace_premium',
-    color: 'text-warning',
-    bg: 'bg-warning/5',
-    iconBg: 'bg-warning/15 text-warning',
-    border: 'border-warning/30',
-  },
+// Estilo visual por plan; los datos (nombre, precio, features) vienen de lib/planes.ts.
+const ESTILO: Record<PlanId, { color: string; bg: string; iconBg: string; border: string }> = {
+  free: { color: 'text-on-surface-variant', bg: 'bg-surface-container-low', iconBg: 'bg-primary/15 text-primary', border: 'border-outline-variant/30' },
+  pro: { color: 'text-success', bg: 'bg-success/5', iconBg: 'bg-success/15 text-success', border: 'border-success/30' },
+  premium: { color: 'text-warning', bg: 'bg-warning/5', iconBg: 'bg-warning/15 text-warning', border: 'border-warning/30' },
 };
-
-const PLANES: PlanUI[] = PLANES_BASE.map((plan) => ({
-  ...plan,
-  ...ESTILOS_PLAN[plan.id],
-}));
-
-const fmt = formatearPrecio;
 
 export default function Suscripcion() {
   const { perfil, user } = useAuth();
@@ -91,15 +55,21 @@ export default function Suscripcion() {
       {/* Header */}
       <div className="text-center mb-10">
         <div className="w-14 h-14 rounded-2xl bg-warning/15 flex items-center justify-center mx-auto text-warning mb-4">
-          <span aria-hidden="true" className="material-symbols-outlined text-3xl">workspace_premium</span>
+          <span className="material-symbols-outlined text-3xl">workspace_premium</span>
         </div>
         <h2 className="text-3xl font-extrabold text-on-surface tracking-tight">Elige tu plan</h2>
         <p className="text-on-surface-variant mt-2 font-medium max-w-xl mx-auto">
           Desbloquea todo el poder de PymEdu. Paga con tarjeta de débito o crédito a través de Webpay.
         </p>
         <span className="inline-block mt-4 text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 px-4 py-1.5 rounded-full">
-          Tu plan actual: {PLANES.find(p => p.id === nivelActual)?.nombre ?? nivelActual}
+          Tu plan actual: {planPorId(nivelActual).nombre}
         </span>
+        {WEBPAY_MODO_PRUEBA && (
+          <p className="mt-3 mx-auto w-fit flex items-center gap-2 text-xs font-bold text-warning bg-warning/10 border border-warning/30 px-4 py-2 rounded-2xl">
+            <span className="material-symbols-outlined text-base">science</span>
+            Modo prueba: los pagos con Webpay no generan cobros reales.
+          </p>
+        )}
       </div>
 
       {error && (
@@ -112,29 +82,35 @@ export default function Suscripcion() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {PLANES.map(plan => {
           const esActual = plan.id === nivelActual;
+          const estilo = ESTILO[plan.id];
           return (
             <div key={plan.id}
-              className={`relative flex flex-col p-7 rounded-3xl shadow-sm border ${plan.bg} ${plan.border} ${plan.destacado ? 'shadow-lg scale-[1.02]' : ''}`}>
+              className={`relative flex flex-col p-7 rounded-3xl shadow-sm border ${estilo.bg} ${estilo.border} ${plan.destacado ? 'shadow-lg scale-[1.02]' : ''}`}>
               {plan.destacado && (
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-extrabold uppercase tracking-widest bg-success text-inverse-on-surface px-3 py-1 rounded-full">
                   Más popular
                 </span>
               )}
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center mb-4 ${plan.iconBg}`}>
-                <span aria-hidden="true" className="material-symbols-outlined text-2xl">{plan.icon}</span>
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center mb-4 ${estilo.iconBg}`}>
+                <span className="material-symbols-outlined text-2xl">{plan.icon}</span>
               </div>
               <h3 className="text-lg font-extrabold text-on-surface">{plan.nombre}</h3>
               <p className="mt-2">
                 <span className="text-3xl font-extrabold text-on-surface">
-                  {plan.precio === 0 ? 'Gratis' : fmt(plan.precio)}
+                  {plan.precio === 0 ? 'Gratis' : formatCLP(plan.precio)}
                 </span>
-                {plan.precio > 0 && <span className="text-sm text-on-surface-variant font-medium"> /mes</span>}
+                {plan.precio > 0 && <span className="text-sm text-on-surface-variant font-medium"> {periodoPlan(plan)}</span>}
               </p>
               <ul className="flex-1 mt-5 space-y-2.5">
                 {plan.features.map(f => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-on-surface-variant font-medium">
-                    <span aria-hidden="true" className={`material-symbols-outlined text-base mt-0.5 ${plan.id === 'free' ? 'text-on-surface-variant' : plan.color}`}>check_circle</span>
-                    {f}
+                  <li key={f.texto} className={`flex items-start gap-2 text-sm font-medium ${f.estado === 'proximamente' ? 'text-on-surface-variant/60' : 'text-on-surface-variant'}`}>
+                    <span className={`material-symbols-outlined text-base mt-0.5 ${f.estado === 'proximamente' ? 'text-on-surface-variant/50' : estilo.color}`}>
+                      {f.estado === 'proximamente' ? 'schedule' : 'check_circle'}
+                    </span>
+                    <span>
+                      {f.texto}
+                      {f.estado === 'proximamente' && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide text-warning">Próximamente</span>}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -155,25 +131,30 @@ export default function Suscripcion() {
                     ? 'Incluido en tu cuenta'
                     : pagando === plan.id
                       ? 'Conectando con Webpay…'
-                      : `Suscribirme · ${fmt(plan.precio)}`}
+                      : `Suscribirme · ${formatCLP(plan.precio)}`}
               </button>
             </div>
           );
         })}
       </div>
 
-      {/* Info ambiente integración */}
+      {/* Info de pago: nunca mostrar datos de tarjetas de prueba fuera de desarrollo (corrección #6) */}
       <div className="max-w-3xl mx-auto bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-6">
         <h3 className="text-sm font-bold text-on-surface flex items-center gap-2 mb-3">
-          <span aria-hidden="true" className="material-symbols-outlined text-lg text-info">info</span>
+          <span className="material-symbols-outlined text-lg text-info">info</span>
           Pago seguro con Webpay Plus
+          {WEBPAY_MODO_PRUEBA && (
+            <span className="ml-auto text-[10px] font-extrabold uppercase tracking-widest bg-warning/15 text-warning px-2.5 py-1 rounded-full">Modo prueba</span>
+          )}
         </h3>
         <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
           Al elegir un plan serás redirigido a Webpay para pagar con tarjeta de débito o crédito chilena.
-          Actualmente operamos en <strong>ambiente de integración</strong>: puedes probar con la tarjeta
-          <strong> 4051 8856 0044 6623</strong>, CVV <strong>123</strong>, cualquier fecha futura,
-          RUT <strong>11.111.111-1</strong> y clave <strong>123</strong> (acepta el pago en el formulario de Transbank).
         </p>
+        {WEBPAY_MODO_PRUEBA && import.meta.env.DEV && (
+          <p className="mt-2 text-[11px] text-on-surface-variant/80 font-mono">
+            [Solo desarrollo] Tarjeta de prueba Transbank: 4051 8856 0044 6623 · CVV 123 · RUT 11.111.111-1 · clave 123
+          </p>
+        )}
       </div>
     </div>
   );

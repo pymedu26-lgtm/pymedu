@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn, formatFecha } from '@/lib/utils';
+import { rangoMes, rangoUltimosMeses } from '@/lib/fechas';
+import { nombreRango } from '@/lib/series';
 
 export interface OpcionDesplegable {
   valor: string;
@@ -14,10 +16,26 @@ export interface OpcionDesplegable {
  * Desde/Hasta del panel de filtros, que lo activan al cambiar una fecha.
  */
 export const OPCIONES_PERIODO: OpcionDesplegable[] = [
-  { valor: 'este_mes', etiqueta: 'Este Mes', icono: 'calendar_today' },
-  { valor: 'mes_anterior', etiqueta: 'Mes Anterior', icono: 'history' },
+  { valor: 'este_mes', etiqueta: 'Este mes', icono: 'calendar_today' },
+  { valor: 'mes_anterior', etiqueta: 'Mes anterior', icono: 'history' },
+  { valor: 'ultimos_3_meses', etiqueta: 'Últimos 3 meses', icono: 'date_range' },
+  { valor: 'este_anio', etiqueta: 'Este año', icono: 'calendar_month' },
   { valor: 'personalizado', etiqueta: 'Personalizado', icono: 'tune' }
 ];
+
+/**
+ * Rango 'YYYY-MM-DD' (fechas locales) de un periodo predefinido; null para
+ * 'personalizado', cuyo rango lo escribe el usuario.
+ */
+export function rangoPeriodo(periodo: string, base = new Date()): { inicio: string; fin: string } | null {
+  switch (periodo) {
+    case 'este_mes': return rangoMes(0, base);
+    case 'mes_anterior': return rangoMes(-1, base);
+    case 'ultimos_3_meses': return rangoUltimosMeses(3, base);
+    case 'este_anio': return { inicio: `${base.getFullYear()}-01-01`, fin: `${base.getFullYear()}-12-31` };
+    default: return null;
+  }
+}
 
 /**
  * Texto que acompaña al periodo elegido: el rango que se esta viendo y, cuando
@@ -29,7 +47,7 @@ export function etiquetaRangoPeriodo(
   fin: string,
   rango: { min: string; max: string } | null
 ): string {
-  if (!personalizado) return 'En el periodo seleccionado';
+  if (!personalizado) return inicio && fin ? nombreRango({ inicio, fin }) : 'En el periodo seleccionado';
 
   const tope = rango ? `máx. ${formatFecha(rango.min)} → ${formatFecha(rango.max)}` : 'sin registros';
   if (!inicio && !fin) return `ingresa el rango · ${tope}`;

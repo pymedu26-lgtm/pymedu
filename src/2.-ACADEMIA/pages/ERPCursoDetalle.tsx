@@ -10,6 +10,7 @@ export default function ERPCursoDetalle() {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [etiqueta, setEtiqueta] = useState('');
 
   useEffect(() => {
     async function loadCourse() {
@@ -22,21 +23,22 @@ export default function ERPCursoDetalle() {
         const course = [...manifest.gratis, ...manifest.suscripcion].find(c => c.id === id);
 
         if (!course) {
-          throw new Error('Curso no encontrado');
+          throw new Error('Lección no encontrada');
         }
 
         const loader = Object.entries(htmlCourses).find(([path]) =>
           path.endsWith(`/${course.file}`)
         )?.[1];
         if (!loader) {
-          throw new Error('Archivo de curso no encontrado');
+          throw new Error('Archivo de la lección no encontrado');
         }
 
+        setEtiqueta(`Módulo ${course.type === 'Legal' ? 'Legal' : 'Financiero'} · Lección ${course.level}.${course.lesson}`);
         const rawHtml = await loader() as string;
         setContent(rawHtml);
       } catch (err) {
         console.error(err);
-        setError('No se pudo cargar el contenido del curso.');
+        setError('No se pudo cargar el contenido de la lección.');
       } finally {
         setLoading(false);
       }
@@ -49,7 +51,7 @@ export default function ERPCursoDetalle() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
-        <p className="text-on-surface-variant font-bold animate-pulse uppercase tracking-widest text-xs">Cargando leccion...</p>
+        <p className="text-on-surface-variant font-bold animate-pulse uppercase tracking-widest text-xs">Cargando lección…</p>
       </div>
     );
   }
@@ -60,8 +62,8 @@ export default function ERPCursoDetalle() {
         <div className="w-20 h-20 bg-error-container text-error rounded-3xl flex items-center justify-center mx-auto mb-6">
           <span aria-hidden="true" className="material-symbols-outlined text-4xl">error</span>
         </div>
-        <h2 className="text-2xl font-black text-on-surface mb-2">Ups! Algo salio mal</h2>
-        <p className="text-on-surface-variant mb-8">{error || 'El curso solicitado no esta disponible.'}</p>
+        <h2 className="text-2xl font-black text-on-surface mb-2">¡Ups! Algo salió mal</h2>
+        <p className="text-on-surface-variant mb-8">{error || 'La lección solicitada no está disponible.'}</p>
         <button
           onClick={() => navigate('/erp/academia')}
           className="px-8 py-3 bg-inverse-surface text-inverse-on-surface rounded-2xl font-bold hover:bg-inverse-surface/90 transition-colors"
@@ -89,7 +91,7 @@ export default function ERPCursoDetalle() {
         </button>
         <div className="flex items-center gap-4">
           <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">
-            Progreso guardado
+            {etiqueta}
           </span>
         </div>
       </div>

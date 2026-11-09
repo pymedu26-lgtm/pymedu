@@ -11,6 +11,7 @@ router.use(requireAuth);
 const ROLES_CREABLES = [
   'admin_institucional', 'coordinador', 'mentor', 'emprendedor', 'dueño',
   'vendedor', 'gestor', 'encargado_rrhh', 'empleado', 'contador_externo',
+  'admin_proveedor', 'instructor', 'curador',
 ];
 
 function flagsPorMembresia(nivel) {

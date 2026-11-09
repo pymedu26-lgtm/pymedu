@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useERP } from '../../1.-ERP/context/ERPContext';
+import { CATEGORIAS, CONFIG_ALERTAS_DEFECTO } from '../../1.-ERP/services/alertas';
 import { api } from '../../lib/api';
-import { PLAN_PRO, formatearPrecio, planPorId } from '../../lib/planes';
 import { cn } from '../../lib/utils';
+import { formatCLP, formatFecha } from '../../lib/fechas';
+import { PLANES, planPorId, WEBPAY_MODO_PRUEBA } from '../../lib/planes';
 
-type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion';
+type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion' | 'inventario' | 'alertas';
 
 const RUBROS = [
   'Alimentación y Bebidas', 'Comercio Minorista', 'Servicios Profesionales',
@@ -27,17 +29,28 @@ const SEGMENTOS = [
   { valor: 'C', label: 'Perfil C — Cadena (21 a 100 empleados)' },
 ] as const;
 
+const MODO_SII: Record<string, string> = {
+  sandbox: 'Prueba (sin envío al SII)',
+  manual_controlled: 'Manual controlado',
+  api_integrated: 'Integrado por API',
+};
+
 const TABS: { id: Tab; icono: string; label: string }[] = [
   { id: 'negocio', icono: 'storefront', label: 'Mi Negocio' },
   { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta' },
   { id: 'equipo', icono: 'group', label: 'Equipo' },
+  { id: 'inventario', icono: 'inventory_2', label: 'Inventario' },
+  { id: 'alertas', icono: 'notifications', label: 'Alertas' },
   { id: 'integraciones', icono: 'cloud_sync', label: 'Integraciones' },
   { id: 'facturacion', icono: 'credit_card', label: 'Suscripción' },
 ];
 
 export default function ERPConfiguracion() {
   const { perfil, actualizarPerfil, puedeHacer } = useAuth();
-  const { configuracionCumplimiento, updatePpmTasa, user } = useERP();
+  const {
+    configuracionCumplimiento, updatePpmTasa, metodoCosteo, setMetodoCosteo, politicaEnvaseAbierto, permitirMezclarEnvases, setPoliticaInventario,
+    plantillasSubcategoria, actualizarPlantilla, eliminarPlantilla, margenObjetivo, setMargenObjetivo, configAlertas, setConfigAlertas,
+  } = useERP();
   const [tab, setTab] = useState<Tab>('negocio');
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
@@ -106,6 +119,7 @@ export default function ERPConfiguracion() {
   // ══ Mi Cuenta ═════════════════════════════════════
   const [formCuenta, setFormCuenta] = useState({
     nombre_completo: perfil?.nombre_completo ?? '',
+    contrasena_actual: '',
     nueva_contrasena: '',
     confirmar_contrasena: '',
     notif_email: !!(perfil?.notif_email ?? true),
@@ -129,22 +143,22 @@ export default function ERPConfiguracion() {
       notif_email: formCuenta.notif_email,
       notif_push: formCuenta.notif_push,
     };
+    // Cambio de contraseña: el servidor exige la actual, mínimo 8 y distinta de la actual (corrección #7).
     if (formCuenta.nueva_contrasena || formCuenta.confirmar_contrasena) {
-      if (formCuenta.nueva_contrasena.length < 8) {
-        notificar('error', 'La contraseña debe tener al menos 8 caracteres');
-        return;
-      }
-      if (formCuenta.nueva_contrasena !== formCuenta.confirmar_contrasena) {
-        notificar('error', 'Las contraseñas no coinciden');
-        return;
-      }
+      const error = !formCuenta.contrasena_actual ? 'Ingresa tu contraseña actual para cambiarla'
+        : formCuenta.nueva_contrasena.length < 8 ? 'La nueva contraseña debe tener al menos 8 caracteres'
+        : formCuenta.nueva_contrasena !== formCuenta.confirmar_contrasena ? 'Las contraseñas no coinciden'
+        : formCuenta.nueva_contrasena === formCuenta.contrasena_actual ? 'La nueva contraseña debe ser distinta de la actual'
+        : '';
+      if (error) { notificar('error', error); return; }
+      payload.contrasena_actual = formCuenta.contrasena_actual;
       payload.nueva_contrasena = formCuenta.nueva_contrasena;
       payload.confirmar_contrasena = formCuenta.confirmar_contrasena;
     }
     setGuardando(true);
     try {
       await actualizarPerfil(payload);
-      setFormCuenta(p => ({ ...p, nueva_contrasena: '', confirmar_contrasena: '' }));
+      setFormCuenta(p => ({ ...p, contrasena_actual: '', nueva_contrasena: '', confirmar_contrasena: '' }));
       notificar('ok', 'Cuenta actualizada correctamente');
     } catch (e) {
       notificar('error', e instanceof Error ? e.message : 'No se pudo guardar');
@@ -167,6 +181,7 @@ export default function ERPConfiguracion() {
   }, [puedeGestionarEquipo, perfil?.institucion_id]);
 
   // ══ Integraciones / SII ═══════════════════════════
+  const siiModoPrueba = configuracionCumplimiento.modoIntegracion === 'sandbox' || configuracionCumplimiento.ambiente !== 'produccion';
   const [ppm, setPpm] = useState(String(configuracionCumplimiento.ppmTasa));
   const [ppmGuardado, setPpmGuardado] = useState(false);
 
@@ -190,7 +205,7 @@ export default function ERPConfiguracion() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span aria-hidden="true" className="material-symbols-outlined text-4xl">settings</span>
+            <span className="material-symbols-outlined text-4xl">settings</span>
             Configuración
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Perfil de tu negocio, cuenta, equipo y preferencias del ERP.</p>
@@ -198,19 +213,19 @@ export default function ERPConfiguracion() {
         {mensaje && (
           <div className={cn('flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm',
             mensaje.tipo === 'ok' ? 'bg-success/15 text-success' : 'bg-error/15 text-error')}>
-            <span aria-hidden="true" className="material-symbols-outlined">{mensaje.tipo === 'ok' ? 'check_circle' : 'error'}</span>
+            <span className="material-symbols-outlined">{mensaje.tipo === 'ok' ? 'check_circle' : 'error'}</span>
             {mensaje.texto}
           </div>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-surface-container-lowest dark-card p-1 rounded-2xl w-fit max-w-full overflow-x-auto">
+      <div className="flex gap-1 bg-surface-container-lowest dark-card p-1 rounded-2xl w-fit max-w-full overflow-x-auto hide-scrollbar">
         {TABS.map(({ id, icono, label }) => (
           <button key={id} onClick={() => setTab(id)}
             className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap',
               tab === id ? 'bg-primary text-inverse-on-surface shadow-md' : 'text-on-surface-variant hover:text-on-surface')}>
-            <span aria-hidden="true" className="material-symbols-outlined text-base">{icono}</span>
+            <span className="material-symbols-outlined text-base">{icono}</span>
             {label}
           </button>
         ))}
@@ -220,7 +235,7 @@ export default function ERPConfiguracion() {
       {tab === 'negocio' && (
         <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8 space-y-6">
           <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
-            <span aria-hidden="true" className="material-symbols-outlined text-primary">storefront</span>
+            <span className="material-symbols-outlined text-primary">storefront</span>
             Datos del Negocio
           </h3>
 
@@ -279,7 +294,7 @@ export default function ERPConfiguracion() {
           {/* Logo */}
           <div className="p-5 rounded-2xl bg-surface-container dark-card border border-outline-variant/20">
             <h4 className="text-sm font-bold text-on-surface mb-3 flex items-center gap-2">
-              <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">image</span>
+              <span className="material-symbols-outlined text-on-surface-variant">image</span>
               Logo del negocio
             </h4>
             <div className="flex items-center gap-5">
@@ -296,7 +311,7 @@ export default function ERPConfiguracion() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="flex items-center gap-2 px-4 py-2.5 border-2 border-outline-variant rounded-xl text-sm font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
-                  <span aria-hidden="true" className="material-symbols-outlined text-base">upload</span> {formNegocio.logo_url ? 'Cambiar logo' : 'Subir logo'}
+                  <span className="material-symbols-outlined text-base">upload</span> {formNegocio.logo_url ? 'Cambiar logo' : 'Subir logo'}
                 </button>
                 {formNegocio.logo_url && (
                   <button onClick={() => setFormNegocio(p => ({ ...p, logo_url: '' }))}
@@ -311,7 +326,7 @@ export default function ERPConfiguracion() {
 
           <button onClick={guardarNegocio} disabled={guardando}
             className="w-full py-4 bg-primary text-inverse-on-surface font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
-            {guardando ? <span aria-hidden="true" className="material-symbols-outlined animate-spin">autorenew</span> : <span aria-hidden="true" className="material-symbols-outlined">save</span>}
+            {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
         </div>
@@ -322,7 +337,7 @@ export default function ERPConfiguracion() {
         <div className="space-y-6 max-w-xl">
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8 space-y-5">
             <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
-              <span aria-hidden="true" className="material-symbols-outlined text-primary">manage_accounts</span>
+              <span className="material-symbols-outlined text-primary">manage_accounts</span>
               Datos personales
             </h3>
             <div>
@@ -339,7 +354,7 @@ export default function ERPConfiguracion() {
 
             <div className="pt-2">
               <h4 className="text-sm font-bold text-on-surface mb-3 flex items-center gap-2">
-                <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">notifications</span>
+                <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
                 Notificaciones
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -365,12 +380,17 @@ export default function ERPConfiguracion() {
 
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8 space-y-5">
             <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
-              <span aria-hidden="true" className="material-symbols-outlined text-primary">lock_reset</span>
+              <span className="material-symbols-outlined text-primary">lock_reset</span>
               Cambiar contraseña
             </h3>
             <div>
+              <label className={labelCls}>Contraseña actual</label>
+              <input type="password" autoComplete="current-password" value={formCuenta.contrasena_actual} onChange={e => setFormCuenta(p => ({ ...p, contrasena_actual: e.target.value }))}
+                placeholder="Tu contraseña de hoy" className={inputCls} />
+            </div>
+            <div>
               <label className={labelCls}>Nueva contraseña</label>
-              <input type="password" value={formCuenta.nueva_contrasena} onChange={e => setFormCuenta(p => ({ ...p, nueva_contrasena: e.target.value }))}
+              <input type="password" autoComplete="new-password" minLength={8} value={formCuenta.nueva_contrasena} onChange={e => setFormCuenta(p => ({ ...p, nueva_contrasena: e.target.value }))}
                 placeholder="Mínimo 8 caracteres" className={inputCls} />
             </div>
             <div>
@@ -382,7 +402,7 @@ export default function ERPConfiguracion() {
 
           <button onClick={guardarCuenta} disabled={guardando}
             className="w-full py-4 bg-primary text-inverse-on-surface font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
-            {guardando ? <span aria-hidden="true" className="material-symbols-outlined animate-spin">autorenew</span> : <span aria-hidden="true" className="material-symbols-outlined">save</span>}
+            {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
         </div>
@@ -404,7 +424,7 @@ export default function ERPConfiguracion() {
             {puedeGestionarEquipo ? (
               equipo === null ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">
-                  <span aria-hidden="true" className="material-symbols-outlined animate-spin inline-block">autorenew</span>
+                  <span className="material-symbols-outlined animate-spin inline-block">autorenew</span>
                 </div>
               ) : equipo.length === 0 ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">Aún no hay miembros en tu institución.</div>
@@ -451,10 +471,10 @@ export default function ERPConfiguracion() {
               <div className="p-8 space-y-4">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <span aria-hidden="true" className="material-symbols-outlined text-primary">group</span>
+                    <span className="material-symbols-outlined text-primary">group</span>
                   </div>
                   <div>
-                    <p className="font-bold text-on-surface">Tu equipo se gestiona desde las Administración</p>
+                    <p className="font-bold text-on-surface">Tu equipo se gestiona desde la Administración</p>
                     <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
                       Los colaboradores, roles y permisos del ERP se administran según tu vinculación a una institución.
                       Como tu rol actual es <strong className="text-on-surface capitalize">{perfil.rol.replace(/_/g, ' ')}</strong>, puedes
@@ -464,11 +484,147 @@ export default function ERPConfiguracion() {
                 </div>
                 <Link to="/erp/mi-institucion"
                   className="inline-flex items-center gap-2 px-5 py-3 border-2 border-outline-variant rounded-xl text-sm font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
-                  <span aria-hidden="true" className="material-symbols-outlined text-lg">domain</span>
+                  <span className="material-symbols-outlined text-lg">domain</span>
                   Ver mi institución
                 </Link>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ Inventario: costeo y frascos abiertos (services/inventarioFraccionado.ts) ══ */}
+      {tab === 'inventario' && (
+        <div className="space-y-6 max-w-xl">
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">calculate</span>Método de costeo</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Cambia el método solo al inicio de un año: afecta el costo de las próximas ventas y tus reportes. LIFO no se acepta en Chile.</p>
+            </div>
+            {([
+              { valor: 'promedio', titulo: 'Promedio ponderado', detalle: 'Usa el promedio de todo tu stock, recalculado en cada compra.' },
+              { valor: 'fifo', titulo: 'FIFO / PEPS', detalle: 'Cada venta usa el costo de la compra más antigua con stock.' },
+            ] as const).map(op => (
+              <label key={op.valor} className={cn('flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-3', metodoCosteo === op.valor ? 'border-primary bg-primary/5' : 'border-outline-variant/30')}>
+                <input type="radio" name="metodo-costeo" className="mt-1 accent-primary" checked={metodoCosteo === op.valor} disabled={!puedeHacer('editar_mi_negocio')}
+                  onChange={() => { setMetodoCosteo(op.valor); notificar('ok', 'Método de costeo actualizado.'); }} />
+                <span><span className="block text-sm font-bold text-on-surface">{op.titulo}</span><span className="block text-xs text-on-surface-variant">{op.detalle}</span></span>
+              </label>
+            ))}
+          </div>
+
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">water_drop</span>Frascos y sacos abiertos</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Al vender una subcategoría (decant, kilo suelto) se usa una abierta que alcance sola. Si ninguna alcanza y hay cerradas, se abre la siguiente automáticamente y te avisa; si el stock total no alcanza, la venta se bloquea.</p>
+            </div>
+            {([
+              { valor: 'menos_contenido', titulo: 'El que tiene menos (recomendado)', detalle: 'Termina primero los envases casi vacíos.' },
+              { valor: 'mas_antiguo', titulo: 'El abierto hace más tiempo', detalle: 'Útil si el producto pierde calidad una vez abierto.' },
+            ] as const).map(op => (
+              <label key={op.valor} className={cn('flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-3', politicaEnvaseAbierto === op.valor ? 'border-primary bg-primary/5' : 'border-outline-variant/30')}>
+                <input type="radio" name="politica-envase" className="mt-1 accent-primary" checked={politicaEnvaseAbierto === op.valor} disabled={!puedeHacer('editar_mi_negocio')}
+                  onChange={() => { setPoliticaInventario({ politicaEnvaseAbierto: op.valor }); notificar('ok', 'Preferencia guardada.'); }} />
+                <span><span className="block text-sm font-bold text-on-surface">{op.titulo}</span><span className="block text-xs text-on-surface-variant">{op.detalle}</span></span>
+              </label>
+            ))}
+            <label className="flex items-start gap-3 rounded-2xl border border-outline-variant/30 p-3">
+              <input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={permitirMezclarEnvases} disabled={!puedeHacer('editar_mi_negocio')}
+                onChange={e => { setPoliticaInventario({ permitirMezclarEnvases: e.target.checked }); notificar('ok', 'Preferencia guardada.'); }} />
+              <span>
+                <span className="block text-sm font-bold text-on-surface">Combinar abiertas antes de abrir una nueva</span>
+                <span className="block text-xs text-on-surface-variant">Por ejemplo, un decant de 5 ml con 3 ml de F3 y 2 ml de F4. Si está apagado, se abre otra y el remanente queda para más tarde (cuando ya no quedan cerradas siempre se combinan).</span>
+              </span>
+            </label>
+          </div>
+
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">percent</span>Margen objetivo</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Se usa para sugerir el precio de una subcategoría cuando no hay otro producto del que copiar el margen.</p>
+            </div>
+            <label className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
+              <input type="number" min={0} max={90} inputMode="decimal" className="min-h-11 w-24 rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base sm:text-sm"
+                value={margenObjetivo} disabled={!puedeHacer('editar_mi_negocio')}
+                onChange={e => setMargenObjetivo(Math.min(90, Math.max(0, Number(e.target.value) || 0)))} />
+              % sobre el precio neto
+            </label>
+          </div>
+
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">bookmarks</span>Subcategorías frecuentes</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Plantillas que aparecen como sugerencias al registrar un producto («Decant 5 ml», «Malla 5 kg»). Cada producto guarda su propia copia: eliminar una plantilla no cambia los productos que ya la usan.</p>
+            </div>
+            {plantillasSubcategoria.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-outline-variant/40 px-4 py-4 text-center text-xs text-on-surface-variant">
+                Aún no tienes plantillas. En el registro de un producto, usa el menú ⋯ de una subcategoría y elige «Guardar como plantilla».
+              </p>
+            ) : (
+              <ul className="divide-y divide-outline-variant/20 rounded-2xl border border-outline-variant/30">
+                {plantillasSubcategoria.map(t => (
+                  <li key={t.id} className={cn('flex flex-wrap items-center gap-2 px-3 py-2', t.oculta && 'opacity-60')}>
+                    <input aria-label={`Nombre de la plantilla ${t.nombre}`} className="min-h-11 min-w-0 flex-1 rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 text-base font-bold sm:text-sm"
+                      value={t.nombre} disabled={!puedeHacer('editar_mi_negocio')} onChange={e => actualizarPlantilla(t.id, { nombre: e.target.value })} />
+                    <span className="text-xs text-on-surface-variant">{t.tipo === 'variable' ? `Precio por ${t.unidad}` : `${t.cantidad.toLocaleString('es-CL')} ${t.unidad === 'l' ? 'L' : t.unidad}`}{t.rubro ? ` · ${t.rubro}` : ''}</span>
+                    <button type="button" disabled={!puedeHacer('editar_mi_negocio')} onClick={() => actualizarPlantilla(t.id, { oculta: !t.oculta })}
+                      className="min-h-11 rounded-full px-3 text-xs font-bold text-on-surface-variant hover:text-primary">{t.oculta ? 'Mostrar' : 'Ocultar'}</button>
+                    <button type="button" disabled={!puedeHacer('editar_mi_negocio')}
+                      onClick={() => { if (window.confirm(`¿Eliminar la plantilla «${t.nombre}»? Los productos que ya la usan no cambian.`)) { eliminarPlantilla(t.id); notificar('ok', 'Plantilla eliminada.'); } }}
+                      className="min-h-11 rounded-full px-3 text-xs font-bold text-error hover:bg-error/10">Eliminar</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ Alertas: categorías, anticipación y umbrales (services/alertas.ts) ══ */}
+      {tab === 'alertas' && (
+        <div className="space-y-6 max-w-xl">
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-6 space-y-3">
+            <div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">notifications</span>Qué alertas quieres ver</h3>
+              <p className="text-xs text-on-surface-variant mt-1">Apagar una categoría la oculta del Centro de alertas, la campana y el panel general.</p>
+            </div>
+            {CATEGORIAS.map(c => {
+              const activa = configAlertas.categorias?.[c.valor] !== false;
+              return (
+                <label key={c.valor} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl border border-outline-variant/30 px-3">
+                  <span className="material-symbols-outlined text-primary">{c.icono}</span>
+                  <span className="flex-1 text-sm font-bold text-on-surface">{c.etiqueta}</span>
+                  <input type="checkbox" className="h-5 w-5 accent-primary" checked={activa} disabled={!puedeHacer('editar_mi_negocio')}
+                    onChange={e => setConfigAlertas({ categorias: { ...(configAlertas.categorias ?? {}), [c.valor]: e.target.checked } })} />
+                </label>
+              );
+            })}
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl border border-outline-variant/30 px-3">
+              <span className="material-symbols-outlined text-success">trending_up</span>
+              <span className="flex-1 text-sm font-bold text-on-surface">Mostrar alertas positivas (flujo del mes)</span>
+              <input type="checkbox" className="h-5 w-5 accent-primary" checked={configAlertas.mostrarPositivas !== false} disabled={!puedeHacer('editar_mi_negocio')}
+                onChange={e => setConfigAlertas({ mostrarPositivas: e.target.checked })} />
+            </label>
+          </div>
+
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-6 space-y-3">
+            <h3 className="text-lg font-bold text-on-surface flex items-center gap-2"><span className="material-symbols-outlined text-primary">schedule</span>Anticipación y umbrales</h3>
+            {([
+              { clave: 'diasF29', etiqueta: 'Avisar el F29 con', sufijo: 'días de anticipación' },
+              { clave: 'diasCobros', etiqueta: 'Avisar cobros por vencer con', sufijo: 'días' },
+              { clave: 'diasPagos', etiqueta: 'Avisar pagos por vencer con', sufijo: 'días' },
+              { clave: 'diasQuiebre', etiqueta: 'Avisar quiebre de stock si alcanza para menos de', sufijo: 'días de venta' },
+              { clave: 'diasLoteVence', etiqueta: 'Avisar lotes por vencer con', sufijo: 'días' },
+              { clave: 'diasSinRotar', etiqueta: 'Perecibles sin vender en', sufijo: 'días = «sin rotar»' },
+            ] as const).map(c => (
+              <label key={c.clave} className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
+                <span className="min-w-0 flex-1">{c.etiqueta}</span>
+                <input type="number" min={0} max={365} inputMode="numeric" className="min-h-11 w-20 rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 text-base sm:text-sm"
+                  value={configAlertas[c.clave] ?? CONFIG_ALERTAS_DEFECTO[c.clave]} disabled={!puedeHacer('editar_mi_negocio')}
+                  onChange={e => setConfigAlertas({ [c.clave]: Math.max(0, Math.min(365, Number(e.target.value) || 0)) })} />
+                <span className="text-xs text-on-surface-variant">{c.sufijo}</span>
+              </label>
+            ))}
           </div>
         </div>
       )}
@@ -478,15 +634,21 @@ export default function ERPConfiguracion() {
         <div className="space-y-6 max-w-xl">
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8">
             <h3 className="text-lg font-bold text-on-surface mb-2 flex items-center gap-2">
-              <span aria-hidden="true" className="material-symbols-outlined text-primary">account_balance</span>
+              <span className="material-symbols-outlined text-primary">account_balance</span>
               Integración con SII
+              {siiModoPrueba && <span className="ml-auto text-[10px] font-extrabold uppercase tracking-widest bg-warning/15 text-warning px-2.5 py-1 rounded-full">Modo prueba</span>}
             </h3>
             <p className="text-sm text-on-surface-variant mb-6">Parámetros que el ERP usa para la declaración de impuestos (F29 e IVA mensual).</p>
+            {siiModoPrueba && (
+              <p className="-mt-3 mb-5 p-3 rounded-xl bg-warning/10 text-xs font-medium text-on-surface-variant leading-relaxed">
+                Los documentos se generan en ambiente de prueba: no se envían al SII ni tienen validez tributaria.
+              </p>
+            )}
 
             <div className="divide-y divide-outline-variant/10 mb-6">
               {[
-                { label: 'Modo de integración', valor: configuracionCumplimiento.modoIntegracion },
-                { label: 'Ambiente', valor: configuracionCumplimiento.ambiente },
+                { label: 'Modo de integración', valor: MODO_SII[configuracionCumplimiento.modoIntegracion] ?? configuracionCumplimiento.modoIntegracion },
+                { label: 'Ambiente', valor: configuracionCumplimiento.ambiente === 'produccion' ? 'Producción' : 'Prueba' },
                 { label: 'Uso de folios manuales', valor: configuracionCumplimiento.usaFoliosManual ? 'Habilitado' : 'Deshabilitado' },
                 { label: 'Declaradores disponibles', valor: 'F29 mensual' },
               ].map(item => (
@@ -499,7 +661,7 @@ export default function ERPConfiguracion() {
 
             <div className="p-4 rounded-2xl border border-warning/30 bg-warning/10">
               <div className="flex gap-3">
-                <span aria-hidden="true" className="material-symbols-outlined text-warning">security</span>
+                <span className="material-symbols-outlined text-warning">security</span>
                 <div>
                   <p className="text-xs font-bold text-warning uppercase tracking-tight">Seguridad de tus datos</p>
                   <p className="text-[11px] text-on-surface-variant mt-1 leading-relaxed">
@@ -512,9 +674,9 @@ export default function ERPConfiguracion() {
 
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-4">
-              <span aria-hidden="true" className="material-symbols-outlined text-primary">percent</span>
+              <span className="material-symbols-outlined text-primary">percent</span>
               <div>
-                <h3 className="font-bold text-on-surface">Tasa de PPM (Pagos Provisional Mensuales)</h3>
+                <h3 className="font-bold text-on-surface">Tasa de PPM (Pagos Provisionales Mensuales)</h3>
                 <p className="text-xs text-on-surface-variant">Ingresa el porcentaje que aparece en tu resolución de PPM para el cálculo del F29.</p>
               </div>
             </div>
@@ -530,8 +692,16 @@ export default function ERPConfiguracion() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest dark-card p-5 text-sm text-on-surface-variant">
-            <p><span className="font-black text-on-surface">Cuenta conectada:</span> {user?.email}</p>
+          {/* Estado real de conexión (corrección #31): no hay credenciales SII guardadas, así que nunca "conectada" a medias */}
+          <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest dark-card p-5 text-sm text-on-surface-variant space-y-2">
+            <p className="flex items-center justify-between gap-3">
+              <span className="font-black text-on-surface">SII</span>
+              <span>{siiModoPrueba ? 'Modo prueba' : configuracionCumplimiento.modoIntegracion === 'api_integrated' ? `Conectada como ${perfil.negocio_rut || perfil.email}` : 'No conectada (declaración manual)'}</span>
+            </p>
+            <p className="flex items-center justify-between gap-3">
+              <span className="font-black text-on-surface">Webpay (suscripción)</span>
+              <span>{WEBPAY_MODO_PRUEBA ? 'Modo prueba' : 'Producción'}</span>
+            </p>
           </div>
         </div>
       )}
@@ -540,7 +710,7 @@ export default function ERPConfiguracion() {
       {tab === 'facturacion' && (
         <div className="max-w-xl bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8">
           <h3 className="text-lg font-bold text-on-surface mb-6 flex items-center gap-2">
-            <span aria-hidden="true" className="material-symbols-outlined text-primary">credit_card</span>
+            <span className="material-symbols-outlined text-primary">credit_card</span>
             Tu Suscripción
           </h3>
 
@@ -557,21 +727,21 @@ export default function ERPConfiguracion() {
               </span>
             </div>
             {perfil.membresia_expira && perfil.membresia_nivel !== 'free' && (
-              <p className="text-xs text-on-surface-variant mt-2">Próxima renovación: <strong className="text-on-surface">{perfil.membresia_expira}</strong></p>
+              <p className="text-xs text-on-surface-variant mt-2">Vigente hasta: <strong className="text-on-surface">{formatFecha(perfil.membresia_expira)}</strong></p>
             )}
           </div>
 
           {perfil.membresia_nivel === 'free' ? (
             <Link to="/erp/suscripcion"
               className="w-full flex items-center justify-center gap-2 py-4 bg-warning hover:bg-warning/90 text-inverse-on-surface font-bold rounded-2xl text-base transition-colors shadow-lg shadow-warning/25">
-              <span aria-hidden="true" className="material-symbols-outlined">rocket_launch</span>
-              Mejorar de plan — desde {formatearPrecio(PLAN_PRO.precio)}/mes
+              <span className="material-symbols-outlined">rocket_launch</span>
+              Mejorar mi plan — desde {formatCLP(PLANES[1].precio)}/mes
             </Link>
           ) : (
             <div className="space-y-3">
               <Link to="/erp/suscripcion"
                 className="w-full py-3 border-2 border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary rounded-2xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
-                <span aria-hidden="true" className="material-symbols-outlined text-lg">receipt_long</span>
+                <span className="material-symbols-outlined text-lg">receipt_long</span>
                 Ver historial de pagos
               </Link>
               <p className="text-[11px] text-on-surface-variant text-center leading-relaxed">
