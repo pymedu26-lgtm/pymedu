@@ -590,7 +590,10 @@ name: 'Mi institución',
       </aside>
 
       {/* ── Main content area ── */}
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className={cn(
+        'flex min-w-0 flex-1 flex-col',
+        esEscritorio ? (sidebarOpen ? 'ml-[248px]' : 'ml-[64px]') : ''
+      )}>
         <header className="sticky top-0 z-40 flex min-h-14 w-full items-center justify-between gap-2 border-b border-outline-variant/60 bg-surface-container-lowest/95 px-3 shadow-sm backdrop-blur-md sm:gap-3 sm:px-6"
           style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           {!esEscritorio && (

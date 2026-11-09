@@ -205,7 +205,7 @@ function RoleProtectedLayout() {
   return (
     <div className="flex min-h-screen bg-surface text-on-surface">
       <RoleNavSidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main className={`flex-1 overflow-y-auto ${collapsed ? 'ml-[64px]' : 'ml-[216px]'}`}>
         <Outlet />
       </main>
     </div>
