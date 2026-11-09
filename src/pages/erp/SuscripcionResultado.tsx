@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { planPorId } from '../../lib/planes';
 import { useAuth } from '../../context/AuthContext';
 
 interface PagoDetalle {
@@ -81,7 +82,7 @@ export default function SuscripcionResultado() {
     <div className="p-6 md:p-8 max-w-xl mx-auto min-h-screen flex items-center">
       <div className="w-full bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-10 text-center">
         <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${config.bg}`}>
-          <span className={`material-symbols-outlined text-4xl ${config.color}`}>{config.icon}</span>
+          <span aria-hidden="true" className={`material-symbols-outlined text-4xl ${config.color}`}>{config.icon}</span>
         </div>
         <h2 className="text-2xl font-extrabold text-on-surface mb-2">{config.titulo}</h2>
         <p className="text-sm text-on-surface-variant font-medium leading-relaxed mb-6">{config.desc}</p>
@@ -95,7 +96,7 @@ export default function SuscripcionResultado() {
         {pago && (
           <div className="bg-surface-container-low rounded-2xl p-5 text-left space-y-2 mb-6">
             {[
-              ['Plan', pago.plan === 'pro' ? 'Pro' : 'Premium'],
+              ['Plan', planPorId(pago.plan).nombre],
               ['Monto', fmt(pago.monto)],
               ['Orden de compra', pago.buy_order],
               ...(pago.tarjeta ? [['Tarjeta', pago.tarjeta] as const] : []),

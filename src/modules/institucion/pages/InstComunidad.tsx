@@ -49,7 +49,7 @@ export default function InstComunidad() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-info">diversity_3</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-info">diversity_3</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Comunidad</h1>
             <p className="text-on-surface-variant">{stats.total} participantes registrados</p>
@@ -57,11 +57,11 @@ export default function InstComunidad() {
         </div>
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-outline-variant/30 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors">
-            <span className="material-symbols-outlined text-lg">upload_file</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">upload_file</span>
             Importar
           </button>
           <button className="flex items-center gap-2 px-4 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
-            <span className="material-symbols-outlined text-lg">person_add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">person_add</span>
             Agregar
           </button>
         </div>
@@ -78,7 +78,7 @@ export default function InstComunidad() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
               <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined text-lg">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
             </div>
@@ -125,13 +125,13 @@ export default function InstComunidad() {
               onClick={() => setVista('tabla')}
               className={`px-3 py-2 text-sm font-bold transition-colors ${vista === 'tabla' ? 'bg-primary text-inverse-on-surface' : 'hover:bg-surface-container-high'}`}
             >
-              <span className="material-symbols-outlined text-lg">table_rows</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">table_rows</span>
             </button>
             <button
               onClick={() => setVista('cards')}
               className={`px-3 py-2 text-sm font-bold transition-colors ${vista === 'cards' ? 'bg-primary text-inverse-on-surface' : 'hover:bg-surface-container-high'}`}
             >
-              <span className="material-symbols-outlined text-lg">grid_view</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">grid_view</span>
             </button>
           </div>
         </div>
@@ -204,8 +204,8 @@ export default function InstComunidad() {
                       </span>
                     </td>
                     <td className="p-4">
-                      <button className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors">
-                        <span className="material-symbols-outlined text-on-surface-variant text-lg">more_vert</span>
+                      <button aria-label={`Opciones de ${p.nombre}`} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors">
+                        <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant text-lg">more_vert</span>
                       </button>
                     </td>
                   </tr>
@@ -215,7 +215,7 @@ export default function InstComunidad() {
           </div>
           {filtrados.length === 0 && (
             <div className="p-12 text-center">
-              <span className="material-symbols-outlined text-5xl text-on-surface-variant/30">search_off</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-5xl text-on-surface-variant/30">search_off</span>
               <p className="mt-3 text-on-surface-variant font-bold">No se encontraron resultados</p>
               <p className="text-sm text-on-surface-variant">Intenta ajustar los filtros de búsqueda</p>
             </div>

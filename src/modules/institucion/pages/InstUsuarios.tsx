@@ -169,7 +169,7 @@ export default function InstUsuarios() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-info">group</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-info">group</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Usuarios de la Institución</h1>
             <p className="text-on-surface-variant">{stats.total} usuarios</p>
@@ -183,7 +183,7 @@ export default function InstUsuarios() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-info">person_add</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-info">person_add</span>
               <h2 className="font-extrabold text-on-surface">Solicitudes de vinculación</h2>
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-info-container text-on-info-container">{solicitudes.length} pendientes</span>
@@ -234,7 +234,7 @@ export default function InstUsuarios() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-teal">card_membership</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-teal">card_membership</span>
               <h2 className="font-extrabold text-on-surface">Códigos de invitación</h2>
             </div>
             <p className="text-xs text-on-surface-variant mt-1">
@@ -302,11 +302,11 @@ export default function InstUsuarios() {
                   </div>
                   <div className="flex gap-1 shrink-0">
                     <button onClick={() => copiarCodigo(c.codigo)} title="Copiar" className="p-1.5 rounded-lg hover:bg-surface-container-high">
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">content_copy</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm text-on-surface-variant">content_copy</span>
                     </button>
                     {c.activo && (
                       <button onClick={() => desactivarCodigo(c.id)} title="Desactivar" className="p-1.5 rounded-lg hover:bg-error-container">
-                        <span className="material-symbols-outlined text-sm text-error">block</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-sm text-error">block</span>
                       </button>
                     )}
                   </div>
@@ -327,7 +327,7 @@ export default function InstUsuarios() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
               <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined text-lg">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
             </div>
@@ -389,8 +389,8 @@ export default function InstUsuarios() {
                     <p className="text-sm text-on-surface-variant">{user.email as string}</p>
                   </div>
                 </div>
-                <button className="p-2 rounded-lg hover:bg-surface-container-high transition-colors">
-                  <span className="material-symbols-outlined text-on-surface-variant">edit</span>
+                <button aria-label={`Editar usuario ${user.nombre_completo}`} className="p-2 rounded-lg hover:bg-surface-container-high transition-colors">
+                  <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">edit</span>
                 </button>
               </div>
             </div>
@@ -398,7 +398,7 @@ export default function InstUsuarios() {
         </div>
         {!loading && usuarios.length === 0 && (
           <div className="p-12 text-center">
-            <span className="material-symbols-outlined text-5xl text-on-surface-variant/30">person_off</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-5xl text-on-surface-variant/30">person_off</span>
             <p className="mt-3 text-on-surface-variant font-bold">No se encontraron usuarios</p>
           </div>
         )}

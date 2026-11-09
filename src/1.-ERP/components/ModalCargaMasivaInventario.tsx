@@ -317,8 +317,8 @@ export default function ModalCargaMasivaInventario({
             <h3 className="text-2xl font-black text-primary">Carga Masiva de Inventario</h3>
             <p className="text-on-surface-variant text-sm mt-1">Importa productos y servicios desde Excel o CSV en un solo paso.</p>
           </div>
-          <button onClick={() => { limpiar(); onClose(); }} className="text-on-surface-variant hover:text-error transition-colors">
-            <span className="material-symbols-outlined text-3xl">close</span>
+          <button onClick={() => { limpiar(); onClose(); }} aria-label="Cerrar carga masiva de inventario" className="text-on-surface-variant hover:text-error transition-colors">
+            <span aria-hidden="true" className="material-symbols-outlined text-3xl">close</span>
           </button>
         </div>
 
@@ -331,7 +331,7 @@ export default function ModalCargaMasivaInventario({
               onDragLeave={onDragLeave}
               className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-all ${arrastrando ? 'border-primary bg-primary/5' : 'border-outline-variant/50 hover:border-primary/40'}`}
             >
-              <span className="material-symbols-outlined text-6xl text-primary mb-4">cloud_upload</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-6xl text-primary mb-4">cloud_upload</span>
               <h4 className="text-xl font-bold text-on-surface mb-2">Arrastra tu archivo aquí</h4>
               <p className="text-on-surface-variant mb-4">o</p>
               <button onClick={() => inputRef.current?.click()} className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
@@ -340,7 +340,7 @@ export default function ModalCargaMasivaInventario({
               <input ref={inputRef} type="file" accept=".xlsx" onChange={onFileChange} className="hidden" />
               <p className="text-xs text-on-surface-variant mt-4">Formato permitido: .xlsx (plantilla de descarga)</p>
               <button onClick={descargarPlantilla} className="mt-6 flex items-center gap-2 px-5 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-surface-container-low transition-all">
-                <span className="material-symbols-outlined text-lg">download</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
                 Descargar Plantilla
               </button>
             </div>
@@ -350,14 +350,14 @@ export default function ModalCargaMasivaInventario({
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-3xl text-primary">description</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-3xl text-primary">description</span>
                   <div>
                     <p className="font-bold text-on-surface">{archivo.name}</p>
                     <p className="text-xs text-on-surface-variant">{(archivo.size / 1024).toFixed(2)} KB</p>
                   </div>
                 </div>
                 <button onClick={limpiar} className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-error/10 hover:text-error transition-all">
-                  <span className="material-symbols-outlined text-lg">close</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg">close</span>
                   Cambiar archivo
                 </button>
               </div>
@@ -371,7 +371,7 @@ export default function ModalCargaMasivaInventario({
 
               {error && (
                 <div className="p-4 bg-error-container text-on-error-container rounded-xl flex items-start gap-3">
-                  <span className="material-symbols-outlined mt-0.5">error</span>
+                  <span aria-hidden="true" className="material-symbols-outlined mt-0.5">error</span>
                   <p className="text-sm font-medium whitespace-pre-wrap">{error}</p>
                 </div>
               )}
@@ -454,7 +454,7 @@ export default function ModalCargaMasivaInventario({
 
               {!cargando && !error && previas.length === 0 && (
                 <div className="text-center py-10">
-                  <span className="material-symbols-outlined text-5xl text-on-surface-variant mb-3">inbox</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-5xl text-on-surface-variant mb-3">inbox</span>
                   <p className="text-on-surface-variant font-medium">No se encontraron filas con datos para procesar.</p>
                 </div>
               )}
@@ -474,7 +474,7 @@ export default function ModalCargaMasivaInventario({
                 disabled={seleccionadas.size === 0}
                 className="px-6 py-2.5 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
               >
-                <span className="material-symbols-outlined text-lg">download</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
                 Importar {seleccionadas.size > 0 ? `(${seleccionadas.size})` : ''}
               </button>
             </div>

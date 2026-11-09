@@ -198,6 +198,7 @@ export default function PortalMunicipal() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroPrioridad, setFiltroPrioridad] = useState<'Todas' | Prioridad>('Todas');
   const [campanaEnviada, setCampanaEnviada] = useState(false);
+  const [dialogo, setDialogo] = useState<'demo' | 'licencia' | 'propuesta' | 'borrador' | null>(null);
 
   const segmentos = useMemo(() => (
     segmentosMock.filter(segmento => {
@@ -233,10 +234,16 @@ export default function PortalMunicipal() {
                 El municipio ve rezagos, avance documental, cobertura territorial y adopcion operativa. No se muestran facturacion, margenes ni datos nominativos de emprendedores.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
-                <button className="rounded-2xl bg-surface-container-lowest px-5 py-3 text-sm font-bold text-on-surface transition-colors hover:bg-surface-container">
+                <button
+                  onClick={() => setDialogo('demo')}
+                  className="rounded-2xl bg-surface-container-lowest px-5 py-3 text-sm font-bold text-on-surface transition-colors hover:bg-surface-container"
+                >
                   Solicitar demo institucional
                 </button>
-                <button className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-white/5">
+                <button
+                  onClick={() => setDialogo('licencia')}
+                  className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-white/5"
+                >
                   Revisar alcance de la licencia
                 </button>
               </div>
@@ -251,7 +258,7 @@ export default function PortalMunicipal() {
                   'La licencia prioriza acompanamiento, formalizacion y cobertura institucional medible.',
                 ].map(item => (
                   <div key={item} className="flex gap-3 rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
-                    <span className="material-symbols-outlined text-on-primary-container">verified_user</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-on-primary-container">verified_user</span>
                     <p className="text-sm leading-6 text-on-primary-container/85">{item}</p>
                   </div>
                 ))}
@@ -401,7 +408,7 @@ export default function PortalMunicipal() {
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+                  <span aria-hidden="true" className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
                   <input
                     value={busqueda}
                     onChange={event => setBusqueda(event.target.value)}
@@ -422,7 +429,7 @@ export default function PortalMunicipal() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-[32px] border border-outline-variant/45 bg-surface-container-lowest shadow-sm dark-card">
+            <div className="overflow-x-auto rounded-[32px] border border-outline-variant/45 bg-surface-container-lowest shadow-sm dark-card">
               <table className="w-full text-sm">
                 <thead className="bg-surface-container-low">
                   <tr>
@@ -499,7 +506,7 @@ export default function PortalMunicipal() {
                     'Privacidad por diseno para resguardar a emprendedores y al municipio',
                   ].map(item => (
                     <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
-                      <span className="material-symbols-outlined text-emerald-300">task_alt</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-emerald-300">task_alt</span>
                       <p className="text-sm leading-6 text-on-primary-container/85">{item}</p>
                     </div>
                   ))}
@@ -512,7 +519,10 @@ export default function PortalMunicipal() {
                 <p className="mt-3 text-sm leading-6 text-on-surface-variant">
                   Ideal para municipios que quieren ordenar acompanamiento productivo, mejorar formalizacion y justificar impacto sin montar un sistema propio.
                 </p>
-                <button className="mt-5 w-full rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-inverse-on-surface transition-colors hover:bg-primary-container">
+                <button
+                  onClick={() => setDialogo('propuesta')}
+                  className="mt-5 w-full rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-inverse-on-surface transition-colors hover:bg-primary-container"
+                >
                   Preparar propuesta institucional
                 </button>
               </div>
@@ -536,7 +546,7 @@ export default function PortalMunicipal() {
               {campanaEnviada ? (
                 <div className="mt-6 rounded-[28px] bg-success-container p-8 text-center">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
-                    <span className="material-symbols-outlined text-3xl text-on-success-container">check_circle</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-3xl text-on-success-container">check_circle</span>
                   </div>
                   <h3 className="mt-4 text-xl font-black text-on-success-container">Campana lista para distribucion</h3>
                   <p className="mt-2 text-sm leading-6 text-on-success-container">
@@ -569,7 +579,7 @@ export default function PortalMunicipal() {
                         ['school', 'Capacitacion'],
                       ].map(([icon, label]) => (
                         <button key={label} className="rounded-2xl border border-outline-variant/45 bg-surface-container-low px-4 py-4 text-left transition-colors hover:border-primary/50 hover:bg-surface-container">
-                          <span className="material-symbols-outlined text-on-surface-variant">{icon}</span>
+                          <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">{icon}</span>
                           <p className="mt-3 text-sm font-bold text-on-surface">{label}</p>
                         </button>
                       ))}
@@ -597,7 +607,10 @@ export default function PortalMunicipal() {
                     >
                       Preparar distribucion
                     </button>
-                    <button className="rounded-2xl border border-outline-variant/45 bg-surface-container-low px-5 py-3 text-sm font-bold text-on-surface-variant transition-colors hover:border-outline-variant hover:bg-surface-container">
+                    <button
+                      onClick={() => setDialogo('borrador')}
+                      className="rounded-2xl border border-outline-variant/45 bg-surface-container-low px-5 py-3 text-sm font-bold text-on-surface-variant transition-colors hover:border-outline-variant hover:bg-surface-container"
+                    >
                       Guardar borrador
                     </button>
                   </div>
@@ -637,6 +650,105 @@ export default function PortalMunicipal() {
           </div>
         )}
       </main>
+
+      {dialogo && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={() => setDialogo(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="portal-dialogo-titulo"
+            className="w-full max-w-lg rounded-[28px] border border-outline-variant/50 bg-surface-container-lowest p-6 shadow-2xl dark-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <h2 id="portal-dialogo-titulo" className="text-xl font-black text-on-surface">
+                {dialogo === 'demo' && 'Solicitar demo institucional'}
+                {dialogo === 'licencia' && 'Alcance de la licencia municipal'}
+                {dialogo === 'propuesta' && 'Preparar propuesta institucional'}
+                {dialogo === 'borrador' && 'Borrador de campaña guardado'}
+              </h2>
+              <button
+                onClick={() => setDialogo(null)}
+                aria-label="Cerrar ventana"
+                className="rounded-full p-1 text-on-surface-variant transition-colors hover:bg-surface-container"
+              >
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="mt-4 text-sm leading-6 text-on-surface-variant">
+              {dialogo === 'demo' && (
+                <p>
+                  Escríbenos a{' '}
+                  <a className="font-bold text-primary underline" href="mailto:instituciones@pymedu.cl?subject=Solicitud%20de%20demo%20institucional">
+                    instituciones@pymedu.cl
+                  </a>{' '}
+                  con el nombre de tu municipio y la cantidad estimada de negocios a acompañar.
+                  Coordinaremos una demostración guiada del panel y de los programas.
+                </p>
+              )}
+
+              {dialogo === 'licencia' && (
+                <ul className="space-y-2">
+                  {[
+                    'Panel agregado por comuna, segmento y programa.',
+                    'Alertas y campañas segmentadas con lenguaje institucional.',
+                    'Indicadores de formalización, empleo y adopción operativa.',
+                    'Sin acceso a ventas, márgenes ni datos personales de emprendedores.',
+                    'Usuarios institucionales con roles y permisos definidos.',
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-2">
+                      <span aria-hidden="true" className="material-symbols-outlined text-base text-success">check</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {dialogo === 'propuesta' && (
+                <p>
+                  Envía los datos de tu municipio a{' '}
+                  <a className="font-bold text-primary underline" href="mailto:instituciones@pymedu.cl?subject=Propuesta%20institucional%20PymEdu">
+                    instituciones@pymedu.cl
+                  </a>{' '}
+                  y prepararemos una propuesta con alcance, número de usuarios y valor anual de la licencia.
+                </p>
+              )}
+
+              {dialogo === 'borrador' && (
+                <p>
+                  La campaña quedó guardada como borrador en esta sesión. Puedes revisar la audiencia
+                  y el mensaje antes de preparar su distribución.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              {(dialogo === 'demo' || dialogo === 'propuesta') && (
+                <a
+                  href={
+                    dialogo === 'demo'
+                      ? 'mailto:instituciones@pymedu.cl?subject=Solicitud%20de%20demo%20institucional'
+                      : 'mailto:instituciones@pymedu.cl?subject=Propuesta%20institucional%20PymEdu'
+                  }
+                  className="rounded-xl bg-primary px-4 py-2.5 text-center text-sm font-bold text-inverse-on-surface transition-opacity hover:opacity-90"
+                >
+                  Escribir correo
+                </a>
+              )}
+              <button
+                onClick={() => setDialogo(null)}
+                className="rounded-xl border border-outline-variant px-4 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:bg-surface-container"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

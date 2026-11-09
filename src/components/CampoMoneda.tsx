@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { useState } from 'react';
 import { cn } from '../lib/utils';
 
 const MASCARA_ARRIBA =
@@ -19,12 +20,20 @@ const estiloFlecha = (mascara: string): CSSProperties => ({
 
 export const aEntero = (valor: number | string): number => {
   if (typeof valor === 'number') return Number.isFinite(valor) ? Math.round(valor) : 0;
-  const soloDigitos = String(valor ?? '').replace(/[^\d]/g, '');
-  return soloDigitos ? parseInt(soloDigitos, 10) : 0;
+  const texto = String(valor ?? '').trim();
+  const negativo = texto.startsWith('-');
+  const soloDigitos = texto.replace(/[^\d]/g, '');
+  const numero = soloDigitos ? parseInt(soloDigitos, 10) : 0;
+  return negativo ? -numero : numero;
 };
 
-export const formatearMoneda = (valor: number): string =>
-  valor === 0 ? '' : `$${Math.round(valor).toLocaleString('es-CL')}`;
+export const formatearMoneda = (valor: number): string => {
+  if (valor === 0) return '';
+  const redondeado = Math.round(valor);
+  return redondeado < 0
+    ? `-$${Math.abs(redondeado).toLocaleString('es-CL')}`
+    : `$${redondeado.toLocaleString('es-CL')}`;
+};
 
 interface CampoMonedaProps {
   valor: number | string;
@@ -44,9 +53,19 @@ export default function CampoMoneda({
   paso = 1
 }: CampoMonedaProps) {
   const numero = aEntero(valor);
+  const [errorNegativo, setErrorNegativo] = useState(false);
+
+  const aplicar = (siguiente: number) => {
+    if (siguiente < 0) {
+      setErrorNegativo(true);
+      return;
+    }
+    setErrorNegativo(false);
+    onChange(siguiente);
+  };
 
   const ajustar = (delta: number) => {
-    onChange(Math.max(0, numero + delta * paso));
+    aplicar(numero + delta * paso);
   };
 
   return (
@@ -56,11 +75,17 @@ export default function CampoMoneda({
         inputMode="numeric"
         autoComplete="off"
         disabled={disabled}
+        aria-invalid={errorNegativo || numero < 0}
         value={formatearMoneda(numero)}
         placeholder={placeholder}
-        onChange={(e) => onChange(aEntero(e.target.value))}
-        className={cn('w-full', className, 'pr-9')}
+        onChange={(e) => aplicar(aEntero(e.target.value))}
+        className={cn('w-full', className, 'pr-9', (errorNegativo || numero < 0) && 'border-error focus:ring-error/30')}
       />
+      {(errorNegativo || numero < 0) && (
+        <p role="alert" className="mt-1 text-xs font-semibold text-error">
+          El monto no puede ser negativo.
+        </p>
+      )}
       {!disabled && (
         <div className="absolute inset-y-1 right-1 flex w-5 flex-col">
           <button

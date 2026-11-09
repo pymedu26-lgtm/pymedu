@@ -1,34 +1,32 @@
 // Cliente HTTP hacia la API PymEdu (Express + PostgreSQL en Railway).
+// La sesion viaja en una cookie HttpOnly: el JavaScript del sitio nunca ve el JWT.
 // En desarrollo usa el proxy de vite.config.ts; en produccion VITE_API_URL
 // (o el mismo origen, que es como Railway sirve el SPA + la API).
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-const TOKEN_KEY = 'pymedu_token';
+const COOKIE_PISTA = 'pymedu_sesion';
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string | null) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+/** Indica si el navegador ya tiene una sesion (cookie no sensible puesta por la API). */
+export function hayPistaSesion(): boolean {
+  return document.cookie.split('; ').some((parte) => parte.startsWith(`${COOKIE_PISTA}=`));
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
   };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const res = await fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal });
+    const res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    });
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({ error: res.statusText }));
@@ -51,14 +49,21 @@ const json = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.strin
 export const api = {
   // ── Auth ──────────────────────────────────────────────
   login: (email: string, password: string) =>
-    request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/login', json({ email, password })),
+    request<{ perfil: Record<string, unknown> }>('/api/auth/login', json({ email, password })),
 
   forgotPassword: (email: string) =>
     request<{ ok: boolean; resetUrl?: string }>('/api/auth/forgot-password', json({ email })),
   resetPassword: (token: string, password: string) =>
     request<{ ok: boolean }>('/api/auth/reset-password', json({ token, password })),
   register: (email: string, password: string, full_name: string, extra: Record<string, unknown> = {}) =>
-    request<{ token: string; perfil: Record<string, unknown> }>('/api/auth/register', json({ email, password, full_name, ...extra })),
+    request<{ perfil: Record<string, unknown> }>('/api/auth/register', json({ email, password, full_name, ...extra })),
+
+  // Siempre responde 200: { perfil: null } cuando no hay sesion.
+  session: () =>
+    request<{ perfil: Record<string, unknown> | null }>('/api/auth/session'),
+
+  logout: () =>
+    request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
 
   me: () =>
     request<{ perfil: Record<string, unknown> }>('/api/auth/me'),

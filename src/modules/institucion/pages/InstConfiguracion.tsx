@@ -13,7 +13,7 @@ export default function InstConfiguracion() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-on-surface-variant">settings</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-3xl text-on-surface-variant">settings</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Configuración Institucional</h1>
           <p className="text-on-surface-variant">Administra los ajustes de tu institución</p>
@@ -34,7 +34,7 @@ export default function InstConfiguracion() {
                     : 'text-on-surface-variant hover:bg-surface-container-high border border-transparent'
                 }`}
               >
-                <span className="material-symbols-outlined text-lg">{sec.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">{sec.icon}</span>
                 {sec.label}
               </button>
             ))}
@@ -46,7 +46,7 @@ export default function InstConfiguracion() {
           {seccion === 'general' && (
             <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 space-y-5">
               <h2 className="font-extrabold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">settings</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-primary">settings</span>
                 Información General
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -98,7 +98,7 @@ export default function InstConfiguracion() {
           {seccion === 'comunidad' && (
             <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 space-y-5">
               <h2 className="font-extrabold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">groups</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-primary">groups</span>
                 Configuración de Comunidad
               </h2>
               <div className="space-y-4">
@@ -108,7 +108,7 @@ export default function InstConfiguracion() {
                     <p className="text-xs text-on-surface-variant">Permitir que los mentores se auto-asignen a emprendedores</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                    <input type="checkbox" aria-label="Auto-asignación de mentores" className="sr-only peer" defaultChecked />
                     <div className="w-11 h-6 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
@@ -118,7 +118,7 @@ export default function InstConfiguracion() {
                     <p className="text-xs text-on-surface-variant">Requerir aprobación manual para nuevos ingresos a la comunidad</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                    <input type="checkbox" aria-label="Aprobación de nuevos miembros" className="sr-only peer" defaultChecked />
                     <div className="w-11 h-6 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
@@ -128,13 +128,13 @@ export default function InstConfiguracion() {
                     <p className="text-xs text-on-surface-variant">Mostrar perfiles de emprendedores a otros miembros de la comunidad</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
+                    <input type="checkbox" aria-label="Mostrar perfiles públicos a la comunidad" className="sr-only peer" />
                     <div className="w-11 h-6 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant mb-1">Cupos máximos por cohorte</label>
-                  <input type="number" defaultValue={25} className="w-32 p-3 rounded-xl border-2 border-surface-container-high focus:border-primary/50 outline-none transition-all text-sm" />
+                  <input type="number" min="1" defaultValue={25} className="w-32 p-3 rounded-xl border-2 border-surface-container-high focus:border-primary/50 outline-none transition-all text-sm" />
                 </div>
               </div>
               <div className="flex justify-end">
@@ -148,7 +148,7 @@ export default function InstConfiguracion() {
           {seccion === 'segmentacion' && (
             <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 space-y-5">
               <h2 className="font-extrabold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">tune</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-primary">tune</span>
                 Segmentación de la Comunidad
               </h2>
               <p className="text-sm text-on-surface-variant">
@@ -165,7 +165,7 @@ export default function InstConfiguracion() {
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-bold text-on-surface text-sm">{seg.label}</span>
                       <label className="relative inline-flex cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked={seg.activo} />
+                        <input type="checkbox" aria-label={`Activar segmento ${seg.label}`} className="sr-only peer" defaultChecked={seg.activo} />
                         <div className="w-11 h-6 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
@@ -193,7 +193,7 @@ export default function InstConfiguracion() {
           {seccion === 'notificaciones' && (
             <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 space-y-5">
               <h2 className="font-extrabold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">notifications</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-primary">notifications</span>
                 Preferencias de Notificaciones
               </h2>
               <div className="space-y-3">
@@ -211,7 +211,7 @@ export default function InstConfiguracion() {
                       <p className="text-xs text-on-surface-variant">{notif.desc}</p>
                     </div>
                     <label className="relative inline-flex cursor-pointer shrink-0 ml-4">
-                      <input type="checkbox" className="sr-only peer" defaultChecked={notif.on} />
+                      <input type="checkbox" aria-label={`Activar notificación: ${notif.label}`} className="sr-only peer" defaultChecked={notif.on} />
                       <div className="w-11 h-6 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                     </label>
                   </div>

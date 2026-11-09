@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import PublicLayout from './layouts/PublicLayout';
 import ERPLayout from './layouts/ERPLayout';
@@ -7,6 +7,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ERPProvider } from './1.-ERP/context/ERPContext';
 import AuthGuard from './components/AuthGuard';
 import RequireRole from './components/RequireRole';
+import RequirePremium from './components/RequirePremium';
 
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -107,72 +108,113 @@ const roleNavItems: Record<string, { label: string; path: string; icon: string }
   ],
 };
 
-function RoleNavSidebar() {
+function RoleNavSidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
   const { perfil, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const items = roleNavItems[perfil?.rol ?? ''] ?? [];
   const [collapsed, setCollapsed] = useState(false);
+  const expandido = !collapsed || mobileOpen;
 
   const handleLogout = async () => {
     await signOut();
     navigate('/login', { replace: true });
   };
 
+  useEffect(() => {
+    onClose();
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const cerrarConEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', cerrarConEscape);
+    return () => window.removeEventListener('keydown', cerrarConEscape);
+  }, [mobileOpen, onClose]);
+
+  // Bloquea el desplazamiento del fondo mientras el cajon movil esta abierto.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const overflowPrevio = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = overflowPrevio; };
+  }, [mobileOpen]);
+
   return (
-    <aside className={`sticky left-0 top-0 z-50 flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-all duration-300 ${collapsed ? 'w-[64px]' : 'w-[216px]'}`}>
+    <aside
+      aria-label="Menú de navegación"
+      className={`fixed inset-y-0 left-0 z-[60] flex h-screen flex-col bg-primary-container shadow-2xl shadow-shadow/20 transition-transform duration-300 md:sticky md:top-0 md:z-50 md:translate-x-0 md:transition-all ${
+        mobileOpen ? 'translate-x-0' : '-translate-x-full'
+      } ${expandido ? 'w-[85vw] max-w-[280px] md:w-[216px]' : 'w-[64px]'}`}
+    >
       <div className="flex items-center gap-2.5 border-b border-white/10 px-3 py-3.5 shrink-0">
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => {
+            if (window.innerWidth < 768) onClose();
+            else setCollapsed(!collapsed);
+          }}
+          aria-label={mobileOpen ? 'Cerrar menú lateral' : 'Alternar menú lateral'}
+          aria-expanded={expandido}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20"
         >
-          <span className="material-symbols-outlined text-lg text-white">
-            {collapsed ? 'menu' : 'menu_open'}
+          <span aria-hidden="true" className="material-symbols-outlined text-lg text-white">
+            {expandido ? 'menu_open' : 'menu'}
           </span>
         </button>
-        {!collapsed && (
-          <div className="min-w-0">
+        {expandido && (
+          <div className="min-w-0 flex-1">
             <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-on-primary-container/60">PymEdu</p>
             <h1 className="text-base font-black leading-none tracking-tight text-white capitalize truncate">
               {perfil?.rol?.replace('_', ' ')}
             </h1>
           </div>
         )}
+        <button
+          onClick={onClose}
+          aria-label="Cerrar menú lateral"
+          className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/20 md:hidden"
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">close</span>
+        </button>
       </div>
 
-      <nav className={`flex-1 py-3 space-y-1.5 ${collapsed ? 'px-2' : 'px-2.5'}`}>
+      <nav className={`flex-1 py-3 space-y-1.5 ${expandido ? 'px-2.5' : 'px-2'}`}>
         {items.map((item) => {
           const active = location.pathname.startsWith(item.path.split('/').slice(0, 3).join('/'));
           return (
             <Link
               key={item.path}
               to={item.path}
-              title={collapsed ? item.label : undefined}
+              onClick={onClose}
+              title={!expandido ? item.label : undefined}
+              aria-label={item.label}
+              aria-current={active ? 'page' : undefined}
               className={`flex items-center gap-2.5 rounded-xl transition-all ${
-                collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
+                expandido ? 'px-3 py-2.5' : 'justify-center px-0 py-2.5'
               } text-[13px] font-bold ${
                 active
                   ? 'bg-white/15 text-white border border-white/20'
                   : 'text-on-primary-container/70 hover:bg-white/10 hover:text-white border border-transparent'
               }`}
             >
-              <span className="material-symbols-outlined text-lg shrink-0">{item.icon}</span>
-              {!collapsed && <span className="truncate">{item.label}</span>}
+              <span aria-hidden="true" className="material-symbols-outlined text-lg shrink-0">{item.icon}</span>
+              {expandido && <span className="truncate">{item.label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      <div className={`border-t border-white/10 py-3 shrink-0 ${collapsed ? 'px-2' : 'px-2.5'}`}>
+      <div className={`border-t border-white/10 py-3 shrink-0 ${expandido ? 'px-2.5' : 'px-2'}`}>
         <button
           onClick={handleLogout}
-          title={collapsed ? 'Cerrar sesion' : undefined}
+          title={!expandido ? 'Cerrar sesión' : undefined}
+          aria-label="Cerrar sesión"
           className={`flex w-full items-center gap-2.5 rounded-xl text-[13px] font-bold text-on-primary-container/60 hover:bg-white/10 hover:text-white transition-all ${
-            collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
+            expandido ? 'px-3 py-2.5' : 'justify-center px-0 py-2.5'
           }`}
         >
-          <span className="material-symbols-outlined text-lg shrink-0">logout</span>
-          {!collapsed && <span>Cerrar sesion</span>}
+          <span aria-hidden="true" className="material-symbols-outlined text-lg shrink-0">logout</span>
+          {expandido && <span>Cerrar sesión</span>}
         </button>
       </div>
     </aside>
@@ -180,11 +222,31 @@ function RoleNavSidebar() {
 }
 
 function RoleProtectedLayout() {
+  const [mobileOpen, setMobileOpen] = useState(false);
   return (
-    <div className="flex min-h-screen bg-surface text-on-surface">
-      <RoleNavSidebar />
-      <main className="flex-1 overflow-y-auto">
-        <Outlet />
+    <div className="flex min-h-screen overflow-x-hidden bg-surface text-on-surface">
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <RoleNavSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <main className="flex min-w-0 flex-1 flex-col">
+        <div className="sticky top-0 z-40 flex items-center gap-3 border-b border-outline-variant/60 bg-surface-container-lowest/95 px-4 py-2 shadow-sm backdrop-blur-md md:hidden">
+          <button
+            onClick={() => setMobileOpen(true)}
+            aria-label="Abrir menú lateral"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-variant hover:bg-surface-container"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined">menu</span>
+          </button>
+          <span className="text-sm font-bold text-on-surface">Menú</span>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
@@ -289,8 +351,10 @@ export default function App() {
                   <Route path="/erp/organigrama" element={<PlaceholderPage title="Organigrama" icon="account_tree" description="Visualizacion jerarquica de tu equipo (jefaturas y reportes directos). Se completara automaticamente con los reportes de la institucion." />} />
                   <Route path="/erp/documentos" element={<PlaceholderPage title="Documentos Laborales" icon="description" description="Contratos, anexos y plantillas para postulaciones y equipo. Sube y organiza tus documentos desde el modulo de Documentos." />} />
 
-                  <Route path="/erp/mercados-publicos" element={<MercadosPublicos />} />
-                  <Route path="/erp/portal-municipal" element={<PortalMunicipal />} />
+                  <Route element={<RequirePremium />}>
+                    <Route path="/erp/mercados-publicos" element={<MercadosPublicos />} />
+                    <Route path="/erp/portal-municipal" element={<PortalMunicipal />} />
+                  </Route>
 
                   <Route path="/erp/mentorias" element={<PlaceholderPage title="Mentorias" icon="school" description="Agenda y seguimiento de mentorias con tu mentor asignado. Gestiona sesiones desde el espacio Mentor." />} />
                   <Route path="/erp/academia" element={<ERPAcademia />} />

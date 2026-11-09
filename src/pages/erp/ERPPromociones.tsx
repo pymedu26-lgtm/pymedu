@@ -4,6 +4,7 @@ import ConfirmDeleteModal from '../../1.-ERP/components/ConfirmDeleteModal';
 import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
 import { cn } from '@/lib/utils';
+import { estadoVigencia, formatearFechaLocal, hoyIso } from '@/lib/fecha';
 
 /** Simula el precio final y la rentabilidad de una promoción sobre un producto. */
 function simularPromocion(producto: Producto, tipo: 'porcentaje' | 'monto', valor: number) {
@@ -53,7 +54,7 @@ const normalizarPorcentaje = (crudo: string) => {
 /** Estado vacío del formulario de promoción. */
 const formVacio = () => ({
   nombre: '', tipo: 'porcentaje' as 'porcentaje' | 'monto', valor: '0',
-  fechaInicio: new Date().toISOString().split('T')[0], fechaFin: '', productoId: '', estado: 'activa' as 'activa' | 'inactiva',
+  fechaInicio: hoyIso(), fechaFin: '', productoId: '', estado: 'activa' as 'activa' | 'inactiva',
 });
 
 export default function ERPPromociones() {
@@ -63,8 +64,9 @@ export default function ERPPromociones() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState(formVacio());
+  const [error, setError] = useState('');
 
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = hoyIso();
   const vigentes = promociones.filter(p => p.fechaInicio <= hoy && (!p.fechaFin || p.fechaFin >= hoy) && p.estado === 'activa');
   const productosActivos = inventario.filter(p => p.estado === 'activo');
 
@@ -79,6 +81,7 @@ export default function ERPPromociones() {
 
   const abrirNuevo = () => {
     setEditandoId(null);
+    setError('');
     setNuevo(formVacio());
     setShowModal(true);
   };
@@ -87,6 +90,7 @@ export default function ERPPromociones() {
     const p = promociones.find(x => x.id === id);
     if (!p) return;
     setEditandoId(id);
+    setError('');
     setNuevo({
       nombre: p.nombre,
       tipo: p.tipo,
@@ -102,15 +106,41 @@ export default function ERPPromociones() {
   const cerrarModal = () => {
     setShowModal(false);
     setEditandoId(null);
+    setError('');
     setNuevo(formVacio());
   };
 
   const guardar = () => {
-    if (!nuevo.nombre.trim() || aNumero(nuevo.valor) <= 0) return;
+    const valor = aNumero(nuevo.valor);
+    if (!nuevo.nombre.trim()) {
+      setError('Escribe un nombre para la promoción.');
+      return;
+    }
+    if (!nuevo.fechaInicio) {
+      setError('Selecciona la fecha de inicio.');
+      return;
+    }
+    if (!(valor > 0)) {
+      setError('El valor del descuento debe ser mayor que cero.');
+      return;
+    }
+    if (nuevo.tipo === 'porcentaje' && valor > 100) {
+      setError('El porcentaje de descuento no puede superar el 100%.');
+      return;
+    }
+    if (nuevo.tipo === 'monto' && productoSel && valor >= productoSel.precio) {
+      setError('El descuento no puede ser igual o mayor que el precio del producto.');
+      return;
+    }
+    if (nuevo.fechaFin && nuevo.fechaFin < nuevo.fechaInicio) {
+      setError('La fecha de fin no puede ser anterior a la fecha de inicio.');
+      return;
+    }
+    setError('');
     const datos = {
       nombre: nuevo.nombre.trim(),
       tipo: nuevo.tipo,
-      valor: aNumero(nuevo.valor),
+      valor,
       fechaInicio: nuevo.fechaInicio,
       fechaFin: nuevo.fechaFin || undefined,
       productoId: nuevo.productoId || undefined,
@@ -128,15 +158,15 @@ export default function ERPPromociones() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-tertiary flex items-center gap-3">
-            <span className="material-symbols-outlined text-4xl">loyalty</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-4xl">loyalty</span>
             Promociones
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Pon productos o servicios en promoción y revisa su rentabilidad antes de publicar.</p>
         </div>
         <button onClick={abrirNuevo}
           className="flex items-center gap-2 px-5 py-3 bg-tertiary text-inverse-on-surface rounded-2xl font-bold text-sm shadow-lg shadow-tertiary/20 hover:scale-105 transition-transform">
-          <span className="material-symbols-outlined text-lg">add_circle</span>
-          Nueva Promocion
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">add_circle</span>
+          Nueva Promoción
         </button>
       </div>
 
@@ -158,11 +188,15 @@ export default function ERPPromociones() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {promociones.length === 0 && (
-          <p className="col-span-full text-center text-on-surface-variant py-10">Aun no hay promociones. Crea la primera.</p>
+          <p className="col-span-full text-center text-on-surface-variant py-10">Aún no hay promociones. Crea la primera.</p>
         )}
         {promociones.map(p => {
           const producto = p.productoId ? inventario.find(i => i.id === p.productoId) : null;
-          const activa = p.estado === 'activa' && p.fechaInicio <= hoy && (!p.fechaFin || p.fechaFin >= hoy);
+          const vigencia = estadoVigencia(p.fechaInicio, p.fechaFin, hoy);
+          const activa = p.estado === 'activa' && vigencia === 'activa';
+          const etiquetaEstado = p.estado === 'inactiva'
+            ? 'Inactiva'
+            : vigencia === 'programada' ? 'Programada' : vigencia === 'vencida' ? 'Vencida' : 'Activa';
           const renta = producto ? simularPromocion(producto, p.tipo, p.valor) : null;
           return (
             <div key={p.id} className={cn('rounded-3xl border p-5 shadow-sm', activa ? 'border-tertiary/40 bg-tertiary/5' : 'border-outline-variant/20 bg-surface-container-lowest')}>
@@ -172,7 +206,7 @@ export default function ERPPromociones() {
                   <p className="text-xs text-on-surface-variant mt-1">{producto?.nombre || 'Toda la tienda'}</p>
                 </div>
                 <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold shrink-0', activa ? 'bg-success-container text-on-success-container' : 'bg-surface-container-high text-on-surface-variant')}>
-                  {activa ? 'Activa' : 'Inactiva'}
+                  {etiquetaEstado}
                 </span>
               </div>
               <p className="mt-4 text-2xl font-black text-tertiary">
@@ -188,19 +222,21 @@ export default function ERPPromociones() {
                 </div>
               )}
               <p className="text-xs text-on-surface-variant mt-2">
-                {new Date(p.fechaInicio).toLocaleDateString('es-CL')}
-                {p.fechaFin ? ` a ${new Date(p.fechaFin).toLocaleDateString('es-CL')}` : ' - sin fecha de fin'}
+                {formatearFechaLocal(p.fechaInicio)}
+                {p.fechaFin ? ` a ${formatearFechaLocal(p.fechaFin)}` : ' - sin fecha de fin'}
               </p>
               <div className="mt-4 flex items-center gap-1">
                 <button
                   onClick={() => abrirEditar(p.id)}
+                  aria-label={`Editar promoción ${p.nombre}`}
                   className="p-1.5 text-on-surface-variant hover:text-tertiary transition-colors rounded-full hover:bg-tertiary/10">
-                  <span className="material-symbols-outlined text-base">edit</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
                 </button>
                 <button
                   onClick={() => { setItemToDelete(p.id); setDeleteModalOpen(true); }}
+                  aria-label={`Eliminar promoción ${p.nombre}`}
                   className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
-                  <span className="material-symbols-outlined text-base">delete</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-base">delete</span>
                 </button>
               </div>
             </div>
@@ -212,16 +248,16 @@ export default function ERPPromociones() {
         <div className="fixed inset-0 bg-scrim/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-tertiary">{editandoId ? 'Editar Promocion' : 'Nueva Promocion'}</h3>
-              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
-                <span className="material-symbols-outlined">close</span>
+              <h3 className="text-lg font-bold text-tertiary">{editandoId ? 'Editar Promoción' : 'Nueva Promoción'}</h3>
+              <button onClick={cerrarModal} aria-label="Cerrar formulario de promoción" className="text-on-surface-variant hover:text-on-surface">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre</label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre <span className="text-error">*</span></label>
                     <input type="text" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
                       className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" placeholder="Ej: 20% off en productos seleccionados" />
                   </div>
@@ -245,7 +281,7 @@ export default function ERPPromociones() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Valor</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Valor <span className="text-error">*</span></label>
                       {nuevo.tipo === 'monto' ? (
                         <CampoMoneda valor={nuevo.valor} onChange={valor => setNuevo({ ...nuevo, valor: String(valor) })}
                           className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
@@ -253,14 +289,14 @@ export default function ERPPromociones() {
                         <div className="relative">
                           <input type="text" inputMode="decimal" value={nuevo.valor} onChange={e => setNuevo({ ...nuevo, valor: normalizarPorcentaje(e.target.value) })}
                             className="w-full px-4 pr-12 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-tertiary outline-none bg-surface-container-lowest text-on-surface" />
-                          <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant pointer-events-none">percent</span>
+                          <span aria-hidden="true" className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant pointer-events-none">percent</span>
                         </div>
                       )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Inicio</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Inicio <span className="text-error">*</span></label>
                       <SelectorFecha value={nuevo.fechaInicio} min={hoy} onChange={fecha => setNuevo({ ...nuevo, fechaInicio: fecha })} />
                     </div>
                     <div>
@@ -310,7 +346,7 @@ export default function ERPPromociones() {
                           simulacion.nivel === 'rojo' ? 'bg-error/10 text-error'
                             : simulacion.nivel === 'naranja' ? 'bg-warning/10 text-warning'
                               : 'bg-success/10 text-success')}>
-                          <span className="material-symbols-outlined text-base shrink-0">
+                          <span aria-hidden="true" className="material-symbols-outlined text-base shrink-0">
                             {simulacion.nivel === 'rojo' ? 'error' : simulacion.nivel === 'naranja' ? 'warning' : 'check_circle'}
                           </span>
                           {simulacion.mensaje}
@@ -325,10 +361,19 @@ export default function ERPPromociones() {
                 </div>
               </div>
             </div>
-            <div className="px-6 pb-6 flex gap-3 shrink-0">
-              <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
-              <button onClick={guardar} disabled={!nuevo.nombre.trim() || aNumero(nuevo.valor) <= 0}
-                className="flex-1 py-3 rounded-2xl bg-tertiary text-inverse-on-surface font-bold shadow-lg shadow-tertiary/20 disabled:opacity-50">{editandoId ? 'Guardar cambios' : 'Guardar'}</button>
+            <div className="px-6 pb-6 flex flex-col gap-3 shrink-0">
+              <p className="text-[11px] text-on-surface-variant">Los campos marcados con <span className="text-error">*</span> son obligatorios. La fecha de fin es opcional: si la dejas vacía la promoción no vence.</p>
+              {error && (
+                <div role="alert" className="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm font-semibold text-error">
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg leading-none">error</span>
+                  <span>{error}</span>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>
+                <button onClick={guardar}
+                  className="flex-1 py-3 rounded-2xl bg-tertiary text-inverse-on-surface font-bold shadow-lg shadow-tertiary/20">{editandoId ? 'Guardar cambios' : 'Guardar'}</button>
+              </div>
             </div>
           </div>
         </div>
@@ -338,7 +383,7 @@ export default function ERPPromociones() {
         isOpen={deleteModalOpen}
         onClose={() => { setDeleteModalOpen(false); setItemToDelete(null); }}
         onConfirm={() => { if (itemToDelete) deletePromocion(itemToDelete); }}
-        title="Eliminar Promocion" />
+        title="Eliminar Promoción" />
     </div>
   );
 }

@@ -56,14 +56,14 @@ export default function AdminInstDashboard() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-info">admin_panel_settings</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-info">admin_panel_settings</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Panel Institucional</h1>
             <p className="text-on-surface-variant">Bienvenido, {perfil?.nombre_completo}</p>
           </div>
         </div>
         <Link to="/institucion/config" className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-outline-variant/30 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors">
-          <span className="material-symbols-outlined text-lg">settings</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">settings</span>
           Configuración
         </Link>
       </div>
@@ -79,7 +79,7 @@ export default function AdminInstDashboard() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
             <div className="flex items-center gap-3 mb-3">
               <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined">{stat.icon}</span>
               </span>
               <div>
                 <span className="text-sm font-bold text-on-surface-variant">{stat.label}</span>
@@ -97,7 +97,7 @@ export default function AdminInstDashboard() {
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-error">notifications_active</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-error">notifications_active</span>
               <h2 className="font-extrabold text-on-surface">Alertas Institucionales</h2>
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-error-container text-on-error-container">{alertas.length} activas</span>
@@ -132,7 +132,7 @@ export default function AdminInstDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-info">school</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-info">school</span>
               <h2 className="font-extrabold text-on-surface">Programas</h2>
             </div>
             <Link to="/institucion/programas" className="text-xs font-bold text-primary hover:underline">Ver todos</Link>
@@ -165,7 +165,7 @@ export default function AdminInstDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-success">group_work</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-success">group_work</span>
               <h2 className="font-extrabold text-on-surface">Cohortes Activas</h2>
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-container text-on-success-container">{totalCohortes} activas</span>
@@ -197,7 +197,7 @@ export default function AdminInstDashboard() {
         <div className="space-y-6">
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
             <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-              <span className="material-symbols-outlined text-warning">task_alt</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-warning">task_alt</span>
               <h2 className="font-extrabold text-on-surface">Tareas Pendientes</h2>
             </div>
             <div className="divide-y divide-outline-variant/30">
@@ -232,7 +232,7 @@ export default function AdminInstDashboard() {
                   to={action.path}
                   className="flex items-center gap-3 p-3 rounded-xl border-2 border-surface-container-high hover:border-primary/30 hover:bg-primary/5 transition-all"
                 >
-                  <span className="material-symbols-outlined text-primary text-lg">{action.icon}</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-primary text-lg">{action.icon}</span>
                   <span className="text-sm font-bold text-on-surface">{action.label}</span>
                 </Link>
               ))}
@@ -246,7 +246,7 @@ export default function AdminInstDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
           <div className="flex items-center gap-3 mb-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-info text-inverse-on-surface">
-              <span className="material-symbols-outlined">groups</span>
+              <span aria-hidden="true" className="material-symbols-outlined">groups</span>
             </span>
             <div>
               <span className="text-sm font-bold text-on-surface-variant">Emprendedores Totales</span>
@@ -265,7 +265,7 @@ export default function AdminInstDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
           <div className="flex items-center gap-3 mb-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal text-inverse-on-surface">
-              <span className="material-symbols-outlined">school</span>
+              <span aria-hidden="true" className="material-symbols-outlined">school</span>
             </span>
             <div>
               <span className="text-sm font-bold text-on-surface-variant">Mentores Activos</span>
@@ -279,7 +279,7 @@ export default function AdminInstDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
           <div className="flex items-center gap-3 mb-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-success text-inverse-on-surface">
-              <span className="material-symbols-outlined">verified</span>
+              <span aria-hidden="true" className="material-symbols-outlined">verified</span>
             </span>
             <div>
               <span className="text-sm font-bold text-on-surface-variant">Formalizados</span>

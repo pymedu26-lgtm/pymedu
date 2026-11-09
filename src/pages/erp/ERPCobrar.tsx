@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useERP, MetodoPago } from '../../1.-ERP/context/ERPContext';
 import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
+import VencimientoBadge from '../../components/VencimientoBadge';
 import { cn, formatFecha } from '@/lib/utils';
+import { hoyIso } from '@/lib/fecha';
 
 const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'efectivo', label: 'Efectivo' },
@@ -15,7 +17,7 @@ const METODOS: { value: MetodoPago; label: string }[] = [
 export default function ERPCobrar() {
   const { ventas, getSaldoPendienteVenta, getAbonosByReferencia, addAbono } = useERP();
   const [abonoVentaId, setAbonoVentaId] = useState<string | null>(null);
-  const [form, setForm] = useState({ monto: '', metodo_pago: 'efectivo' as MetodoPago, fecha: new Date().toISOString().split('T')[0] });
+  const [form, setForm] = useState({ monto: '', metodo_pago: 'efectivo' as MetodoPago, fecha: hoyIso() });
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
@@ -40,14 +42,14 @@ export default function ERPCobrar() {
       origen: 'manual',
     });
     setAbonoVentaId(null);
-    setForm({ monto: '', metodo_pago: 'efectivo', fecha: new Date().toISOString().split('T')[0] });
+    setForm({ monto: '', metodo_pago: 'efectivo', fecha: hoyIso() });
   };
 
   return (
     <div className="p-8 space-y-8">
       <div>
         <h2 className="text-3xl font-extrabold text-secondary flex items-center gap-3">
-          <span className="material-symbols-outlined text-4xl">payments</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-4xl">payments</span>
           Cuentas por Cobrar
         </h2>
         <p className="text-on-surface-variant mt-1 text-sm">Ventas con saldo pendiente y cobros registrados.</p>
@@ -77,17 +79,17 @@ export default function ERPCobrar() {
                 const abonos = getAbonosByReferencia(v.id);
                 return (
                   <tr key={v.id} className="hover:bg-surface-container-low/50 transition-colors">
-                    <td className="p-4 font-mono text-xs text-outline">{v.id}</td>
+                    <td className="p-4 font-mono text-xs text-outline" title={v.id}>#{v.id.slice(-6).toUpperCase()}</td>
                     <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(v.fecha)}</td>
                     <td className="p-4 font-bold text-on-surface">{v.cliente}</td>
                     <td className="p-4 font-bold text-on-surface">{fmt(v.monto)}</td>
                     <td className="p-4 font-extrabold text-secondary">{fmt(saldo)}</td>
-                    <td className="p-4 text-on-surface-variant text-xs">{formatFecha(v.fecha_vencimiento)}</td>
+                    <td className="p-4"><VencimientoBadge fecha={v.fecha_vencimiento} /></td>
                     <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
                     <td className="p-4">
                       <button onClick={() => setAbonoVentaId(v.id)}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-secondary text-inverse-on-surface text-xs font-bold hover:bg-secondary/80 transition-colors">
-                        <span className="material-symbols-outlined text-sm">payments</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-sm">payments</span>
                         Cobrar
                       </button>
                     </td>
@@ -110,8 +112,8 @@ export default function ERPCobrar() {
                   <h3 className="text-lg font-bold text-secondary">Registrar cobro</h3>
                   <p className="text-xs text-on-surface-variant mt-1">{venta?.cliente} · saldo {fmt(saldo)}</p>
                 </div>
-                <button onClick={() => setAbonoVentaId(null)} className="text-on-surface-variant hover:text-on-surface">
-                  <span className="material-symbols-outlined">close</span>
+                <button onClick={() => setAbonoVentaId(null)} aria-label="Cerrar registro de abono" className="text-on-surface-variant hover:text-on-surface">
+                  <span aria-hidden="true" className="material-symbols-outlined">close</span>
                 </button>
               </div>
               <div className="p-6 space-y-4">

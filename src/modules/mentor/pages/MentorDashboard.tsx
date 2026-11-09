@@ -115,7 +115,7 @@ export default function MentorDashboard() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-teal">school</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-3xl text-teal">school</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Panel Mentor</h1>
           <p className="text-on-surface-variant">Bienvenido, {perfil?.nombre_completo}</p>
@@ -133,7 +133,7 @@ export default function MentorDashboard() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
             <div className="flex items-center gap-3 mb-3">
               <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined">{stat.icon}</span>
               </span>
               <div>
                 <span className="text-sm font-bold text-on-surface-variant">{stat.label}</span>
@@ -149,7 +149,7 @@ export default function MentorDashboard() {
         {/* Emergencias y alertas */}
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-            <span className="material-symbols-outlined text-error">notifications_active</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-error">notifications_active</span>
             <h2 className="font-extrabold text-on-surface">Alertas y Casos en Riesgo</h2>
           </div>
           <div className="divide-y divide-outline-variant/30">
@@ -181,7 +181,7 @@ export default function MentorDashboard() {
             ))}
             {emprendedores.filter(e => e.alertas > 0).length === 0 && (
               <div className="p-8 text-center">
-                <span className="material-symbols-outlined text-4xl text-success">check_circle</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-4xl text-success">check_circle</span>
                 <p className="mt-2 text-on-surface-variant font-bold">Sin alertas pendientes</p>
               </div>
             )}
@@ -191,7 +191,7 @@ export default function MentorDashboard() {
         {/* Próximas sesiones */}
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-            <span className="material-symbols-outlined text-info">event</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-info">event</span>
             <h2 className="font-extrabold text-on-surface">Próximas Sesiones</h2>
           </div>
           <div className="divide-y divide-outline-variant/30">
@@ -199,7 +199,7 @@ export default function MentorDashboard() {
               <div key={sesion.id} className="p-4 hover:bg-surface-container-low/50 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-info-container text-on-info-container">
-                    <span className="material-symbols-outlined">event</span>
+                    <span aria-hidden="true" className="material-symbols-outlined">event</span>
                   </div>
                   <div>
                     <p className="font-bold text-on-surface text-sm">{sesion.emprendedor}</p>
@@ -217,7 +217,7 @@ export default function MentorDashboard() {
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
         <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-warning">task_alt</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-warning">task_alt</span>
             <h2 className="font-extrabold text-on-surface">Tareas Pendientes</h2>
           </div>
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-warning-container text-on-warning-container">
@@ -245,7 +245,7 @@ export default function MentorDashboard() {
       {/* Resumen de progreso del grupo */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-5">
         <div className="flex items-center gap-2 mb-4">
-          <span className="material-symbols-outlined text-teal">bar_chart</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-teal">bar_chart</span>
           <h2 className="font-extrabold text-on-surface">Progreso del Grupo</h2>
         </div>
         <div className="space-y-3">

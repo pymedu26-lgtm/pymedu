@@ -9,7 +9,7 @@ const logs = [
   { id: 'l6', fecha: '25 Jul 2026 12:45:00', usuario: 'Ana Silva', accion: 'login', modulo: 'Auth', detalle: 'Inicio de sesion exitoso', ip: '190.45.12.50', nivel: 'info' as const },
   { id: 'l7', fecha: '25 Jul 2026 12:10:22', usuario: 'Carlos Mendoza', accion: 'suspender_org', modulo: 'Organizaciones', detalle: 'Municipalidad de Temuco suspendida por pago vencido', ip: '190.45.12.34', nivel: 'warning' as const },
   { id: 'l8', fecha: '25 Jul 2026 11:30:00', usuario: 'Sistema', accion: 'alerta', modulo: 'Monitoreo', detalle: 'Uso de CPU superó 80% por 5 minutos', ip: '—', nivel: 'error' as const },
-  { id: 'l9', fecha: '25 Jul 2026 10:15:45', usuario: 'Carlos Mendoza', accion: 'habilitar_modulo', modulo: 'Modulos', detalle: 'Modulo Laboratorio habilitado para Universidad Catolica', ip: '190.45.12.34', nivel: 'info' as const },
+  { id: 'l9', fecha: '25 Jul 2026 10:15:45', usuario: 'Carlos Mendoza', accion: 'habilitar_modulo', modulo: 'Módulos', detalle: 'Módulo Laboratorio habilitado para Universidad Católica', ip: '190.45.12.34', nivel: 'info' as const },
   { id: 'l10', fecha: '25 Jul 2026 09:00:00', usuario: 'Sistema', accion: 'cron', modulo: 'Tareas', detalle: 'Tarea programada: limpieza de sesiones expiradas (48 eliminadas)', ip: '—', nivel: 'info' as const },
   { id: 'l11', fecha: '24 Jul 2026 23:45:12', usuario: 'Sistema', accion: 'backup', modulo: 'Sistema', detalle: 'Backup nocturno completado', ip: '—', nivel: 'info' as const },
   { id: 'l12', fecha: '24 Jul 2026 22:10:33', usuario: 'Desconocido', accion: 'login_fallido', modulo: 'Auth', detalle: '3 intentos fallidos de login para admin@pymedu.cl', ip: '102.34.56.78', nivel: 'error' as const },
@@ -28,7 +28,7 @@ const moduloConfig: Record<string, { color: string }> = {
   Planes: { color: 'bg-warning-container text-on-warning-container' },
   API: { color: 'bg-error-container text-on-error-container' },
   Organizaciones: { color: 'bg-success-container text-on-success-container' },
-  Modulos: { color: 'bg-teal-container text-on-teal-container' },
+  Módulos: { color: 'bg-teal-container text-on-teal-container' },
   Monitoreo: { color: 'bg-error-container text-on-error-container' },
   Tareas: { color: 'bg-surface-container text-on-surface-variant' },
 };
@@ -58,14 +58,14 @@ export default function SuperAdminAuditoria() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-on-surface-variant">fact_check</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-on-surface-variant">fact_check</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Auditoria y Logs</h1>
             <p className="text-on-surface-variant">Trazabilidad completa de acciones en la plataforma</p>
           </div>
         </div>
         <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-outline-variant/30 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors">
-          <span className="material-symbols-outlined text-lg">download</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
           Exportar logs
         </button>
       </div>
@@ -81,7 +81,7 @@ export default function SuperAdminAuditoria() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
               <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined text-lg">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
             </div>
@@ -124,7 +124,7 @@ export default function SuperAdminAuditoria() {
               <div className="flex items-start gap-4">
                 <div className="flex flex-col items-center shrink-0 pt-1">
                   <span className={`flex h-8 w-8 items-center justify-center rounded-full ${nivelConfig[log.nivel].color}`}>
-                    <span className="material-symbols-outlined text-lg">{nivelConfig[log.nivel].icon}</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-lg">{nivelConfig[log.nivel].icon}</span>
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -139,7 +139,7 @@ export default function SuperAdminAuditoria() {
                   <p className="text-xs text-on-surface-variant mt-0.5">{log.detalle}</p>
                 </div>
                 <button className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors shrink-0">
-                  <span className="material-symbols-outlined text-on-surface-variant text-lg">open_in_new</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant text-lg">open_in_new</span>
                 </button>
               </div>
             </div>
@@ -147,7 +147,7 @@ export default function SuperAdminAuditoria() {
         </div>
         {filtrados.length === 0 && (
           <div className="p-12 text-center">
-            <span className="material-symbols-outlined text-5xl text-on-surface-variant/30">search_off</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-5xl text-on-surface-variant/30">search_off</span>
             <p className="mt-3 text-on-surface-variant font-bold">No se encontraron eventos</p>
           </div>
         )}

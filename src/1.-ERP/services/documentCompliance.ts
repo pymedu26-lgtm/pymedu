@@ -1,3 +1,5 @@
+import { hoyIso } from '../../lib/fecha';
+
 export type DocumentType =
   | 'boleta_electronica'
   | 'factura_electronica'
@@ -167,7 +169,7 @@ export const STATUS_LABELS: Record<DocumentStatus, string> = {
 };
 
 export function periodoTributarioFromDate(fecha: string): string {
-  const safeDate = fecha || new Date().toISOString().split('T')[0];
+  const safeDate = fecha || hoyIso();
   return safeDate.slice(0, 7);
 }
 
@@ -364,17 +366,18 @@ export function createCreditNote(input: {
 }): DocumentoTributario {
   const monto = Math.max(0, Math.min(input.monto, input.original.total));
   const ratio = input.original.total > 0 ? monto / input.original.total : 0;
+  const hoy = hoyIso();
   return {
     id: safeId('NC'),
     operacion: 'ajuste',
-    folioInterno: buildInternalFolio('NC', new Date().toISOString().slice(0, 10), input.original.id),
+    folioInterno: buildInternalFolio('NC', hoy, input.original.id),
     tipoDocumento: 'nota_credito',
     estado: 'pendiente_emision',
     neto: Math.round(input.original.neto * ratio),
     iva: Math.round(input.original.iva * ratio),
     exento: Math.round(input.original.exento * ratio),
     total: monto,
-    periodoTributario: periodoTributarioFromDate(new Date().toISOString().slice(0, 10)),
+    periodoTributario: periodoTributarioFromDate(hoy),
     clienteId: input.original.clienteId,
     proveedorId: input.original.proveedorId,
     documentoReferenciaId: input.original.id,

@@ -1,40 +1,20 @@
 import { useState } from 'react';
+import { MODULOS_GLOBALES, PLANES_INSTITUCION, formatearPrecio } from '@/lib/planes';
 
-const planes = [
-  {
-    id: 'basico', nombre: 'Básico', precio: 0, periodo: 'Gratis',
-    descripcion: 'Para organizaciones que están comenzando.',
-    color: 'border-outline-variant/30', badgeColor: 'bg-surface-container text-on-surface-variant',
-    modulos: ['Academia'],
-    limites: { usuarios: 50, emprendedores: 25, mentores: 5, coordinadores: 2 },
-    features: ['Acceso a cursos básicos', '1 coordinador', 'Soporte por email', 'Reportes básicos'],
-  },
-  {
-    id: 'profesional', nombre: 'Profesional', precio: 299000, periodo: '/mes',
-    descripcion: 'Para instituciones en crecimiento con necesidades avanzadas.',
-    color: 'border-info/30', badgeColor: 'bg-info-container text-on-info-container',
-    modulos: ['Academia', 'ERP', 'Mentoría'],
-    limites: { usuarios: 200, emprendedores: 100, mentores: 20, coordinadores: 5 },
-    features: ['Todo lo del plan Básico', 'ERP completo', 'Mentoría ilimitada', 'Soporte prioritario', 'Reportes avanzados', 'API básica'],
-    popular: true,
-  },
-  {
-    id: 'premium', nombre: 'Premium', precio: 599000, periodo: '/mes',
-    descripcion: 'Para grandes instituciones con acceso completo.',
-    color: 'border-info/30', badgeColor: 'bg-info-container text-on-info-container',
-    modulos: ['Academia', 'ERP', 'Mentoría', 'Comunidad', 'Laboratorio'],
-    limites: { usuarios: -1, emprendedores: -1, mentores: -1, coordinadores: -1 },
-    features: ['Todo lo del plan Profesional', 'Comunidad completa', 'Laboratorio de innovación', 'SSO / SAML', 'Soporte 24/7', 'API completa', 'Branding personalizado', 'SLA garantizado'],
-  },
-];
+const ESTILO_PLAN = {
+  basico: { color: 'border-outline-variant/30', badgeColor: 'bg-surface-container text-on-surface-variant' },
+  profesional: { color: 'border-info/30', badgeColor: 'bg-info-container text-on-info-container' },
+  premium: { color: 'border-info/30', badgeColor: 'bg-info-container text-on-info-container' },
+} as const;
 
-const modulosGlobales = [
-  { id: 'academia', nombre: 'Academia', icon: 'school', descripcion: 'Cursos, módulos y certificaciones', incluidoEn: ['Básico', 'Profesional', 'Premium'] },
-  { id: 'erp', nombre: 'ERP', icon: 'point_of_sale', descripcion: 'Ventas, gastos, inventario y contabilidad', incluidoEn: ['Profesional', 'Premium'] },
-  { id: 'mentoria', nombre: 'Mentoría', icon: 'groups', descripcion: 'Sesiones, seguimiento y acuerdos', incluidoEn: ['Profesional', 'Premium'] },
-  { id: 'comunidad', nombre: 'Comunidad', icon: 'diversity_3', descripcion: 'Networking y eventos entre emprendedores', incluidoEn: ['Premium'] },
-  { id: 'laboratorio', nombre: 'Laboratorio', icon: 'science', descripcion: 'Innovación, prototipos y testing', incluidoEn: ['Premium'] },
-];
+const estiloPlan = (id: string) =>
+  ESTILO_PLAN[id.includes('basico') ? 'basico' : id.includes('profesional') ? 'profesional' : 'premium'];
+
+const planes = PLANES_INSTITUCION.map((plan) => ({
+  ...plan,
+  periodo: plan.precio > 0 ? '/mes' : 'Gratis',
+  ...estiloPlan(plan.id),
+}));
 
 export default function SuperAdminPlanes() {
   const [tab, setTab] = useState<'planes' | 'modulos'>('planes');
@@ -43,10 +23,10 @@ export default function SuperAdminPlanes() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-warning">workspace_premium</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-warning">workspace_premium</span>
           <div>
-            <h1 className="text-2xl font-extrabold text-on-surface">Planes y Módulos</h1>
-            <p className="text-on-surface-variant">Configura los planes de suscripción y módulos de la plataforma</p>
+            <h1 className="text-2xl font-extrabold text-on-surface">Planes institucionales y módulos</h1>
+            <p className="text-on-surface-variant">Licencias por organización (usuarios, emprendedores y mentores). No son los planes de negocio de la landing.</p>
           </div>
         </div>
       </div>
@@ -79,13 +59,13 @@ export default function SuperAdminPlanes() {
                 )}
                 <div className="flex items-center justify-between mb-3">
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${plan.badgeColor}`}>{plan.nombre}</span>
-                  <button className="p-1 rounded-lg hover:bg-surface-container-high transition-colors">
-                    <span className="material-symbols-outlined text-on-surface-variant text-lg">edit</span>
+                  <button aria-label={`Editar plan ${plan.nombre}`} className="p-1 rounded-lg hover:bg-surface-container-high transition-colors">
+                    <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant text-lg">edit</span>
                   </button>
                 </div>
                 <div className="mb-3">
                   <span className="text-3xl font-extrabold text-on-surface">
-                    {plan.precio === 0 ? 'Gratis' : `$${plan.precio.toLocaleString()}`}
+                    {plan.precio === 0 ? 'Gratis' : formatearPrecio(plan.precio)}
                   </span>
                   {plan.precio > 0 && <span className="text-sm text-on-surface-variant">{plan.periodo}</span>}
                 </div>
@@ -118,7 +98,7 @@ export default function SuperAdminPlanes() {
                   <ul className="space-y-1">
                     {plan.features.map((f, i) => (
                       <li key={i} className="flex items-center gap-1.5 text-xs text-on-surface-variant">
-                        <span className="material-symbols-outlined text-success text-sm">check</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-success text-sm">check</span>
                         {f}
                       </li>
                     ))}
@@ -132,12 +112,12 @@ export default function SuperAdminPlanes() {
 
       {tab === 'modulos' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {modulosGlobales.map((mod) => (
+          {MODULOS_GLOBALES.map((mod) => (
             <div key={mod.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-5 hover:border-primary/20 transition-colors">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <span className="material-symbols-outlined">{mod.icon}</span>
+                    <span aria-hidden="true" className="material-symbols-outlined">{mod.icon}</span>
                   </span>
                   <div>
                     <h3 className="font-extrabold text-on-surface">{mod.nombre}</h3>
@@ -145,7 +125,7 @@ export default function SuperAdminPlanes() {
                   </div>
                 </div>
                 <label className="relative inline-flex cursor-pointer shrink-0">
-                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <input type="checkbox" aria-label={`Activar ${mod.nombre}`} className="sr-only peer" defaultChecked />
                   <div className="w-11 h-6 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                 </label>
               </div>

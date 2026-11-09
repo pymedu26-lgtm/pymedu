@@ -2,11 +2,11 @@ import { useAuth } from '@/context/AuthContext';
 import { Link } from 'react-router-dom';
 
 const organizaciones = [
-  { id: 'o1', nombre: 'Municipalidad de Santiago', plan: 'Premium', usuarios: 128, emprendedores: 63, estado: 'activa', avance: 72 },
-  { id: 'o2', nombre: 'Incubadora Innova', plan: 'Profesional', usuarios: 85, emprendedores: 42, estado: 'activa', avance: 58 },
-  { id: 'o3', nombre: 'Universidad Católica', plan: 'Premium', usuarios: 210, emprendedores: 95, estado: 'activa', avance: 81 },
-  { id: 'o4', nombre: 'Fundación Emprende', plan: 'Básico', usuarios: 34, emprendedores: 18, estado: 'activa', avance: 45 },
-  { id: 'o5', nombre: 'Municipalidad de Temuco', plan: 'Profesional', usuarios: 78, emprendedores: 35, estado: 'suspendida', avance: 30 },
+  { id: 'o1', nombre: 'Municipalidad de Santiago', plan: 'Premium Institucional', usuarios: 128, emprendedores: 63, estado: 'activa', avance: 72 },
+  { id: 'o2', nombre: 'Incubadora Innova', plan: 'Profesional Institucional', usuarios: 85, emprendedores: 42, estado: 'activa', avance: 58 },
+  { id: 'o3', nombre: 'Universidad Católica', plan: 'Premium Institucional', usuarios: 210, emprendedores: 95, estado: 'activa', avance: 81 },
+  { id: 'o4', nombre: 'Fundación Emprende', plan: 'Básico Institucional', usuarios: 34, emprendedores: 18, estado: 'activa', avance: 45 },
+  { id: 'o5', nombre: 'Municipalidad de Temuco', plan: 'Profesional Institucional', usuarios: 78, emprendedores: 35, estado: 'suspendida', avance: 30 },
 ];
 
 const ticketsRecientes = [
@@ -49,7 +49,7 @@ export default function SuperAdminDashboard() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-error">shield</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-error">shield</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Panel Super Admin</h1>
             <p className="text-on-surface-variant">Bienvenido, {perfil?.nombre_completo} — Vista global de la plataforma</p>
@@ -74,7 +74,7 @@ export default function SuperAdminDashboard() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30">
             <div className="flex items-center gap-3 mb-3">
               <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined">{stat.icon}</span>
               </span>
               <div>
                 <span className="text-sm font-bold text-on-surface-variant">{stat.label}</span>
@@ -92,7 +92,7 @@ export default function SuperAdminDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-success">monitor_heart</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-success">monitor_heart</span>
               <h2 className="font-extrabold text-on-surface">Salud del Sistema</h2>
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-success-container text-on-success-container">Operativo</span>
@@ -122,7 +122,7 @@ export default function SuperAdminDashboard() {
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-error">confirmation_number</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-error">confirmation_number</span>
               <h2 className="font-extrabold text-on-surface">Tickets de Soporte</h2>
             </div>
             <div className="flex items-center gap-2">
@@ -162,7 +162,7 @@ export default function SuperAdminDashboard() {
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
           <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-info">apartment</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-info">apartment</span>
               <h2 className="font-extrabold text-on-surface">Organizaciones</h2>
             </div>
             <Link to="/admin/instituciones" className="text-xs font-bold text-primary hover:underline">Gestionar</Link>
@@ -173,7 +173,7 @@ export default function SuperAdminDashboard() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-info-container text-on-info-container">
-                      <span className="material-symbols-outlined text-lg">apartment</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-lg">apartment</span>
                     </div>
                     <div>
                       <p className="font-bold text-on-surface text-sm">{org.nombre}</p>
@@ -201,7 +201,7 @@ export default function SuperAdminDashboard() {
         <div className="space-y-6">
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
             <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-              <span className="material-symbols-outlined text-info">history</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-info">history</span>
               <h2 className="font-extrabold text-on-surface">Actividad Reciente</h2>
             </div>
             <div className="divide-y divide-outline-variant/30">
@@ -209,7 +209,7 @@ export default function SuperAdminDashboard() {
                 <div key={act.id} className="p-4 hover:bg-surface-container-low/50 transition-colors">
                   <div className="flex items-start gap-3">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-high text-on-surface-variant shrink-0 mt-0.5">
-                      <span className="material-symbols-outlined text-lg">{act.icon}</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-lg">{act.icon}</span>
                     </span>
                     <div className="min-w-0">
                       <p className="font-bold text-on-surface text-sm">{act.accion}</p>
@@ -238,7 +238,7 @@ export default function SuperAdminDashboard() {
                   to={action.path}
                   className="flex items-center gap-3 p-3 rounded-xl border-2 border-surface-container-high hover:border-primary/30 hover:bg-primary/5 transition-all"
                 >
-                  <span className="material-symbols-outlined text-primary text-lg">{action.icon}</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-primary text-lg">{action.icon}</span>
                   <span className="text-sm font-bold text-on-surface">{action.label}</span>
                 </Link>
               ))}

@@ -2,6 +2,7 @@ import { useRef, useState, ChangeEvent, DragEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { EstadoPago, Gasto, MetodoPago, TipoDocumento } from '../context/ERPContext';
 import { DocumentType } from '../services/documentCompliance';
+import { hoyIso } from '@/lib/fecha';
 import {
   ESTADOS, EXTENSIONES, METODOS_PAGO, descargarLibroPlantilla, elegirEnum, extensionValida,
   formatPesos, mapearColumnas, normKey, parseBooleano, parseFecha, parseNumero,
@@ -44,14 +45,14 @@ const COLUMNAS: { campo: CampoClave; titulo: string; obligatorio: boolean; ayuda
   { campo: 'fecha', titulo: 'Fecha', obligatorio: true, ayuda: 'Formato aaaa-mm-dd o dd-mm-aaaa.' },
   { campo: 'proveedor', titulo: 'Proveedor', obligatorio: true, ayuda: 'Razón social de quien emitió el gasto. Si va vacío se usa el RUT.' },
   { campo: 'rut', titulo: 'RUT Proveedor', obligatorio: false, ayuda: 'Opcional. Identifica al proveedor y alimenta el crédito fiscal.' },
-  { campo: 'categoria', titulo: 'Categoria', obligatorio: false, ayuda: 'Insumos/Mercaderia, Servicios Basicos, Arriendo, Sueldos, Publicidad, Tecnologia, Transporte, Capacitacion, Mantencion, IVA/Impuestos u Otros.' },
+  { campo: 'categoria', titulo: 'Categoría', obligatorio: false, ayuda: 'Insumos/Mercadería, Servicios Básicos, Arriendo, Sueldos, Publicidad, Tecnología, Transporte, Capacitación, Mantención, IVA/Impuestos u Otros.' },
   { campo: 'tipoDocumento', titulo: 'Tipo Documento', obligatorio: false, ayuda: 'factura_electronica (33), boleta_electronica (39), factura_exenta (34) o boleta_exenta (41).' },
   { campo: 'folio', titulo: 'Folio', obligatorio: false, ayuda: 'Numero del documento. Sirve para detectar duplicados en reimportaciones.' },
   { campo: 'monto', titulo: 'Monto Total', obligatorio: false, ayuda: 'Total con IVA. Si informas Neto e IVA puedes dejarlo vacio.' },
   { campo: 'subtotal', titulo: 'Neto', obligatorio: false, ayuda: 'Monto sin IVA. Tiene prioridad sobre el cálculo automático.' },
   { campo: 'iva', titulo: 'IVA', obligatorio: false, ayuda: 'IVA de la operación. Si falta se calcula al 19% sobre el neto.' },
   { campo: 'estado', titulo: 'Estado', obligatorio: false, ayuda: 'Pagado (por defecto), Pendiente o Por Pagar (deja saldo pendiente).' },
-  { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, debito, credito, mixto o cheque.' },
+  { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, débito, crédito, mixto o cheque.' },
   { campo: 'fechaVencimiento', titulo: 'Vencimiento', obligatorio: false, ayuda: 'Solo para gastos Pendientes: fecha en que se debe pagar.' },
   { campo: 'recurrente', titulo: 'Recurrente', obligatorio: false, ayuda: 'Si/No. Marca el gasto como recurrente (mensual), igual que el formulario.' },
   { campo: 'nota', titulo: 'Nota', obligatorio: false, ayuda: 'Observación o glosa del gasto.' },
@@ -96,8 +97,8 @@ const ESTADOS_GASTO: { valor: EstadoPago; alias: string[] }[] = [
 ];
 
 const CATEGORIAS = [
-  'Insumos/Mercaderia', 'Servicios Basicos', 'Arriendo', 'Sueldos', 'Publicidad',
-  'Tecnologia', 'Transporte', 'Capacitacion', 'Mantencion', 'IVA/Impuestos', 'Otros',
+  'Insumos/Mercadería', 'Servicios Básicos', 'Arriendo', 'Sueldos', 'Publicidad',
+  'Tecnología', 'Transporte', 'Capacitación', 'Mantención', 'IVA/Impuestos', 'Otros',
 ];
 
 const CATEGORIAS_KEY = new Map(CATEGORIAS.map(c => [normKey(c), c]));
@@ -127,18 +128,18 @@ function descargarPlantilla() {
     'Gastos',
     [
       COLUMNAS.map(c => c.titulo),
-      ['2026-09-01', 'PROVEEDOR EJEMPLO SPA', '76.123.456-7', 'Insumos/Mercaderia', '33', '1001', 11900, '', '', 'Pagado', 'transferencia', '', '', 'Compra de mercadería'],
-      ['02-09-2026', 'SERVICIOS DE TELECOMUNICACIONES', '96.888.777-1', 'Servicios Basicos', '33', '1002', '', 100000, 19000, 'Pendiente', 'debito', '30-09-2026', 'No', 'Factura de internet'],
+      ['2026-09-01', 'PROVEEDOR EJEMPLO SPA', '76.123.456-7', 'Insumos/Mercadería', '33', '1001', 11900, '', '', 'Pagado', 'transferencia', '', '', 'Compra de mercadería'],
+      ['02-09-2026', 'SERVICIOS DE TELECOMUNICACIONES', '96.888.777-1', 'Servicios Básicos', '33', '1002', '', 100000, 19000, 'Pendiente', 'debito', '30-09-2026', 'No', 'Factura de internet'],
       ['15-09-2026', 'COMERCIO MINORISTA', '77.555.444-K', 'Arriendo', '39', '1003', 500000, '', '', 'Pagado', 'efectivo', '', 'Si', 'Arriendo mensual'],
     ],
     COLUMNAS.map(c => ({ wch: Math.max(16, c.titulo.length + 4) })),
     [
-      ['Columna', 'Obligatorio', 'Descripcion'],
+      ['Columna', 'Obligatorio', 'Descripción'],
       ...COLUMNAS.map(c => [c.titulo, c.obligatorio ? 'Si' : 'No', c.ayuda]),
       [],
       ['Montos', '', 'Informa "Monto Total" con IVA, o bien "Neto" e "IVA". Con solo el total, el neto se calcula al 19%.'],
-      ['Categorias', '', CATEGORIAS.join(' · ')],
-      ['Documentos SII', '', 'Acepta los codigos del Registro de Compras: 33 factura, 39 boleta, 34/41 exentas, 61 nota de credito.'],
+      ['Categorías', '', CATEGORIAS.join(' · ')],
+      ['Documentos SII', '', 'Acepta los códigos del Registro de Compras: 33 factura, 39 boleta, 34/41 exentas, 61 nota de crédito.'],
       ['Duplicados', '', 'Una fila con el mismo Folio, Proveedor y Fecha que ya existe no se importa.'],
       ['Pendientes', '', 'Un gasto Pendiente con Vencimiento genera saldo pendiente por cobrar.'],
       ['Recurrente', '', 'Acepta Si/No, 1/0, X o vacío. Marca el gasto como recurrente mensual, igual que el formulario.'],
@@ -195,7 +196,7 @@ export default function ModalCargaMasivaGastos({
           return i >= 0 ? fila[i] : '';
         };
 
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = hoyIso();
         const lista: GastoPrevio[] = [];
 
         filas.slice(indiceEncabezado + 1).forEach((fila, offset) => {
@@ -228,7 +229,7 @@ export default function ModalCargaMasivaGastos({
           if (!proveedor) errores.push('Falta el Proveedor o el RUT.');
           if (calculo.monto <= 0) errores.push('El monto debe ser mayor a 0.');
           if (textoCategoria && !normalizarCategoria(textoCategoria)) {
-            errores.push(`Categoria "${textoCategoria}" no existe. Usa: ${CATEGORIAS.join(', ')}.`);
+            errores.push(`La categoría "${textoCategoria}" no existe. Usa: ${CATEGORIAS.join(', ')}.`);
           }
 
           // El folio viaja en las notas, que es donde el gasto guarda su trazabilidad.
@@ -352,8 +353,8 @@ export default function ModalCargaMasivaGastos({
             <h3 className="text-2xl font-black text-primary">Carga Masiva de Gastos</h3>
             <p className="text-on-surface-variant text-sm mt-1">Importa múltiples gastos desde Excel o CSV en un solo paso.</p>
           </div>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-error transition-colors">
-            <span className="material-symbols-outlined text-3xl">close</span>
+          <button onClick={onClose} aria-label="Cerrar carga masiva de gastos" className="text-on-surface-variant hover:text-error transition-colors">
+            <span aria-hidden="true" className="material-symbols-outlined text-3xl">close</span>
           </button>
         </div>
 
@@ -366,7 +367,7 @@ export default function ModalCargaMasivaGastos({
               onDrop={handleDrop}
               className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-all ${arrastrando ? 'border-primary bg-primary/5' : 'border-outline-variant/50 hover:border-primary/40'}`}
             >
-              <span className="material-symbols-outlined text-6xl text-primary mb-4">cloud_upload</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-6xl text-primary mb-4">cloud_upload</span>
               <h4 className="text-xl font-bold text-on-surface mb-2">Arrastra tu archivo aquí</h4>
               <p className="text-on-surface-variant mb-4">o</p>
               <button onClick={() => inputRef.current?.click()} className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
@@ -375,7 +376,7 @@ export default function ModalCargaMasivaGastos({
               <input ref={inputRef} type="file" accept={EXTENSIONES.join(',')} onChange={handleInputChange} className="hidden" />
               <p className="text-xs text-on-surface-variant mt-4">Formato permitido: .xlsx (plantilla de descarga)</p>
               <button onClick={descargarPlantilla} className="mt-6 flex items-center gap-2 px-5 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-surface-container-low transition-all">
-                <span className="material-symbols-outlined text-lg">download</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
                 Descargar Plantilla
               </button>
             </div>
@@ -385,14 +386,14 @@ export default function ModalCargaMasivaGastos({
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-3xl text-primary">description</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-3xl text-primary">description</span>
                   <div>
                     <p className="font-bold text-on-surface">{archivo.name}</p>
                     <p className="text-xs text-on-surface-variant">{(archivo.size / 1024).toFixed(2)} KB</p>
                   </div>
                 </div>
                 <button onClick={() => { setPrevias([]); setArchivo(null); setError(null); }} className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-error/10 hover:text-error transition-all">
-                  <span className="material-symbols-outlined text-lg">close</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg">close</span>
                   Cambiar archivo
                 </button>
               </div>
@@ -406,7 +407,7 @@ export default function ModalCargaMasivaGastos({
 
               {error && (
                 <div className="p-4 bg-error-container text-on-error-container rounded-xl flex items-start gap-3">
-                  <span className="material-symbols-outlined mt-0.5">error</span>
+                  <span aria-hidden="true" className="material-symbols-outlined mt-0.5">error</span>
                   <p className="text-sm font-medium whitespace-pre-wrap">{error}</p>
                 </div>
               )}
@@ -499,7 +500,7 @@ export default function ModalCargaMasivaGastos({
 
               {!cargando && !error && previas.length === 0 && (
                 <div className="text-center py-10">
-                  <span className="material-symbols-outlined text-5xl text-on-surface-variant mb-3">inbox</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-5xl text-on-surface-variant mb-3">inbox</span>
                   <p className="text-on-surface-variant font-medium">No se encontraron filas con datos para procesar.</p>
                 </div>
               )}
@@ -519,7 +520,7 @@ export default function ModalCargaMasivaGastos({
                 disabled={aImportar.length === 0}
                 className="px-6 py-2.5 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
               >
-                <span className="material-symbols-outlined text-lg">download</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
                 Importar {aImportar.length > 0 ? `(${aImportar.length})` : ''}
               </button>
             </div>

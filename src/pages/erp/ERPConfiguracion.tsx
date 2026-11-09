@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useERP } from '../../1.-ERP/context/ERPContext';
 import { api } from '../../lib/api';
+import { PLAN_PRO, formatearPrecio, planPorId } from '../../lib/planes';
 import { cn } from '../../lib/utils';
 
 type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion';
@@ -129,8 +130,8 @@ export default function ERPConfiguracion() {
       notif_push: formCuenta.notif_push,
     };
     if (formCuenta.nueva_contrasena || formCuenta.confirmar_contrasena) {
-      if (formCuenta.nueva_contrasena.length < 6) {
-        notificar('error', 'La contraseña debe tener al menos 6 caracteres');
+      if (formCuenta.nueva_contrasena.length < 8) {
+        notificar('error', 'La contraseña debe tener al menos 8 caracteres');
         return;
       }
       if (formCuenta.nueva_contrasena !== formCuenta.confirmar_contrasena) {
@@ -189,7 +190,7 @@ export default function ERPConfiguracion() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span className="material-symbols-outlined text-4xl">settings</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-4xl">settings</span>
             Configuración
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Perfil de tu negocio, cuenta, equipo y preferencias del ERP.</p>
@@ -197,7 +198,7 @@ export default function ERPConfiguracion() {
         {mensaje && (
           <div className={cn('flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm',
             mensaje.tipo === 'ok' ? 'bg-success/15 text-success' : 'bg-error/15 text-error')}>
-            <span className="material-symbols-outlined">{mensaje.tipo === 'ok' ? 'check_circle' : 'error'}</span>
+            <span aria-hidden="true" className="material-symbols-outlined">{mensaje.tipo === 'ok' ? 'check_circle' : 'error'}</span>
             {mensaje.texto}
           </div>
         )}
@@ -209,7 +210,7 @@ export default function ERPConfiguracion() {
           <button key={id} onClick={() => setTab(id)}
             className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap',
               tab === id ? 'bg-primary text-inverse-on-surface shadow-md' : 'text-on-surface-variant hover:text-on-surface')}>
-            <span className="material-symbols-outlined text-base">{icono}</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">{icono}</span>
             {label}
           </button>
         ))}
@@ -219,7 +220,7 @@ export default function ERPConfiguracion() {
       {tab === 'negocio' && (
         <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8 space-y-6">
           <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">storefront</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-primary">storefront</span>
             Datos del Negocio
           </h3>
 
@@ -278,7 +279,7 @@ export default function ERPConfiguracion() {
           {/* Logo */}
           <div className="p-5 rounded-2xl bg-surface-container dark-card border border-outline-variant/20">
             <h4 className="text-sm font-bold text-on-surface mb-3 flex items-center gap-2">
-              <span className="material-symbols-outlined text-on-surface-variant">image</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">image</span>
               Logo del negocio
             </h4>
             <div className="flex items-center gap-5">
@@ -295,7 +296,7 @@ export default function ERPConfiguracion() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="flex items-center gap-2 px-4 py-2.5 border-2 border-outline-variant rounded-xl text-sm font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
-                  <span className="material-symbols-outlined text-base">upload</span> {formNegocio.logo_url ? 'Cambiar logo' : 'Subir logo'}
+                  <span aria-hidden="true" className="material-symbols-outlined text-base">upload</span> {formNegocio.logo_url ? 'Cambiar logo' : 'Subir logo'}
                 </button>
                 {formNegocio.logo_url && (
                   <button onClick={() => setFormNegocio(p => ({ ...p, logo_url: '' }))}
@@ -310,7 +311,7 @@ export default function ERPConfiguracion() {
 
           <button onClick={guardarNegocio} disabled={guardando}
             className="w-full py-4 bg-primary text-inverse-on-surface font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
-            {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
+            {guardando ? <span aria-hidden="true" className="material-symbols-outlined animate-spin">autorenew</span> : <span aria-hidden="true" className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
         </div>
@@ -321,7 +322,7 @@ export default function ERPConfiguracion() {
         <div className="space-y-6 max-w-xl">
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8 space-y-5">
             <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">manage_accounts</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-primary">manage_accounts</span>
               Datos personales
             </h3>
             <div>
@@ -338,7 +339,7 @@ export default function ERPConfiguracion() {
 
             <div className="pt-2">
               <h4 className="text-sm font-bold text-on-surface mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">notifications</span>
                 Notificaciones
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -364,13 +365,13 @@ export default function ERPConfiguracion() {
 
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8 space-y-5">
             <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">lock_reset</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-primary">lock_reset</span>
               Cambiar contraseña
             </h3>
             <div>
               <label className={labelCls}>Nueva contraseña</label>
               <input type="password" value={formCuenta.nueva_contrasena} onChange={e => setFormCuenta(p => ({ ...p, nueva_contrasena: e.target.value }))}
-                placeholder="Mínimo 6 caracteres" className={inputCls} />
+                placeholder="Mínimo 8 caracteres" className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Confirmar contraseña</label>
@@ -381,7 +382,7 @@ export default function ERPConfiguracion() {
 
           <button onClick={guardarCuenta} disabled={guardando}
             className="w-full py-4 bg-primary text-inverse-on-surface font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-70 transition-colors">
-            {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
+            {guardando ? <span aria-hidden="true" className="material-symbols-outlined animate-spin">autorenew</span> : <span aria-hidden="true" className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
         </div>
@@ -403,7 +404,7 @@ export default function ERPConfiguracion() {
             {puedeGestionarEquipo ? (
               equipo === null ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">
-                  <span className="material-symbols-outlined animate-spin inline-block">autorenew</span>
+                  <span aria-hidden="true" className="material-symbols-outlined animate-spin inline-block">autorenew</span>
                 </div>
               ) : equipo.length === 0 ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">Aún no hay miembros en tu institución.</div>
@@ -438,7 +439,7 @@ export default function ERPConfiguracion() {
                             </span>
                           </td>
                           <td className="px-8 py-4 text-right text-xs font-bold text-on-surface-variant capitalize">
-                            {String(m.membresia_nivel ?? 'free')}
+                            {planPorId(String(m.membresia_nivel ?? 'free')).nombre}
                           </td>
                         </tr>
                       ))}
@@ -450,7 +451,7 @@ export default function ERPConfiguracion() {
               <div className="p-8 space-y-4">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-primary">group</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-primary">group</span>
                   </div>
                   <div>
                     <p className="font-bold text-on-surface">Tu equipo se gestiona desde las Administración</p>
@@ -463,7 +464,7 @@ export default function ERPConfiguracion() {
                 </div>
                 <Link to="/erp/mi-institucion"
                   className="inline-flex items-center gap-2 px-5 py-3 border-2 border-outline-variant rounded-xl text-sm font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
-                  <span className="material-symbols-outlined text-lg">domain</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg">domain</span>
                   Ver mi institución
                 </Link>
               </div>
@@ -477,7 +478,7 @@ export default function ERPConfiguracion() {
         <div className="space-y-6 max-w-xl">
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8">
             <h3 className="text-lg font-bold text-on-surface mb-2 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">account_balance</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-primary">account_balance</span>
               Integración con SII
             </h3>
             <p className="text-sm text-on-surface-variant mb-6">Parámetros que el ERP usa para la declaración de impuestos (F29 e IVA mensual).</p>
@@ -498,7 +499,7 @@ export default function ERPConfiguracion() {
 
             <div className="p-4 rounded-2xl border border-warning/30 bg-warning/10">
               <div className="flex gap-3">
-                <span className="material-symbols-outlined text-warning">security</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-warning">security</span>
                 <div>
                   <p className="text-xs font-bold text-warning uppercase tracking-tight">Seguridad de tus datos</p>
                   <p className="text-[11px] text-on-surface-variant mt-1 leading-relaxed">
@@ -511,7 +512,7 @@ export default function ERPConfiguracion() {
 
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-4">
-              <span className="material-symbols-outlined text-primary">percent</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-primary">percent</span>
               <div>
                 <h3 className="font-bold text-on-surface">Tasa de PPM (Pagos Provisional Mensuales)</h3>
                 <p className="text-xs text-on-surface-variant">Ingresa el porcentaje que aparece en tu resolución de PPM para el cálculo del F29.</p>
@@ -539,7 +540,7 @@ export default function ERPConfiguracion() {
       {tab === 'facturacion' && (
         <div className="max-w-xl bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8">
           <h3 className="text-lg font-bold text-on-surface mb-6 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">credit_card</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-primary">credit_card</span>
             Tu Suscripción
           </h3>
 
@@ -548,7 +549,7 @@ export default function ERPConfiguracion() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">Plan Actual</p>
-                <h4 className="text-xl font-extrabold text-on-surface capitalize">{perfil.membresia_nivel ?? 'free'}</h4>
+                <h4 className="text-xl font-extrabold text-on-surface">{planPorId(perfil.membresia_nivel).nombre}</h4>
               </div>
               <span className={cn('material-symbols-outlined text-4xl',
                 perfil.membresia_nivel === 'free' ? 'text-on-surface-variant/50' : 'text-success')}>
@@ -563,14 +564,14 @@ export default function ERPConfiguracion() {
           {perfil.membresia_nivel === 'free' ? (
             <Link to="/erp/suscripcion"
               className="w-full flex items-center justify-center gap-2 py-4 bg-warning hover:bg-warning/90 text-inverse-on-surface font-bold rounded-2xl text-base transition-colors shadow-lg shadow-warning/25">
-              <span className="material-symbols-outlined">rocket_launch</span>
-              Pasarse a Premium — $10.000/mes
+              <span aria-hidden="true" className="material-symbols-outlined">rocket_launch</span>
+              Mejorar de plan — desde {formatearPrecio(PLAN_PRO.precio)}/mes
             </Link>
           ) : (
             <div className="space-y-3">
               <Link to="/erp/suscripcion"
                 className="w-full py-3 border-2 border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary rounded-2xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-lg">receipt_long</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">receipt_long</span>
                 Ver historial de pagos
               </Link>
               <p className="text-[11px] text-on-surface-variant text-center leading-relaxed">

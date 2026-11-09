@@ -51,11 +51,11 @@ export default function CoordEmprendedores() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-success">groups</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-success">groups</span>
           <h1 className="text-2xl font-extrabold text-on-surface">Emprendedores</h1>
         </div>
         <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
-          <span className="material-symbols-outlined text-lg">person_add</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">person_add</span>
           Agregar Emprendedor
         </button>
       </div>

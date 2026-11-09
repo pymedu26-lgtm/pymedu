@@ -51,7 +51,7 @@ export default function InstProgramas() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-teal">school</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-teal">school</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Programas y Cohortes</h1>
             <p className="text-on-surface-variant">{stats.total} programas · {stats.cohortes} cohortes activas</p>
@@ -61,7 +61,7 @@ export default function InstProgramas() {
           onClick={() => setShowNuevo(!showNuevo)}
           className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors"
         >
-          <span className="material-symbols-outlined text-lg">add</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
           Nuevo Programa
         </button>
       </div>
@@ -77,7 +77,7 @@ export default function InstProgramas() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
               <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined text-lg">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
             </div>
@@ -90,7 +90,7 @@ export default function InstProgramas() {
       {showNuevo && (
         <div className="bg-surface-container-lowest rounded-2xl border-2 border-primary/30 p-6 space-y-4">
           <h2 className="font-extrabold text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">add_circle</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-primary">add_circle</span>
             Crear Nuevo Programa
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -160,19 +160,19 @@ export default function InstProgramas() {
                   <p className="text-sm text-on-surface-variant mb-2">{prog.descripcion}</p>
                   <div className="flex flex-wrap items-center gap-4 text-xs text-on-surface-variant">
                     <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">person</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm">person</span>
                       {prog.coordinador}
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">calendar_today</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm">calendar_today</span>
                       {prog.fechaInicio} — {prog.fechaFin}
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">group_work</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm">group_work</span>
                       {prog.cohortes.length} cohorte{prog.cohortes.length > 1 ? 's' : ''}
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">groups</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm">groups</span>
                       {prog.cohortes.reduce((a, c) => a + c.emprendedores, 0)} emprendedores
                     </span>
                   </div>
@@ -184,7 +184,7 @@ export default function InstProgramas() {
                     </p>
                     <p className="text-xs text-on-surface-variant">avance global</p>
                   </div>
-                  <span className="material-symbols-outlined text-on-surface-variant">
+                  <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">
                     {expanded === prog.id ? 'expand_less' : 'expand_more'}
                   </span>
                 </div>
@@ -197,7 +197,7 @@ export default function InstProgramas() {
                 {/* Módulos */}
                 <div>
                   <h4 className="text-sm font-extrabold text-on-surface mb-2 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm text-teal">view_module</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-sm text-teal">view_module</span>
                     Módulos del Programa
                   </h4>
                   <div className="flex flex-wrap gap-2">
@@ -216,11 +216,11 @@ export default function InstProgramas() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-extrabold text-on-surface flex items-center gap-2">
-                      <span className="material-symbols-outlined text-sm text-info">group_work</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm text-info">group_work</span>
                       Cohortes
                     </h4>
                     <button className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border-2 border-primary/30 text-primary hover:bg-primary/5 transition-colors">
-                      <span className="material-symbols-outlined text-sm">add</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm">add</span>
                       Nueva Cohorte
                     </button>
                   </div>

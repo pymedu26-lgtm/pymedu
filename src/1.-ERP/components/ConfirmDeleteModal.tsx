@@ -15,7 +15,7 @@ export default function ConfirmDeleteModal({ isOpen, onClose, onConfirm, title =
       <div className="bg-surface-container-lowest text-on-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-outline-variant/20">
         <div className="p-6">
           <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center mb-4">
-            <span className="material-symbols-outlined text-error text-2xl">warning</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-error text-2xl">warning</span>
           </div>
           <h3 className="text-xl font-bold text-on-surface mb-2">{title}</h3>
           <p className="text-on-surface-variant">

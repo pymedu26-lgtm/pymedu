@@ -88,7 +88,7 @@ export default function InstReportes() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-info">analytics</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-info">analytics</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Reportes Institucionales</h1>
             <p className="text-on-surface-variant">Vista global del desempeño de la institución</p>
@@ -103,7 +103,7 @@ export default function InstReportes() {
             {meses.map(m => <option key={m}>{m}</option>)}
           </select>
           <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-outline-variant/30 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors">
-            <span className="material-symbols-outlined text-lg">download</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
         </div>
@@ -142,7 +142,7 @@ export default function InstReportes() {
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${rep.color} text-inverse-on-surface`}>
-                    <span className="material-symbols-outlined">{rep.icon}</span>
+                    <span aria-hidden="true" className="material-symbols-outlined">{rep.icon}</span>
                   </span>
                   <div>
                     <span className={`text-[10px] font-extrabold uppercase tracking-wider ${categoriaConfig[rep.categoria].color}`}>
@@ -151,7 +151,7 @@ export default function InstReportes() {
                     <h3 className="font-extrabold text-on-surface text-sm">{rep.titulo}</h3>
                   </div>
                 </div>
-                <span className="material-symbols-outlined text-on-surface-variant text-lg">
+                <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant text-lg">
                   {expanded === rep.id ? 'expand_less' : 'expand_more'}
                 </span>
               </div>
@@ -184,11 +184,11 @@ export default function InstReportes() {
                 </div>
                 <div className="flex items-center gap-2 mt-3">
                   <button className="flex-1 px-3 py-2 rounded-xl text-xs font-bold border border-outline-variant/30 hover:bg-surface-container-high transition-colors flex items-center justify-center gap-1">
-                    <span className="material-symbols-outlined text-sm">visibility</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-sm">visibility</span>
                     Ver completo
                   </button>
                   <button className="flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-primary text-inverse-on-surface hover:bg-primary/90 transition-colors flex items-center justify-center gap-1">
-                    <span className="material-symbols-outlined text-sm">download</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-sm">download</span>
                     Exportar PDF
                   </button>
                 </div>

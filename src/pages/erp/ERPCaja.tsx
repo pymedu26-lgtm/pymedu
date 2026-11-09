@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useERP } from '../../1.-ERP/context/ERPContext';
+import { aIsoLocal, formatearFechaLocal } from '@/lib/fecha';
 
 export default function ERPCaja() {
   const { movimientos, saldoActual, ventas, gastos } = useERP();
@@ -9,7 +10,7 @@ export default function ERPCaja() {
   const totalEgresos = movimientos.filter(m => m.tipo === 'Egreso').reduce((a, m) => a + m.monto, 0);
 
   const { ingresosMes, egresosMes } = useMemo(() => {
-    const mes = new Date().toISOString().slice(0, 7);
+    const mes = aIsoLocal().slice(0, 7);
     return {
       ingresosMes: movimientos.filter(m => m.tipo === 'Ingreso' && m.fecha.slice(0, 7) === mes).reduce((a, m) => a + m.monto, 0),
       egresosMes: movimientos.filter(m => m.tipo === 'Egreso' && m.fecha.slice(0, 7) === mes).reduce((a, m) => a + m.monto, 0),
@@ -22,7 +23,7 @@ export default function ERPCaja() {
     <div className="p-8 space-y-8">
       <div>
         <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-          <span className="material-symbols-outlined text-4xl">account_balance</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-4xl">account_balance</span>
           Caja y Bancos
         </h2>
         <p className="text-on-surface-variant mt-1 text-sm">Movimientos de caja generados automaticamente por ventas, gastos y abonos.</p>
@@ -59,11 +60,11 @@ export default function ERPCaja() {
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {ordenados.length === 0 && (
-                <tr><td colSpan={5} className="p-8 text-center text-on-surface-variant">Aun no hay movimientos de caja.</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-on-surface-variant">Aún no hay movimientos de caja.</td></tr>
               )}
               {ordenados.map(m => (
                 <tr key={m.id} className="hover:bg-surface-container-low/50 transition-colors">
-                  <td className="p-4 text-on-surface-variant whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-CL')}</td>
+                  <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatearFechaLocal(m.fecha)}</td>
                   <td className="p-4 font-bold text-on-surface">{m.concepto}</td>
                   <td className="p-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${m.tipo === 'Ingreso' ? 'bg-success-container text-on-success-container' : 'bg-error/10 text-error'}`}>

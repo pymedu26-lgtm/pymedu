@@ -27,9 +27,9 @@ export default function SuperAdminConfig() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-on-surface-variant">settings</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-3xl text-on-surface-variant">settings</span>
         <div>
-          <h1 className="text-2xl font-extrabold text-on-surface">Configuracion Global</h1>
+          <h1 className="text-2xl font-extrabold text-on-surface">Configuración Global</h1>
           <p className="text-on-surface-variant">Integraciones, branding, APIs y plantillas de la plataforma</p>
         </div>
       </div>
@@ -47,7 +47,7 @@ export default function SuperAdminConfig() {
                     : 'text-on-surface-variant hover:bg-surface-container-high border border-transparent'
                 }`}
               >
-                <span className="material-symbols-outlined text-lg">{sec.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">{sec.icon}</span>
                 {sec.label}
               </button>
             ))}
@@ -60,7 +60,7 @@ export default function SuperAdminConfig() {
               <div className="flex items-center justify-between">
                 <h2 className="font-extrabold text-on-surface">Integraciones Activas</h2>
                 <button className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-primary/30 text-sm font-bold text-primary hover:bg-primary/5 transition-colors">
-                  <span className="material-symbols-outlined text-lg">add</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
                   Nueva Integracion
                 </button>
               </div>
@@ -70,7 +70,7 @@ export default function SuperAdminConfig() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant">
-                          <span className="material-symbols-outlined">{int.icon}</span>
+                          <span aria-hidden="true" className="material-symbols-outlined">{int.icon}</span>
                         </span>
                         <div>
                           <h3 className="font-extrabold text-on-surface text-sm">{int.nombre}</h3>
@@ -78,7 +78,7 @@ export default function SuperAdminConfig() {
                         </div>
                       </div>
                       <label className="relative inline-flex cursor-pointer shrink-0">
-                        <input type="checkbox" className="sr-only peer" defaultChecked={int.estado === 'activo'} />
+                        <input type="checkbox" aria-label={`Activar ${int.nombre}`} className="sr-only peer" defaultChecked={int.estado === 'activo'} />
                         <div className="w-11 h-6 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
@@ -97,7 +97,7 @@ export default function SuperAdminConfig() {
               <div className="flex items-center justify-between">
                 <h2 className="font-extrabold text-on-surface">APIs y Conexiones Externas</h2>
                 <button className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-primary/30 text-sm font-bold text-primary hover:bg-primary/5 transition-colors">
-                  <span className="material-symbols-outlined text-lg">add</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
                   Nueva API Key
                 </button>
               </div>
@@ -107,7 +107,7 @@ export default function SuperAdminConfig() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-container text-on-success-container">
-                          <span className="material-symbols-outlined">api</span>
+                          <span aria-hidden="true" className="material-symbols-outlined">api</span>
                         </span>
                         <div>
                           <h3 className="font-extrabold text-on-surface">{api.nombre}</h3>
@@ -144,7 +144,7 @@ export default function SuperAdminConfig() {
           {seccion === 'branding' && (
             <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 space-y-5">
               <h2 className="font-extrabold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">palette</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-primary">palette</span>
                 Branding Base de la Plataforma
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -199,7 +199,7 @@ export default function SuperAdminConfig() {
                 <div key={i} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 flex items-center justify-between hover:border-primary/20 transition-colors">
                   <div className="flex items-center gap-4">
                     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant">
-                      <span className="material-symbols-outlined">{plantilla.icon}</span>
+                      <span aria-hidden="true" className="material-symbols-outlined">{plantilla.icon}</span>
                     </span>
                     <div>
                       <p className="font-bold text-on-surface text-sm">{plantilla.nombre}</p>
@@ -210,8 +210,8 @@ export default function SuperAdminConfig() {
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${plantilla.activa ? 'bg-success-container text-on-success-container' : 'bg-surface-container text-on-surface-variant'}`}>
                       {plantilla.activa ? 'Activa' : 'Inactiva'}
                     </span>
-                    <button className="p-2 rounded-lg hover:bg-surface-container-high transition-colors">
-                      <span className="material-symbols-outlined text-on-surface-variant">edit</span>
+                    <button aria-label={`Editar plantilla ${plantilla.nombre}`} className="p-2 rounded-lg hover:bg-surface-container-high transition-colors">
+                      <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">edit</span>
                     </button>
                   </div>
                 </div>

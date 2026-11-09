@@ -31,7 +31,65 @@ try {
 }
 
 const app = express();
-app.use(cors());
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
+/** Origenes propios autorizados para llamar a la API desde el navegador. */
+const ORIGENES_PERMITIDOS = new Set(
+  [
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'https://pymedu.cl',
+    'https://www.pymedu.cl',
+    'https://pymedu-p52u.vercel.app',
+  ]
+    .map((origen) => (origen || '').trim().replace(/\/$/, ''))
+    .filter(Boolean)
+);
+
+app.use(cors({
+  origin(origin, callback) {
+    // Sin Origin = mismo origen, curl o health check del hosting.
+    if (!origin || ORIGENES_PERMITIDOS.has(origin.replace(/\/$/, ''))) return callback(null, true);
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
+}));
+
+// Cabeceras de seguridad estandar. El SPA usa estilos y un script inline para
+// el tema, ademas de Google Fonts, por eso se permite 'unsafe-inline' y esos hosts.
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: blob: https:",
+      "connect-src 'self' https:",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ')
+  );
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
 
@@ -43,7 +101,7 @@ app.use('/api/membresia', membresiaRouter);
 app.use('/api/admin', adminRouter);
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, servicio: 'PymEdu API', entorno: process.env.RAILWAY_ENV || 'local', ts: Date.now() });
+  res.json({ ok: true, servicio: 'PymEdu API', ts: Date.now() });
 });
 
 app.get('/api/instituciones', async (req, res) => {

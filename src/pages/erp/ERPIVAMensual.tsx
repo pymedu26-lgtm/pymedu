@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useERP } from '../../1.-ERP/context/ERPContext';
+import { aIsoLocal } from '@/lib/fecha';
 
 export default function ERPIVAMensual() {
   const { getF29Preparador, documentosTributarios } = useERP();
-  const [periodo, setPeriodo] = useState(new Date().toISOString().slice(0, 7));
+  const [periodo, setPeriodo] = useState(aIsoLocal().slice(0, 7));
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
   const f29 = getF29Preparador(periodo);
@@ -17,7 +18,7 @@ export default function ERPIVAMensual() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span className="material-symbols-outlined text-4xl">account_balance_wallet</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-4xl">account_balance_wallet</span>
             IVA Mensual (F29)
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Débito y crédito fiscal por periodo, con detalle de documentos.</p>
@@ -48,7 +49,7 @@ export default function ERPIVAMensual() {
       <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-outline-variant/20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-primary">receipt_long</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-primary">receipt_long</span>
             <div>
               <h3 className="font-bold text-on-surface">Estimación del formulario</h3>
               <p className="text-xs text-on-surface-variant">Herramienta interna de preparación; no reemplaza la declaración oficial ante el SII.</p>
@@ -64,7 +65,7 @@ export default function ERPIVAMensual() {
           <div className="px-6 space-y-2">
             {f29.alertas.map(a => (
               <p key={a} className="flex items-center gap-2 text-sm text-secondary bg-secondary/10 rounded-xl px-3 py-2">
-                <span className="material-symbols-outlined text-base">warning</span>{a}
+                <span aria-hidden="true" className="material-symbols-outlined text-base">warning</span>{a}
               </p>
             ))}
           </div>

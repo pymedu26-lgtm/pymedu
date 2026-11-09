@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, ChangeEvent, DragEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { EstadoPago, MetodoPago, Producto, Venta, VentaProducto } from '../context/ERPContext';
 import { DocumentType, IntegrationMode, isExemptDocument, normalizeDocumentType } from '../services/documentCompliance';
+import { hoyIso } from '@/lib/fecha';
 import {
   ESTADOS, EXTENSIONES, METODOS_PAGO, descargarLibroPlantilla, elegirEnum, extensionValida,
   formatPesos, mapearColumnas, normKey, parseFecha, parseNumero,
@@ -61,7 +62,7 @@ const COLUMNAS: { campo: CampoClave; titulo: string; obligatorio: boolean; ayuda
   { campo: 'precio', titulo: 'Precio Unitario', obligatorio: true, ayuda: 'Precio de cada unidad, IVA incluido.' },
   { campo: 'descuento', titulo: 'Descuento %', obligatorio: false, ayuda: 'Descuento sobre el bruto de la línea. Por defecto 0.' },
   { campo: 'estado', titulo: 'Estado', obligatorio: false, ayuda: 'Pagado (por defecto) o Pendiente.' },
-  { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, debito, credito, mixto o cheque.' },
+  { campo: 'metodoPago', titulo: 'Método de Pago', obligatorio: false, ayuda: 'efectivo (por defecto), transferencia, débito, crédito, mixto o cheque.' },
   { campo: 'nota', titulo: 'Nota', obligatorio: false, ayuda: 'Observación interna de la venta.' },
 ];
 
@@ -137,12 +138,12 @@ function descargarPlantilla() {
     ],
     COLUMNAS.map(c => ({ wch: Math.max(14, c.titulo.length + 4) })),
     [
-      ['Columna', 'Obligatorio', 'Descripcion'],
-      ...COLUMNAS.map(c => [c.titulo, c.obligatorio ? 'Si' : 'No', c.ayuda]),
+      ['Columna', 'Obligatorio', 'Descripción'],
+      ...COLUMNAS.map(c => [c.titulo, c.obligatorio ? 'Sí' : 'No', c.ayuda]),
       [],
-      ['Como agrupar', '', 'Repite el mismo Folio en varias filas para sumar esas lineas en una sola venta.'],
+      ['Cómo agrupar', '', 'Repite el mismo Folio en varias filas para sumar esas líneas en una sola venta.'],
       ['Sin Folio', '', 'Cada fila se importa como una venta independiente.'],
-      ['Stock', '', 'Un Codigo Producto existente en Inventario descuenta stock; el resto se registra como texto libre.'],
+      ['Stock', '', 'Un Código Producto existente en Inventario descuenta stock; el resto se registra como texto libre.'],
       ['IVA', '', 'El Precio Unitario se interpreta con IVA incluido (19%), igual que el formulario de venta.'],
       ['Exentas', '', 'Los tipos *_exenta no generan IVA y se registran como monto exento.'],
     ],
@@ -211,7 +212,7 @@ export default function ModalCargaMasivaVentas({
           return i >= 0 ? fila[i] ?? '' : '';
         };
 
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = hoyIso();
         const grupos = new Map<string, GrupoVenta>();
 
         filas.slice(indiceEncabezado + 1).forEach((fila, offset) => {
@@ -252,7 +253,7 @@ export default function ModalCargaMasivaVentas({
             descuentoTipo: descuento > 0 ? 'porcentaje' : 'ninguno',
             descuentoValor: descuento > 0 ? descuento : 0,
             /** Mismo valor por defecto que la carga manual. */
-            categoria: producto?.categoria || 'Sin categoria',
+            categoria: producto?.categoria || 'Sin categoría',
             subtotal: calculo.subtotal,
             iva: calculo.iva,
             total: calculo.total,
@@ -404,8 +405,8 @@ export default function ModalCargaMasivaVentas({
             <h3 className="text-2xl font-black text-primary">Carga Masiva de Ventas</h3>
             <p className="text-on-surface-variant text-sm mt-1">Importa múltiples ventas desde Excel o CSV en un solo paso.</p>
           </div>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-error transition-colors">
-            <span className="material-symbols-outlined text-3xl">close</span>
+          <button onClick={onClose} aria-label="Cerrar carga masiva de ventas" className="text-on-surface-variant hover:text-error transition-colors">
+            <span aria-hidden="true" className="material-symbols-outlined text-3xl">close</span>
           </button>
         </div>
 
@@ -418,7 +419,7 @@ export default function ModalCargaMasivaVentas({
               onDrop={handleDrop}
               className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-all ${arrastrando ? 'border-primary bg-primary/5' : 'border-outline-variant/50 hover:border-primary/40'}`}
             >
-              <span className="material-symbols-outlined text-6xl text-primary mb-4">cloud_upload</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-6xl text-primary mb-4">cloud_upload</span>
               <h4 className="text-xl font-bold text-on-surface mb-2">Arrastra tu archivo aquí</h4>
               <p className="text-on-surface-variant mb-4">o</p>
               <button onClick={() => inputRef.current?.click()} className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
@@ -427,7 +428,7 @@ export default function ModalCargaMasivaVentas({
               <input ref={inputRef} type="file" accept={EXTENSIONES.join(',')} onChange={handleInputChange} className="hidden" />
               <p className="text-xs text-on-surface-variant mt-4">Formato permitido: .xlsx (plantilla de descarga)</p>
               <button onClick={descargarPlantilla} className="mt-6 flex items-center gap-2 px-5 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-surface-container-low transition-all">
-                <span className="material-symbols-outlined text-lg">download</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
                 Descargar Plantilla
               </button>
             </div>
@@ -437,14 +438,14 @@ export default function ModalCargaMasivaVentas({
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-3xl text-primary">description</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-3xl text-primary">description</span>
                   <div>
                     <p className="font-bold text-on-surface">{archivo.name}</p>
                     <p className="text-xs text-on-surface-variant">{(archivo.size / 1024).toFixed(2)} KB</p>
                   </div>
                 </div>
                 <button onClick={() => { setPrevias([]); setArchivo(null); setError(null); }} className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-sm font-bold hover:bg-error/10 hover:text-error transition-all">
-                  <span className="material-symbols-outlined text-lg">close</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg">close</span>
                   Cambiar archivo
                 </button>
               </div>
@@ -458,7 +459,7 @@ export default function ModalCargaMasivaVentas({
 
               {error && (
                 <div className="p-4 bg-error-container text-on-error-container rounded-xl flex items-start gap-3">
-                  <span className="material-symbols-outlined mt-0.5">error</span>
+                  <span aria-hidden="true" className="material-symbols-outlined mt-0.5">error</span>
                   <p className="text-sm font-medium whitespace-pre-wrap">{error}</p>
                 </div>
               )}
@@ -543,7 +544,7 @@ export default function ModalCargaMasivaVentas({
 
               {!cargando && !error && previas.length === 0 && (
                 <div className="text-center py-10">
-                  <span className="material-symbols-outlined text-5xl text-on-surface-variant mb-3">inbox</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-5xl text-on-surface-variant mb-3">inbox</span>
                   <p className="text-on-surface-variant font-medium">No se encontraron filas con datos para procesar.</p>
                 </div>
               )}
@@ -563,7 +564,7 @@ export default function ModalCargaMasivaVentas({
                 disabled={aImportar.length === 0}
                 className="px-6 py-2.5 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
               >
-                <span className="material-symbols-outlined text-lg">download</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
                 Importar {aImportar.length > 0 ? `(${aImportar.length})` : ''}
               </button>
             </div>

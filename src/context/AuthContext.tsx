@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { api, setToken } from '../lib/api';
+import { api, hayPistaSesion } from '../lib/api';
 import { ROL_PUEDE_HACER, type Rol } from '../lib/roles';
 
 export type { Rol };
@@ -60,18 +60,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(p ? { id: p.id, email: p.email } : null);
   };
 
-  // Restaura la sesion desde el token guardado en localStorage
+  // Restaura la sesion desde la cookie HttpOnly. Si no hay pista de sesion no se
+  // llama a la API: evita el error de consola en login y paginas publicas.
   useEffect(() => {
     let active = true;
+    // Limpia el token antiguo que versiones previas guardaban en localStorage.
+    try { localStorage.removeItem('pymedu_token'); } catch { /* almacenamiento no disponible */ }
     (async () => {
+      if (!hayPistaSesion()) {
+        if (active) setIsLoading(false);
+        return;
+      }
       try {
-        const { perfil: p } = await api.me();
-        if (active) {
+        const { perfil: p } = await api.session();
+        if (active && p) {
           aplicarPerfil(p as Perfil);
-          setUser({ id: p.id as string, email: p.email as string });
         }
       } catch {
-        setToken(null);
         if (active) {
           setPerfil(null);
           setUser(null);
@@ -84,23 +89,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, password: string): Promise<Perfil> => {
-    const { token, perfil: p } = await api.login(email, password);
-    setToken(token);
+    const { perfil: p } = await api.login(email, password);
     aplicarPerfil(p as Perfil);
     setIsLoading(false);
     return p as Perfil;
   };
 
   const register = async (email: string, password: string, full_name: string, extra: Record<string, unknown> = {}): Promise<Perfil> => {
-    const { token, perfil: p } = await api.register(email, password, full_name, extra);
-    setToken(token);
+    const { perfil: p } = await api.register(email, password, full_name, extra);
     aplicarPerfil(p as Perfil);
     setIsLoading(false);
     return p as Perfil;
   };
 
   const signOut = async () => {
-    setToken(null);
+    try {
+      await api.logout();
+    } catch {
+      // aunque falle la llamada, se limpia el estado local
+    }
     setPerfil(null);
     setUser(null);
   };

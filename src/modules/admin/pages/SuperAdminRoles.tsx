@@ -32,7 +32,7 @@ function GrupoArbol() {
   return (
     <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6">
       <div className="flex items-center gap-2 mb-4">
-        <span className="material-symbols-outlined text-info">account_tree</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-info">account_tree</span>
         <h3 className="font-extrabold text-on-surface">Estructura de roles (guía ESTRUCTURA_ROLES.txt)</h3>
       </div>
       <div className="space-y-1 text-sm">
@@ -94,7 +94,7 @@ export default function SuperAdminRoles() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-info">admin_panel_settings</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-3xl text-info">admin_panel_settings</span>
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface">Roles y Permisos Maestros</h1>
           <p className="text-on-surface-variant">Jerarquía institucional, roles de PYME y matriz de permisos de la plataforma</p>
@@ -106,7 +106,7 @@ export default function SuperAdminRoles() {
       {/* Nota sobre los roles PYME */}
       <div className="bg-success-container border border-success/30 rounded-2xl p-5">
         <div className="flex items-start gap-3">
-          <span className="material-symbols-outlined text-success text-xl mt-0.5">storefront</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-success text-xl mt-0.5">storefront</span>
           <div>
             <p className="font-extrabold text-on-success-container">PYME / Pequeña Empresa — roles definibles por el dueño</p>
             <p className="text-sm text-on-success-container/90 mt-1">
@@ -125,7 +125,7 @@ export default function SuperAdminRoles() {
           {GRUPOS_ROL.map((grupo) => (
             <div key={grupo.id}>
               <div className="flex items-center gap-2 px-1 mb-2">
-                <span className="material-symbols-outlined text-lg text-on-surface-variant">{grupo.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg text-on-surface-variant">{grupo.icon}</span>
                 <h3 className="text-xs font-extrabold uppercase tracking-wider text-on-surface-variant">{grupo.label}</h3>
               </div>
               <div className="space-y-1.5">
@@ -189,7 +189,7 @@ export default function SuperAdminRoles() {
           {/* Matriz de permisos */}
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
             <div className="p-5 border-b border-outline-variant/30 flex items-center gap-2">
-              <span className="material-symbols-outlined text-info">lock</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-info">lock</span>
               <h3 className="font-extrabold text-on-surface">Matriz de Permisos — {rol.label}</h3>
             </div>
             <div className="overflow-x-auto">
@@ -206,7 +206,7 @@ export default function SuperAdminRoles() {
                     <tr key={key} className="hover:bg-surface-container-low/50 transition-colors">
                       <td className="p-4">
                         <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-on-surface-variant text-lg">{MODULOS[key].icon}</span>
+                          <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant text-lg">{MODULOS[key].icon}</span>
                           <span className="font-bold text-on-surface text-sm">{MODULOS[key].label}</span>
                         </div>
                       </td>

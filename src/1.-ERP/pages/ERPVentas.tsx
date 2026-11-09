@@ -1,4 +1,5 @@
 ﻿import { useState, useMemo, useEffect, lazy, Suspense, useDeferredValue } from 'react';
+import { Link } from 'react-router-dom';
 import { useERP, Venta, VentaProducto, Producto } from '../context/ERPContext';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
@@ -11,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { DOCUMENT_LABELS, STATUS_LABELS, normalizeDocumentType } from '../services/documentCompliance';
 import { abrirPdfNotaVenta, abrirPdfVentasLote } from '../services/pdfNotaVenta';
 import { cn, formatFecha } from '@/lib/utils';
+import { hoyIso, rangoMes as rangoMesLocal, rangoUltimosMeses } from '@/lib/fecha';
 import { useColoresTema } from '@/lib/useColoresTema';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -72,6 +74,8 @@ export default function ERPVentas() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [montoPagado, setMontoPagado] = useState('');
   const [avisoStock, setAvisoStock] = useState('');
+  const [avisoVenta, setAvisoVenta] = useState('');
+  const [permitirSinStock, setPermitirSinStock] = useState(false);
   const [activeTab, setActiveTab] = useState<'lista' | 'analisis'>('lista');
 
   useEffect(() => {
@@ -105,7 +109,7 @@ export default function ERPVentas() {
   };
 
   const [nuevaVenta, setNuevaVenta] = useState<Partial<Venta>>({
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: hoyIso(),
     estado: 'Pagado',
     cliente: '',
     productos: [],
@@ -216,8 +220,13 @@ const stockDisponible = productoSeleccionado
     + (editingId ? stockYaReservado[productoActual.productoId] || 0 : 0)
   : 0;
 
+// Solo se puede omitir el control de stock cuando el producto esta agotado y el
+// usuario lo confirma explicitamente. Nunca se permite vender mas que el stock
+// disponible real (eso evita descuadres de inventario).
+const sinStockConfirmado = permitirSinStock && stockDisponible <= 0;
 const stockInsuficiente = productoSeleccionado
   ? productoSeleccionado.tipo === 'producto'
+      && !sinStockConfirmado
       && (cantidadEnVenta(productoActual.productoId) + (productoActual.cantidad || 0)) > stockDisponible
   : false;
 
@@ -275,8 +284,8 @@ const stockInsuficiente = productoSeleccionado
       costoUnitario: esInventario ? (productoSeleccionado?.costo ?? 0) : 0,
       descuentoTipo: aplicaDescuento ? productoActual.descuentoTipo : 'ninguno',
       descuentoValor: aplicaDescuento ? productoActual.descuentoValor : 0,
-      /** Sin categoria informada queda 'Sin categoria', no cadena vacia. */
-      categoria: productoActual.categoria.trim() || 'Sin categoria',
+      /** Sin categoria informada queda 'Sin categoría', no cadena vacia. */
+      categoria: productoActual.categoria.trim() || 'Sin categoría',
       subtotal: totales.subtotal,
       iva: totales.iva,
       total: totales.total,
@@ -357,7 +366,7 @@ const stockInsuficiente = productoSeleccionado
     : 0;
 
   const impactoVenta = useMemo(() => previewVentaImpacto({
-    fecha: nuevaVenta.fecha || new Date().toISOString().split('T')[0],
+    fecha: nuevaVenta.fecha || hoyIso(),
     cliente: nuevaVenta.cliente || 'Cliente General',
     productos: nuevaVenta.productos || [],
     subtotal: totalesVenta.subtotal,
@@ -379,20 +388,10 @@ const stockInsuficiente = productoSeleccionado
   const [periodoSeleccionado, setPeriodoSeleccionado] = useState('este_mes');
 
   /** Rango de mes natural, en ISO 'YYYY-MM-DD', para reutilizar fuera del efecto. */
-  const rangoMes = (offset: number) => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  const rangoMes = (offset: number) => rangoMesLocal(offset);
 
   /** Últimos 3 meses: mes actual + 2 meses atrás */
-  const rangoUltimos3Meses = () => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  const rangoUltimos3Meses = () => rangoUltimosMeses(3);
 
   useEffect(() => {
     if (periodoSeleccionado === 'personalizado') return;
@@ -586,7 +585,7 @@ const stockInsuficiente = productoSeleccionado
     const ventasPorCat: Record<string, number> = {};
     ventasFiltradas.forEach(v => {
       v.productos.forEach(p => {
-        const cat = p.categoria || categoriaPorProducto[p.productoId] || 'Sin categoria';
+        const cat = p.categoria || categoriaPorProducto[p.productoId] || 'Sin categoría';
         ventasPorCat[cat] = (ventasPorCat[cat] || 0) + p.total;
       });
     });
@@ -606,6 +605,20 @@ const stockInsuficiente = productoSeleccionado
   const COLORES_CATEGORIA = ['info', 'success', 'warning', 'error', 'violet', 'teal'] as const;
 
   const handleGuardar = () => {
+    if (!nuevaVenta.productos || nuevaVenta.productos.length === 0) {
+      setAvisoVenta('Agrega al menos un producto o servicio a la venta.');
+      return;
+    }
+    if (!nuevaVenta.fecha) {
+      setAvisoVenta('Selecciona la fecha de la venta.');
+      return;
+    }
+    const cantidadInvalida = nuevaVenta.productos.some(p => !Number.isFinite(p.cantidad) || (p.cantidad || 0) <= 0);
+    if (cantidadInvalida) {
+      setAvisoVenta('Cada producto debe tener una cantidad mayor que cero.');
+      return;
+    }
+    setAvisoVenta('');
     if (nuevaVenta.productos && nuevaVenta.productos.length > 0 && nuevaVenta.fecha) {
       /** Estado elegido a mano por el usuario: respeta su marca, no se recalcula. */
       const estadoElegido: Venta['estado'] = nuevaVenta.estado === 'Pendiente' ? 'Pendiente' : 'Pagado';
@@ -631,7 +644,8 @@ const stockInsuficiente = productoSeleccionado
         // esta misma venta (en edicion) ya tenia tomado.
         const disponible = Math.max(0, prod.stock - (prod.stockReservado || 0))
           + (editingId ? stockYaReservado[pp.productoId] || 0 : 0);
-        if (itemsPorProducto[pp.productoId] > disponible) {
+        const ventaSinStock = permitirSinStock && disponible <= 0;
+        if (!ventaSinStock && itemsPorProducto[pp.productoId] > disponible) {
           setAvisoStock(`Stock insuficiente para "${prod.nombre}": se necesitan ${itemsPorProducto[pp.productoId]} unidades y hay ${Math.max(0, disponible)} disponibles.`);
           return;
         }
@@ -668,7 +682,7 @@ const stockInsuficiente = productoSeleccionado
       setEditingId(null);
       setMontoPagado('');
       setNuevaVenta({
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: hoyIso(),
         estado: 'Pagado',
         cliente: '',
         productos: [],
@@ -695,6 +709,7 @@ const stockInsuficiente = productoSeleccionado
       fecha_vencimiento: venta.fecha_vencimiento,
       nota: venta.nota,
     });
+    setPermitirSinStock(false);
     setShowModal(true);
   };
 
@@ -730,11 +745,14 @@ const stockInsuficiente = productoSeleccionado
       v.total,
       v.nota || '',
     ]);
-    descargarCSV(`ventas_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+    descargarCSV(`ventas_${hoyIso()}.csv`, headers, rows);
   };
   const cerrarModal = () => {
     setShowModal(false);
     setEditingId(null);
+    setPermitirSinStock(false);
+    setAvisoVenta('');
+    setAvisoStock('');
   };
 
   const limpiarFiltros = () => {
@@ -762,19 +780,19 @@ const stockInsuficiente = productoSeleccionado
             onClick={() => setShowCargaMasiva(true)}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-lg">upload_file</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportarVentasCSV}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">download</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
           <button 
-            onClick={() => { setEditingId(null); setShowModal(true); }}
+            onClick={() => { setEditingId(null); setPermitirSinStock(false); setAvisoVenta(''); setAvisoStock(''); setShowModal(true); }}
             className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-lg">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
             Nueva Venta
           </button>
         </div>
@@ -847,7 +865,7 @@ const stockInsuficiente = productoSeleccionado
           </div>
 
           <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/20">
-            <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Metodo de Pago</h3>
+            <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest mb-4">Método de pago</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosMetodosPago}>
@@ -888,7 +906,7 @@ const stockInsuficiente = productoSeleccionado
             />
           </div>
           <div>
-            <label className="block text-xs text-on-surface-variant mb-1">Categoria</label>
+            <label className="block text-xs text-on-surface-variant mb-1">Categoría</label>
             <SelectorDesplegable
               className="w-full"
               valor={filtros.categoria}
@@ -923,6 +941,7 @@ const stockInsuficiente = productoSeleccionado
                 <th className="px-4 py-4 w-10">
                   <input
                     type="checkbox"
+                    aria-label="Seleccionar todas las ventas de la lista"
                     checked={todasMarcadas}
                     onChange={alternarTodas}
                     disabled={ventasFiltradas.length === 0}
@@ -931,13 +950,13 @@ const stockInsuficiente = productoSeleccionado
                   />
                 </th>
                 <th className="px-6 py-4">Documento</th>
-                <th className="px-6 py-4">Tipo</th>
+                <th className="px-6 py-4 hidden sm:table-cell">Tipo</th>
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4">Cliente</th>
-                <th className="px-6 py-4">Realizado por</th>
+                <th className="px-6 py-4 hidden md:table-cell">Realizado por</th>
                 <th className="px-6 py-4">Productos</th>
                 <th className="px-6 py-4 text-right">Total</th>
-                <th className="px-6 py-4">Categoria</th>
+                <th className="px-6 py-4 hidden lg:table-cell">Categoría</th>
                 <th className="px-6 py-4 text-center">Estado</th>
                 <th className="px-6 py-4 text-center">Acciones</th>
               </tr>
@@ -948,6 +967,7 @@ const stockInsuficiente = productoSeleccionado
                   <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
+                      aria-label={`Marcar ${DOCUMENT_LABELS[normalizeDocumentType(venta.tipo_documento)] || 'venta'} ${venta.documento_id || venta.id}`}
                       checked={ventasSeleccionadas.includes(venta.id)}
                       onChange={() => alternarVenta(venta.id)}
                       title={`Marcar ${DOCUMENT_LABELS[normalizeDocumentType(venta.tipo_documento)] || 'venta'} ${venta.documento_id || venta.id}`}
@@ -973,16 +993,16 @@ const stockInsuficiente = productoSeleccionado
                       {tipoBoletaOFactura(venta.tipo_documento)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-on-surface-variant">{venta.fecha}</td>
+                  <td className="px-6 py-4 text-on-surface-variant hidden sm:table-cell">{venta.fecha}</td>
                   <td className="px-6 py-4 font-semibold text-on-surface">
                     <span className="inline-flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-sm text-primary/70">person</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm text-primary/70">person</span>
                       {venta.cliente}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 hidden md:table-cell">
                     <span className="inline-flex items-center gap-1.5 text-xs font-bold text-on-surface-variant">
-                      <span className="material-symbols-outlined text-sm text-tertiary">badge</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm text-tertiary">badge</span>
                       {autorDeVenta(venta)}
                     </span>
                   </td>
@@ -999,7 +1019,7 @@ const stockInsuficiente = productoSeleccionado
                     ${venta.monto.toLocaleString('es-CL')}
                     <span className="block text-[10px] text-on-surface-variant/60 font-normal">IVA: ${venta.iva?.toLocaleString('es-CL')}</span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 hidden lg:table-cell">
                     <ChipsCategorias categorias={categoriasPorVenta[venta.id] ?? []} />
                   </td>
                   <td className="px-6 py-4 text-center">
@@ -1008,31 +1028,33 @@ const stockInsuficiente = productoSeleccionado
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <button 
+                    <div className="relative inline-block">
+                      <button
                         onClick={(e) => { e.stopPropagation(); setVentaNota(venta); }}
                         className="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
-                        title="Ver Nota de Venta (formato Chile)"
+                        title="Ver Nota de Venta"
                       >
-                        <span className="material-symbols-outlined text-xl">receipt_long</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-xl">receipt_long</span>
                       </button>
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); abrirEdicion(venta); }}
+                        aria-label={`Editar venta de ${venta.cliente || 'cliente'}`}
                         className="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
                         title="Editar"
                       >
-                        <span className="material-symbols-outlined text-xl">edit</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-xl">edit</span>
                       </button>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setItemToDelete(venta.id);
                           setDeleteModalOpen(true);
                         }}
+                        aria-label={`Eliminar venta de ${venta.cliente || 'cliente'}`}
                         className="p-2 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
                         title="Eliminar"
                       >
-                        <span className="material-symbols-outlined text-xl">delete</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-xl">delete</span>
                       </button>
                     </div>
                   </td>
@@ -1041,7 +1063,9 @@ const stockInsuficiente = productoSeleccionado
               {ventasFiltradas.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-6 py-8 text-center text-on-surface-variant">
-                    No se encontraron ventas con los filtros aplicados.
+                    <span aria-hidden="true" className="material-symbols-outlined text-3xl text-outline/30 mb-3 block">point_of_sale</span>
+                    <p className="text-on-surface-variant text-sm font-medium">No se encontraron ventas con los filtros aplicados.</p>
+                    <p className="text-[11px] text-outline/60 mt-1">Intenta ajustar los filtros de fecha, cliente o estado.</p>
                   </td>
                 </tr>
               )}
@@ -1053,7 +1077,7 @@ const stockInsuficiente = productoSeleccionado
       {/* Acciones múltiples: al pie de la tabla, junto al resumen de lo marcado */}
       <div className="bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/20 p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="material-symbols-outlined text-xl text-primary">checklist</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-xl text-primary">checklist</span>
           <p className="text-sm text-on-surface-variant">
             {ventasMarcadas.length > 0 ? (
               <>
@@ -1075,7 +1099,7 @@ const stockInsuficiente = productoSeleccionado
               onClick={() => setVentasSeleccionadas([])}
               className="px-3 py-2 rounded-xl text-xs font-bold text-on-surface-variant hover:text-error transition-colors hover:bg-error/10 flex items-center gap-1.5"
             >
-              <span className="material-symbols-outlined text-base">close</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
               Quitar seleccion
             </button>
           )}
@@ -1086,7 +1110,7 @@ const stockInsuficiente = productoSeleccionado
             title={ventasMarcadas.length === 0 ? 'Selecciona al menos una venta' : 'Un PDF con una pagina por venta'}
             className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-inverse-on-surface shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-lg">
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">
               {generandoPdf ? 'progress_activity' : 'picture_as_pdf'}
             </span>
             {generandoPdf ? 'Generando...' : 'Generar PDF'}
@@ -1102,8 +1126,8 @@ const stockInsuficiente = productoSeleccionado
               <div>
                 <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar venta' : 'Nueva venta'}</h3>
               </div>
-              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-error transition-colors">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={cerrarModal} aria-label="Cerrar formulario de venta" className="text-on-surface-variant hover:text-error transition-colors">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
             
@@ -1123,14 +1147,14 @@ const stockInsuficiente = productoSeleccionado
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha de la venta</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Fecha de la venta <span className="text-error">*</span></label>
                   <SelectorFecha
                     value={nuevaVenta.fecha || ''}
                     onChange={fecha => setNuevaVenta({ ...nuevaVenta, fecha: fecha })}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Metodo de pago</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Método de pago</label>
                   <SelectorDesplegable
                     className="w-full"
                     valor={nuevaVenta.metodo_pago}
@@ -1169,7 +1193,7 @@ const stockInsuficiente = productoSeleccionado
                               : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/40 hover:border-primary/40'
                           )}
                         >
-                          <span className="material-symbols-outlined text-lg">{op === 'Boleta' ? 'receipt' : 'request_quote'}</span>
+                          <span aria-hidden="true" className="material-symbols-outlined text-lg">{op === 'Boleta' ? 'receipt' : 'request_quote'}</span>
                           {op}
                         </button>
                       );
@@ -1192,7 +1216,7 @@ const stockInsuficiente = productoSeleccionado
               <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/30 space-y-4">
                 <div className="flex justify-between items-center">
                   <h4 className="text-sm font-bold text-on-surface flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">add_shopping_cart</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-primary">add_shopping_cart</span>
                     Producto o servicio
                   </h4>
                   <label className="flex items-center gap-2 text-xs font-black text-on-surface-variant cursor-pointer select-none">
@@ -1221,6 +1245,7 @@ const stockInsuficiente = productoSeleccionado
                       valor={productoActual.productoId}
                       onChange={valor => {
                         const sel = inventario.find(x => x.id === valor);
+                        setPermitirSinStock(false);
                         setProductoActual(prev => ({
                           ...prev,
                           productoId: valor,
@@ -1243,15 +1268,28 @@ const stockInsuficiente = productoSeleccionado
                       type="text"
                       value={productoActual.nombre}
                       onChange={(e) => setProductoActual({ ...productoActual, nombre: e.target.value })}
-                      placeholder="Ej: Servicio de reparacion, flete, hora de taller, articulo sin inventario..."
+                      placeholder="Ej: Servicio de reparación, flete, hora de taller, artículo sin inventario..."
                       className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none bg-surface-container-lowest text-on-surface"
                     />
+                  )}
+                  {productoActual.esInventario && inventario.filter(p => p.estado === 'activo').length === 0 && (
+                    <div className="mt-2 flex flex-col gap-2 rounded-xl border border-warning/30 bg-warning-container px-4 py-3 text-sm text-on-warning-container sm:flex-row sm:items-center sm:justify-between">
+                      <span>
+                        No tienes productos activos en el inventario. Crea uno o vende un servicio con el interruptor de arriba.
+                      </span>
+                      <Link
+                        to="/erp/inventario"
+                        className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-center text-xs font-bold text-inverse-on-surface"
+                      >
+                        Crear producto
+                      </Link>
+                    </div>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad</label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad <span className="text-error">*</span></label>
                     <input 
                       type="number" 
                       min="1"
@@ -1263,6 +1301,19 @@ const stockInsuficiente = productoSeleccionado
                       <p className={`text-xs mt-1 ${stockInsuficiente ? 'text-error font-bold' : 'text-on-surface-variant'}`}>
                         Stock: {productoSeleccionado.stock} {productoSeleccionado.unidadMedida}
                       </p>
+                    )}
+                    {productoSeleccionado?.tipo === 'producto' && stockDisponible <= 0 && (
+                      <label className="mt-2 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-container px-2.5 py-2 text-[11px] font-semibold leading-4 text-on-warning-container">
+                        <input
+                          type="checkbox"
+                          checked={permitirSinStock}
+                          onChange={(e) => setPermitirSinStock(e.target.checked)}
+                          className="mt-0.5 h-3.5 w-3.5 accent-primary"
+                        />
+                        <span>
+                          Producto sin stock. Confirmo que quiero venderlo igual; el inventario no se descontará.
+                        </span>
+                      </label>
                     )}
                   </div>
                   <div>
@@ -1290,7 +1341,7 @@ const stockInsuficiente = productoSeleccionado
                     />
                     {productoActual.esInventario && productoSeleccionado && (
                       <p className="flex items-center gap-1 text-xs mt-1 text-on-surface-variant">
-                        <span className="material-symbols-outlined text-sm">lock</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-sm">lock</span>
                         Precio fijo del inventario
                       </p>
                     )}
@@ -1299,7 +1350,7 @@ const stockInsuficiente = productoSeleccionado
 
                 {promocionActiva && productoActual.esInventario && (
                   <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-tertiary/10 border border-tertiary/30 text-tertiary text-sm font-bold">
-                    <span className="material-symbols-outlined text-base">local_offer</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-base">local_offer</span>
                     Promoción "{promocionActiva.nombre}" aplicada automáticamente
                     <span className="font-black">
                       ({promocionActiva.tipo === 'porcentaje' ? `-${promocionActiva.valor}%` : `-$${promocionActiva.valor.toLocaleString('es-CL')}`})
@@ -1325,7 +1376,7 @@ const stockInsuficiente = productoSeleccionado
                     disabled={!fichaValida}
                     className="px-4 py-2 bg-primary text-inverse-on-surface rounded-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    <span className="material-symbols-outlined text-sm">add</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-sm">add</span>
                     Agregar a la venta
                   </button>
                 </div>
@@ -1352,7 +1403,7 @@ const stockInsuficiente = productoSeleccionado
                               {prod.esInventariable === false && <span className="block text-[10px] text-on-surface-variant/60">Item libre / no inventariable</span>}
                               {prod.descuentoTipo && prod.descuentoTipo !== 'ninguno' && (
                                 <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold">
-                                  <span className="material-symbols-outlined text-[12px]">local_offer</span>
+                                  <span aria-hidden="true" className="material-symbols-outlined text-[12px]">local_offer</span>
                                   Promoción {prod.descuentoTipo === 'porcentaje' ? `-${prod.descuentoValor}%` : `-$${prod.descuentoValor.toLocaleString('es-CL')}`}
                                 </span>
                               )}
@@ -1365,8 +1416,8 @@ const stockInsuficiente = productoSeleccionado
                               <span className="font-bold text-on-surface">${prod.total.toLocaleString('es-CL')}</span>
                             </td>
                             <td className="px-4 py-2 text-center">
-                              <button onClick={() => handleRemoveProducto(idx)} className="text-on-surface-variant hover:text-error">
-                                <span className="material-symbols-outlined text-sm">close</span>
+                              <button onClick={() => handleRemoveProducto(idx)} aria-label="Quitar producto de la venta" className="text-on-surface-variant hover:text-error">
+                                <span aria-hidden="true" className="material-symbols-outlined text-sm">close</span>
                               </button>
                             </td>
                           </tr>
@@ -1402,7 +1453,7 @@ const stockInsuficiente = productoSeleccionado
                                 : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/40 hover:border-primary/40'
                             )}
                           >
-                            <span className="material-symbols-outlined text-lg">{op === 'Pagado' ? 'check_circle' : 'schedule'}</span>
+                            <span aria-hidden="true" className="material-symbols-outlined text-lg">{op === 'Pagado' ? 'check_circle' : 'schedule'}</span>
                             {op}
                           </button>
                         );
@@ -1437,7 +1488,7 @@ const stockInsuficiente = productoSeleccionado
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="flex items-center justify-between gap-4 rounded-2xl border border-tertiary/25 bg-tertiary/5 p-4">
                     <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary text-xl">restaurant</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">restaurant</span>
                       <div>
                         <button 
                           type="button" 
@@ -1447,7 +1498,7 @@ const stockInsuficiente = productoSeleccionado
                             aplicarPropina ? "text-tertiary" : "text-on-surface-variant"
                           )}
                         >
-                          <span className={`material-symbols-outlined ${aplicarPropina ? 'text-tertiary' : ''}`}>{aplicarPropina ? 'toggle_on' : 'toggle_off'}</span>
+                          <span aria-hidden="true" className={`material-symbols-outlined ${aplicarPropina ? 'text-tertiary' : ''}`}>{aplicarPropina ? 'toggle_on' : 'toggle_off'}</span>
                           Propina 10% (opcional)
                         </button>
                         <p className="text-[10px] text-on-surface-variant/70 mt-0.5">Campo separado: no infla IVA ni documento; se registra en Caja como propina.</p>
@@ -1475,7 +1526,7 @@ const stockInsuficiente = productoSeleccionado
               )}
 
               <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-low p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant">Confirmacion simple</p>
+                <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant">Confirmación simple</p>
                 <p className="mt-1 text-sm leading-6 text-on-surface-variant/80">
                   Al guardar se crea la venta, el documento interno, el registro de IVA del periodo,
                   el movimiento de caja por lo pagado, la cuenta por cobrar si queda saldo y la salida de stock.
@@ -1483,6 +1534,11 @@ const stockInsuficiente = productoSeleccionado
               </div>
             </div>
 
+            {avisoVenta && (
+              <div role="alert" className="px-6 py-3 bg-error/10 text-error text-sm font-semibold flex items-center gap-2">
+                <span aria-hidden="true" className="material-symbols-outlined text-lg leading-none">error</span>{avisoVenta}
+              </div>
+            )}
             {avisoStock && (
               <div className="px-6 py-3 bg-error/10 text-error text-sm font-semibold flex items-center gap-2">
                 <span>⚠</span>{avisoStock}
@@ -1509,7 +1565,7 @@ const stockInsuficiente = productoSeleccionado
             <div className="nota-venta-sheet w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl">
               <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-outline-variant/30 bg-surface px-5 py-3 print:hidden">
                 <h3 className="flex items-center gap-2 text-lg font-black text-on-surface">
-                  <span className="material-symbols-outlined text-primary">receipt_long</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-primary">receipt_long</span>
                   Nota de Venta
                 </h3>
                 <div className="flex items-center gap-2">
@@ -1519,7 +1575,7 @@ const stockInsuficiente = productoSeleccionado
                     className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-on-primary transition-colors hover:bg-primary-dark disabled:opacity-60 disabled:cursor-wait"
                     title="Abrir PDF en una pestaña nueva"
                   >
-                    <span className="material-symbols-outlined text-base">
+                    <span aria-hidden="true" className="material-symbols-outlined text-base">
                       {generandoPdf ? 'hourglass_top' : 'picture_as_pdf'}
                     </span>
                     {generandoPdf ? 'Generando PDF...' : 'Ver / Descargar PDF'}
@@ -1529,7 +1585,7 @@ const stockInsuficiente = productoSeleccionado
                     className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
                     title="Cerrar"
                   >
-                    <span className="material-symbols-outlined text-xl">close</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-xl">close</span>
                   </button>
                 </div>
               </div>
@@ -1617,7 +1673,7 @@ const stockInsuficiente = productoSeleccionado
                 <div className="mt-5 flex items-center justify-between border-t border-dashed border-outline-variant/40 pt-3 text-xs text-on-surface-variant print:hidden">
                   <p>
                     <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">person</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm">person</span>
                       Realizado por: <span className="font-bold text-on-surface">{ventaNota.creado_por || ventaNota.creado_por_id?.slice(0, 6)?.toUpperCase() || '—'}</span>
                     </span>
                   </p>

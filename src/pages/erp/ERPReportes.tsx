@@ -7,6 +7,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts';
 import * as XLSX from 'xlsx';
+import { aIsoLocal } from '@/lib/fecha';
 
 const PALETA_CATEGORIAS = ['#6750A4', '#006A6A', '#B3261E', '#7D5260', '#38693C', '#8B5000', '#00639A', '#9C4173'];
 
@@ -14,7 +15,7 @@ export default function ERPReportes() {
   const { ventas, gastos, inventario, abonos, getF29Preparador, getSaldoPendienteVenta, getSaldoPendienteGasto } = useERP();
   const { perfil } = useAuth();
   const c = useColoresTema();
-  const [periodo, setPeriodo] = useState(new Date().toISOString().slice(0, 7));
+  const [periodo, setPeriodo] = useState(aIsoLocal().slice(0, 7));
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
@@ -260,7 +261,7 @@ export default function ERPReportes() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span className="material-symbols-outlined text-4xl">bar_chart</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-4xl">bar_chart</span>
             Reportes y Tributos
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Movimientos del mes, IVA mensual (F29), márgenes y descargas.</p>
@@ -273,12 +274,12 @@ export default function ERPReportes() {
           </select>
           <button onClick={descargarPdf}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-error text-inverse-on-surface text-sm font-bold hover:bg-error/80 transition-colors">
-            <span className="material-symbols-outlined text-lg">picture_as_pdf</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">picture_as_pdf</span>
             PDF
           </button>
           <button onClick={descargarExcel}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-success text-inverse-on-surface text-sm font-bold hover:bg-success/80 transition-colors">
-            <span className="material-symbols-outlined text-lg">table_view</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">table_view</span>
             Excel
           </button>
         </div>
@@ -442,7 +443,7 @@ export default function ERPReportes() {
       {/* ── F29 ── */}
       <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-outline-variant/20 flex items-center gap-3">
-          <span className="material-symbols-outlined text-primary">account_balance_wallet</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-primary">account_balance_wallet</span>
           <div>
             <h3 className="font-bold text-on-surface">Liquidación IVA Mensual (F29) — {periodo}</h3>
             <p className="text-xs text-on-surface-variant">Estimación interna del formulario 29. No reemplaza la declaración oficial.</p>
@@ -470,7 +471,7 @@ export default function ERPReportes() {
             <div className="mt-4 space-y-2">
               {f29.alertas.map(a => (
                 <p key={a} className="flex items-center gap-2 text-sm text-secondary bg-secondary/10 rounded-xl px-3 py-2">
-                  <span className="material-symbols-outlined text-base">warning</span>{a}
+                  <span aria-hidden="true" className="material-symbols-outlined text-base">warning</span>{a}
                 </p>
               ))}
             </div>

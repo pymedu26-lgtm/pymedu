@@ -179,7 +179,7 @@ export default function SelectorDesplegable({
           disabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-primary/40'
         )}
       >
-        {icono && <span className="material-symbols-outlined text-outline text-sm">{icono}</span>}
+        {icono && <span aria-hidden="true" className="material-symbols-outlined text-outline text-sm">{icono}</span>}
         <span className="flex-1 min-w-0 truncate text-left text-xs font-bold text-on-surface-variant uppercase tracking-wider">
           {seleccionada?.etiqueta}
         </span>
@@ -258,7 +258,7 @@ export default function SelectorDesplegable({
                     </span>
                   )}
                 </span>
-                {activa && <span className="material-symbols-outlined text-sm text-primary">check</span>}
+                {activa && <span aria-hidden="true" className="material-symbols-outlined text-sm text-primary">check</span>}
               </button>
             );
           })}

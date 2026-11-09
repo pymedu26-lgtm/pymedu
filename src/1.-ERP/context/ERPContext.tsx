@@ -255,6 +255,10 @@ interface ERPContextType {
   pagosPOS: PagoPOS[];
   configuracionCumplimiento: ConfiguracionCumplimiento;
   saldoActual: number;
+  errorPersistencia: string | null;
+  falloCarga: boolean;
+  recargarErp: () => void;
+  reintentarGuardado: () => void;
   addVenta: (venta: Omit<Venta, 'id'>) => void;
   updateVenta: (id: string, venta: Partial<Venta>) => void;
   deleteVenta: (id: string) => void;
@@ -306,6 +310,10 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   const [configuracionCumplimiento, setConfiguracionCumplimiento] = useState<ConfiguracionCumplimiento>(DEMO_CONFIG);
 
   const [hydrated, setHydrated] = useState(false);
+  const [errorPersistencia, setErrorPersistencia] = useState<string | null>(null);
+  const [cargaErpFallida, setCargaErpFallida] = useState(false);
+  const [intentoCarga, setIntentoCarga] = useState(0);
+  const [intentoGuardado, setIntentoGuardado] = useState(0);
   const dbIdsRef = useRef<Record<string, Set<string>>>({});
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -315,6 +323,7 @@ export function ERPProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     setHydrated(false);
+    setCargaErpFallida(false);
 
     if (!user) return () => { active = false; };
 
@@ -382,19 +391,25 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         setPagosPOS((grouped.pagosPOS ?? []) as PagoPOS[]);
         const cfg = grouped.config?.[0] as ConfiguracionCumplimiento | undefined;
         if (cfg) setConfiguracionCumplimiento({ ...DEMO_CONFIG, ...cfg });
+        setErrorPersistencia(null);
       } catch (err) {
         console.error('No se pudo cargar el ERP desde Railway (¿existe la tabla erp_datos?):', err);
+        if (active) {
+          setCargaErpFallida(true);
+          setErrorPersistencia('No pudimos cargar tus datos guardados. Para no sobrescribirlos, el guardado automático está en pausa. Revisa tu conexión e inténtalo de nuevo.');
+        }
       } finally {
         if (active) setHydrated(true);
       }
     })();
 
     return () => { active = false; };
-  }, [user?.id]);
+  }, [user?.id, intentoCarga]);
 
   // ══ Guardado en Railway (debounced) ════════════
   useEffect(() => {
-    if (!hydrated || !user) return;
+    // Si la carga inicial falló no se guarda: evita borrar datos reales con listas vacías.
+    if (!hydrated || !user || cargaErpFallida) return;
 
     const snapshot: Record<string, { id: string }[]> = {
       ventas,
@@ -433,15 +448,17 @@ export function ERPProvider({ children }: { children: ReactNode }) {
           }
           dbIdsRef.current[coleccion] = live;
         }
+        setErrorPersistencia(null);
       } catch (err) {
         console.error('No se pudo guardar el ERP en Railway:', err);
+        setErrorPersistencia('No pudimos guardar los últimos cambios. Revisa tu conexión e inténtalo de nuevo; mientras tanto los datos solo están en esta pestaña.');
       }
     }, 600);
 
     return () => {
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
-  }, [hydrated, user,
+  }, [hydrated, user, cargaErpFallida, intentoGuardado,
     ventas, gastos, clientes, proveedores, movimientos, inventario,
     movimientosInventario, promociones, abonos, documentosTributarios,
     integracionEventos, pagosPOS, configuracionCumplimiento]);
@@ -1087,6 +1104,10 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     <ERPContext.Provider value={{
       ventas, gastos, clientes, proveedores, movimientos, inventario, movimientosInventario, promociones, abonos,
       documentosTributarios, integracionEventos, pagosPOS, configuracionCumplimiento, saldoActual,
+      errorPersistencia,
+      falloCarga: cargaErpFallida,
+      recargarErp: () => setIntentoCarga((n) => n + 1),
+      reintentarGuardado: () => setIntentoGuardado((n) => n + 1),
       addVenta, updateVenta, addGasto, updateGasto, addCliente, updateCliente, addProveedor, updateProveedor, addProducto, editProducto, addMovimientoInventario, addPromocion, editPromocion,
       deleteVenta, deleteGasto, deleteCliente, deleteProveedor, deleteProducto, deletePromocion,
       addAbono, createNotaCredito, reconcilePagoPOS, previewVentaImpacto, getDocumentosByPeriodo, getF29Preparador,

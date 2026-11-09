@@ -165,7 +165,7 @@ export default function MiInstitucion() {
     <div className="p-6 md:p-8 max-w-4xl mx-auto min-h-screen">
       {/* Header */}
       <div className="flex items-center gap-3 mb-8">
-        <span className="material-symbols-outlined text-3xl text-primary">apartment</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-3xl text-primary">apartment</span>
         <div>
           <h2 className="text-2xl font-extrabold text-on-surface tracking-tight">Mi institución</h2>
           <p className="text-on-surface-variant font-medium">Vinculación, solicitudes y códigos de invitación</p>
@@ -179,11 +179,11 @@ export default function MiInstitucion() {
           {errorMsg && (
             <div className="flex items-center justify-between gap-3 p-4 bg-error-container text-on-error-container rounded-2xl text-sm font-bold">
               <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined">error_outline</span>
+                <span aria-hidden="true" className="material-symbols-outlined">error_outline</span>
                 {errorMsg}
               </span>
-              <button onClick={() => setErrorMsg('')} className="text-error hover:text-on-error-container">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={() => setErrorMsg('')} aria-label="Cerrar mensaje de error" className="text-error hover:text-on-error-container">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
           )}
@@ -191,11 +191,11 @@ export default function MiInstitucion() {
           {successMsg && (
             <div className="flex items-center justify-between gap-3 p-4 bg-success-container text-on-success-container rounded-2xl text-sm font-bold">
               <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined">check_circle</span>
+                <span aria-hidden="true" className="material-symbols-outlined">check_circle</span>
                 {successMsg}
               </span>
-              <button onClick={() => setSuccessMsg('')} className="text-success hover:text-on-success-container">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={() => setSuccessMsg('')} aria-label="Cerrar mensaje de éxito" className="text-success hover:text-on-success-container">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
           )}
@@ -205,7 +205,7 @@ export default function MiInstitucion() {
             <div className="bg-gradient-to-br from-primary/10 to-secondary/10 dark-card rounded-3xl shadow-sm p-7 border border-primary/20">
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                  <span className="material-symbols-outlined text-3xl">verified</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-3xl">verified</span>
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-extrabold uppercase tracking-widest text-primary mb-1">
@@ -220,13 +220,13 @@ export default function MiInstitucion() {
                   </p>
                   {vinculacion?.institucion_direccion && (
                     <p className="text-xs text-on-surface-variant mt-1">
-                      <span className="material-symbols-outlined text-sm align-[-3px]">location_on</span>{' '}
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm align-[-3px]">location_on</span>{' '}
                       {vinculacion.institucion_direccion}
                     </p>
                   )}
                   {vinculacion?.jefe_nombre && (
                     <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-high text-xs font-bold text-on-surface">
-                      <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm">admin_panel_settings</span>
                       Administrador: {vinculacion.jefe_nombre}
                     </div>
                   )}
@@ -240,7 +240,7 @@ export default function MiInstitucion() {
             <div className="bg-warning/10 dark-card rounded-3xl shadow-sm p-7 border border-warning/20">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-warning/15 text-warning">
-                  <span className="material-symbols-outlined text-2xl">hourglass_top</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-2xl">hourglass_top</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-extrabold uppercase tracking-widest text-warning mb-1">
@@ -272,7 +272,7 @@ export default function MiInstitucion() {
             <div className="space-y-6">
               {rechazada && (
                 <div className="p-4 bg-error-container text-on-error-container rounded-2xl flex items-center gap-3 text-sm font-bold">
-                  <span className="material-symbols-outlined">block</span>
+                  <span aria-hidden="true" className="material-symbols-outlined">block</span>
                   Tu solicitud a {vinculacion?.solicitud_institucion_nombre ?? 'la institución'} fue rechazada.
                 </div>
               )}
@@ -280,7 +280,7 @@ export default function MiInstitucion() {
               {/* Solicitar vinculación */}
               <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-7">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="material-symbols-outlined text-primary">person_add</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-primary">person_add</span>
                   <h3 className="text-base font-extrabold text-on-surface">Solicitar vinculación a una institución</h3>
                 </div>
                 <p className="text-sm text-on-surface-variant mb-5">
@@ -290,7 +290,7 @@ export default function MiInstitucion() {
                 {institucion ? (
                   <div className="flex items-center justify-between gap-3 p-4 rounded-xl border-2 border-primary/30 bg-primary/5">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="material-symbols-outlined text-on-surface-variant">apartment</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">apartment</span>
                       <div className="min-w-0">
                         <p className="font-bold text-on-surface truncate">{institucion.nombre}</p>
                         <p className="text-xs text-on-surface-variant">
@@ -299,7 +299,7 @@ export default function MiInstitucion() {
                       </div>
                     </div>
                     <button onClick={() => setInstitucion(null)} className="p-1.5 hover:bg-surface-container-high rounded-lg" title="Quitar institución">
-                      <span className="material-symbols-outlined text-on-surface-variant">close</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">close</span>
                     </button>
                   </div>
                 ) : (
@@ -324,7 +324,7 @@ export default function MiInstitucion() {
                               onClick={() => seleccionarInstitucion(r)}
                               className="w-full text-left px-4 py-3 hover:bg-surface-container-low transition-colors flex items-center gap-3"
                             >
-                              <span className="material-symbols-outlined text-on-surface-variant">apartment</span>
+                              <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">apartment</span>
                               <div className="min-w-0">
                                 <p className="text-sm font-bold text-on-surface truncate">{r.nombre}</p>
                                 <p className="text-xs text-on-surface-variant truncate">
@@ -359,11 +359,11 @@ export default function MiInstitucion() {
               {/* Canjear código */}
               <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-7">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="material-symbols-outlined text-teal">card_membership</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-teal">card_membership</span>
                   <h3 className="text-base font-extrabold text-on-surface">Tengo un código de invitación</h3>
                 </div>
                 <p className="text-sm text-on-surface-variant mb-5">
-                  Si tu institución te entregó un código, cánjéalo aquí y tu cuenta quedará vinculada de inmediato.
+                  Si tu institución te entregó un código, canjéalo aquí y tu cuenta quedará vinculada de inmediato.
                 </p>
                 <form onSubmit={redimirCodigo} className="flex flex-col sm:flex-row gap-3">
                   <input

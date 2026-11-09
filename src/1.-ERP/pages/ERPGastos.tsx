@@ -4,9 +4,11 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import TarjetasResumen from '../components/TarjetasResumen';
 import SelectorFecha from '../components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
+import VencimientoBadge from '../../components/VencimientoBadge';
 import FiltroPeriodo from '../components/FiltroPeriodo';
 import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
+import { hoyIso, rangoMes as rangoMesLocal, rangoUltimosMeses } from '@/lib/fecha';
 import { useColoresTema } from '@/lib/useColoresTema';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -15,7 +17,7 @@ import {
 
 const ModalCargaMasivaGastos = lazy(() => import('../components/ModalCargaMasivaGastos'));
 
-const CATEGORIAS_GASTO = ['Insumos/Mercaderia','Servicios Basicos','Arriendo','Sueldos','Publicidad','Tecnologia','Transporte','Capacitacion','Mantencion','IVA/Impuestos','Otros'];
+const CATEGORIAS_GASTO = ['Insumos/Mercadería','Servicios Básicos','Arriendo','Sueldos','Publicidad','Tecnología','Transporte','Capacitación','Mantención','IVA/Impuestos','Otros'];
 const METODOS: { value: MetodoPago; label: string }[] = [
   { value: 'efectivo', label: 'Efectivo' },
   { value: 'transferencia', label: 'Transferencia' },
@@ -36,10 +38,11 @@ export default function ERPGastos() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [errorGasto, setErrorGasto] = useState('');
   const [nuevoGasto, setNuevoGasto] = useState<Partial<Gasto>>({
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: hoyIso(),
     estado: 'Pagado', monto: 0, proveedor: '',
-    categoria: 'Insumos/Mercaderia', esFactura: false,
+    categoria: 'Insumos/Mercadería', esFactura: false,
     metodo_pago: 'efectivo', recurrente: false,
   });
 
@@ -56,19 +59,9 @@ export default function ERPGastos() {
   });
 
   /** Rango de mes natural, en ISO 'YYYY-MM-DD', para reutilizar fuera del efecto. */
-  const rangoMes = (offset: number) => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  const rangoMes = (offset: number) => rangoMesLocal(offset);
 
-  const rangoUltimos3Meses = () => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  const rangoUltimos3Meses = () => rangoUltimosMeses(3);
 
   useEffect(() => {
     if (periodoSeleccionado === 'personalizado') return;
@@ -208,7 +201,28 @@ export default function ERPGastos() {
   }, [gastosDelPeriodo]);
 
   const handleGuardar = () => {
-    if (!nuevoGasto.monto || !nuevoGasto.fecha || !nuevoGasto.categoria) return;
+    const monto = Number(nuevoGasto.monto);
+    if (!nuevoGasto.proveedor?.trim()) {
+      setErrorGasto('Indica el proveedor o concepto del gasto.');
+      return;
+    }
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setErrorGasto('El monto total debe ser un número mayor que cero.');
+      return;
+    }
+    if (!nuevoGasto.fecha) {
+      setErrorGasto('Selecciona la fecha del gasto.');
+      return;
+    }
+    if (!nuevoGasto.categoria) {
+      setErrorGasto('Selecciona una categoría para el gasto.');
+      return;
+    }
+    if (nuevoGasto.estado === 'Por Pagar' && !nuevoGasto.fecha_vencimiento) {
+      setErrorGasto('Indica la fecha de vencimiento del gasto por pagar.');
+      return;
+    }
+    setErrorGasto('');
     const esFactura = nuevoGasto.esFactura || false;
     const subtotal  = esFactura ? Math.round(Number(nuevoGasto.monto) / 1.19) : Number(nuevoGasto.monto);
     const iva       = esFactura ? Number(nuevoGasto.monto) - subtotal : 0;
@@ -236,7 +250,7 @@ export default function ERPGastos() {
     }
     setShowModal(false);
     setEditingId(null);
-    setNuevoGasto({ fecha: new Date().toISOString().split('T')[0], estado: 'Pagado', monto: 0, proveedor: '', categoria: 'Insumos/Mercaderia', esFactura: false, metodo_pago: 'efectivo', recurrente: false });
+    setNuevoGasto({ fecha: hoyIso(), estado: 'Pagado', monto: 0, proveedor: '', categoria: 'Insumos/Mercadería', esFactura: false, metodo_pago: 'efectivo', recurrente: false });
   };
 
   const abrirEdicion = (g: Gasto) => {
@@ -254,6 +268,7 @@ export default function ERPGastos() {
       fecha_vencimiento: g.fecha_vencimiento,
     });
     setShowModal(true);
+    setErrorGasto('');
   };
 
   const celdaCSV = (valor: unknown) => {
@@ -292,11 +307,12 @@ export default function ERPGastos() {
       g.recurrente ? 'Sí' : 'No',
       g.nota || '',
     ]);
-    descargarCSV(`gastos_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+    descargarCSV(`gastos_${hoyIso()}.csv`, headers, rows);
   };
   const cerrarModal = () => {
     setShowModal(false);
     setEditingId(null);
+    setErrorGasto('');
   };
 
   return (
@@ -304,7 +320,7 @@ export default function ERPGastos() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h2 className="text-3xl font-extrabold text-on-surface flex items-center gap-3">
-            <span className="material-symbols-outlined text-error text-4xl">receipt_long</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-error text-4xl">receipt_long</span>
             Gastos y Compras
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Registra todos los egresos y controla tu credito fiscal IVA.</p>
@@ -312,17 +328,17 @@ export default function ERPGastos() {
         <div className="flex gap-3">
           <button onClick={() => setShowCargaMasiva(true)}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">upload_file</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportarGastosCSV}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">download</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
-          <button onClick={() => { setEditingId(null); setShowModal(true); }}
+          <button onClick={() => { setEditingId(null); setShowModal(true); setErrorGasto(''); }}
             className="px-6 py-3 bg-error text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-error/20 hover:scale-105 transition-transform flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
             Registrar Gasto
           </button>
         </div>
@@ -352,7 +368,7 @@ export default function ERPGastos() {
           <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-4">
               <h3 className="font-bold text-on-surface text-sm flex items-center gap-2">
-                <span className="material-symbols-outlined text-base text-primary">bar_chart</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base text-primary">bar_chart</span>
                 Categorías de Gasto
               </h3>
               <span className="text-xs text-on-surface-variant font-bold">
@@ -430,7 +446,7 @@ export default function ERPGastos() {
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="relative flex-1">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
+          <span aria-hidden="true" className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
           <input type="text" placeholder="Buscar por proveedor o categoria..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
         </div>
@@ -449,20 +465,29 @@ export default function ERPGastos() {
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low border-b border-outline-variant/20">
               <tr>
-                {['Fecha', 'Proveedor / Concepto', 'Categoria', 'Monto', 'Saldo', 'Metodo', 'Estado', 'Acciones'].map(h => (
-                  <th key={h} className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">{h}</th>
-                ))}
+                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left hidden sm:table-cell">Fecha</th>
+                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">Proveedor / Concepto</th>
+                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left hidden md:table-cell">Categoría</th>
+                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">Monto</th>
+                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left hidden md:table-cell">Saldo</th>
+                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left hidden sm:table-cell">Método</th>
+                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">Estado</th>
+                <th className="p-4 text-xs font-bold text-outline uppercase tracking-wider text-left">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {gastosFiltrados.length === 0 && (
-                <tr><td colSpan={8} className="p-8 text-center text-on-surface-variant">No se encontraron gastos.</td></tr>
+<tr><td colSpan={8} className="p-8 text-center text-on-surface-variant">
+                  <span aria-hidden="true" className="material-symbols-outlined text-3xl text-outline/30 mb-3 block">receipt_long</span>
+                  <p className="text-on-surface-variant text-sm font-medium">No se encontraron gastos.</p>
+                  <p className="text-[11px] text-outline/60 mt-1">Intenta ajustar los filtros de búsqueda o categoría.</p>
+                </td></tr>
               )}
               {gastosFiltrados.map(g => {
                 const saldo = getSaldoPendienteGasto(g.id);
                 return (
                   <tr key={g.id} className={cn('hover:bg-surface-container-low/50 transition-colors', saldo > 0 ? 'bg-secondary/5' : '')}>
-                    <td className="p-4 text-on-surface-variant whitespace-nowrap">{formatFecha(g.fecha)}</td>
+                    <td className="p-4 text-on-surface-variant whitespace-nowrap hidden sm:table-cell">{formatFecha(g.fecha)}</td>
                     <td className="p-4">
                       <p className="font-bold text-on-surface">{g.proveedor}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
@@ -470,27 +495,30 @@ export default function ERPGastos() {
                         {g.recurrente && <span className="text-[10px] bg-tertiary/10 text-tertiary font-bold px-1.5 py-0.5 rounded-full">Recurrente</span>}
                       </div>
                     </td>
-                    <td className="p-4"><span className="text-xs bg-surface-container-high text-on-surface-variant font-bold px-2 py-1 rounded-full whitespace-nowrap">{g.categoria}</span></td>
+                    <td className="p-4 hidden md:table-cell"><span className="text-xs bg-surface-container-high text-on-surface-variant font-bold px-2 py-1 rounded-full whitespace-nowrap">{g.categoria}</span></td>
                     <td className="p-4 font-bold text-on-surface">{fmt(g.monto)}</td>
-                    <td className="p-4 font-bold">
+                    <td className="p-4 font-bold hidden md:table-cell">
                       {saldo > 0 ? <span className="text-secondary">{fmt(saldo)}</span> : <span className="text-success">$0</span>}
                     </td>
-                    <td className="p-4 text-on-surface-variant text-xs capitalize">{g.metodo_pago || '---'}</td>
+                    <td className="p-4 text-on-surface-variant text-xs hidden sm:table-cell">{METODOS.find(m => m.value === g.metodo_pago)?.label || g.metodo_pago || '---'}</td>
                     <td className="p-4">
                       <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold',
                         g.estado === 'Pagado' ? 'bg-success-container text-on-success-container' : 'bg-secondary/20 text-secondary')}>
                         {g.estado}
                       </span>
+                      {g.estado !== 'Pagado' && g.fecha_vencimiento && (
+                        <VencimientoBadge fecha={g.fecha_vencimiento} className="mt-1" />
+                      )}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-1">
                         <button onClick={() => abrirEdicion(g)}
                           className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10">
-                          <span className="material-symbols-outlined text-base">edit</span>
+                          <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
                         </button>
                         <button onClick={() => { setItemToDelete(g.id); setDeleteModalOpen(true); }}
                           className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10">
-                          <span className="material-symbols-outlined text-base">delete</span>
+                          <span aria-hidden="true" className="material-symbols-outlined text-base">delete</span>
                         </button>
                       </div>
                     </td>
@@ -507,32 +535,32 @@ export default function ERPGastos() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
               <h3 className="text-xl font-bold text-error">{editingId ? 'Editar Gasto' : 'Registrar Gasto'}</h3>
-              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-error transition-colors">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={cerrarModal} aria-label="Cerrar formulario de gasto" className="text-on-surface-variant hover:text-error transition-colors">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 overflow-y-auto flex-grow">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Proveedor / Concepto</label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Proveedor / Concepto <span className="text-error">*</span></label>
                     <input type="text" value={nuevoGasto.proveedor} onChange={e => setNuevoGasto({ ...nuevoGasto, proveedor: e.target.value })}
                       className="w-full px-4 py-3 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-error outline-none bg-surface-container-lowest text-on-surface" placeholder="Ej: CGE, Arriendo local" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Monto Total</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Monto Total <span className="text-error">*</span></label>
                       <CampoMoneda valor={nuevoGasto.monto} onChange={monto => setNuevoGasto({ ...nuevoGasto, monto })}
                         className="px-4 py-3 border-2 border-outline-variant/50 rounded-xl font-bold focus:border-error outline-none bg-surface-container-lowest text-on-surface" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha <span className="text-error">*</span></label>
                       <SelectorFecha value={nuevoGasto.fecha} onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha: fecha })} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoria</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoría <span className="text-error">*</span></label>
                       <SelectorDesplegable
                         className="w-full"
                         valor={nuevoGasto.categoria}
@@ -569,7 +597,7 @@ export default function ERPGastos() {
 
                   {nuevoGasto.estado === 'Por Pagar' && (
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha de Vencimiento</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Fecha de Vencimiento <span className="text-error">*</span></label>
                       <SelectorFecha
                         value={nuevoGasto.fecha_vencimiento || ''}
                         onChange={fecha => setNuevoGasto({ ...nuevoGasto, fecha_vencimiento: fecha })}
@@ -581,14 +609,14 @@ export default function ERPGastos() {
                 <div className="space-y-4">
                   <div className="space-y-3">
                     <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border-2 border-outline-variant/20 hover:border-primary/30 transition-colors">
-                      <input type="checkbox" checked={nuevoGasto.esFactura} onChange={e => setNuevoGasto({ ...nuevoGasto, esFactura: e.target.checked })} className="w-5 h-5 rounded" />
+                      <input type="checkbox" aria-label="Es una factura con crédito fiscal IVA" checked={nuevoGasto.esFactura} onChange={e => setNuevoGasto({ ...nuevoGasto, esFactura: e.target.checked })} className="w-5 h-5 rounded" />
                       <div>
-                        <p className="font-bold text-on-surface text-sm">Es una Factura (Credito Fiscal IVA)</p>
+                        <p className="font-bold text-on-surface text-sm">Es una Factura (Crédito Fiscal IVA)</p>
                         <p className="text-xs text-on-surface-variant">El IVA de facturas se resta del IVA a pagar en el F29</p>
                       </div>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border-2 border-outline-variant/20 hover:border-tertiary/30 transition-colors">
-                      <input type="checkbox" checked={nuevoGasto.recurrente} onChange={e => setNuevoGasto({ ...nuevoGasto, recurrente: e.target.checked })} className="w-5 h-5 rounded" />
+                      <input type="checkbox" aria-label="Gasto recurrente mensual" checked={nuevoGasto.recurrente} onChange={e => setNuevoGasto({ ...nuevoGasto, recurrente: e.target.checked })} className="w-5 h-5 rounded" />
                       <div>
                         <p className="font-bold text-on-surface text-sm">Gasto Recurrente (mensual)</p>
                         <p className="text-xs text-on-surface-variant">Arriendo, luz, internet u otros gastos fijos mensuales</p>
@@ -603,6 +631,14 @@ export default function ERPGastos() {
                   </div>
                 </div>
               </div>
+
+              <p className="mt-3 text-[11px] text-on-surface-variant">Los campos marcados con <span className="text-error">*</span> son obligatorios.</p>
+              {errorGasto && (
+                <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm font-semibold text-error">
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg leading-none">error</span>
+                  <span>{errorGasto}</span>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-outline-variant/20 flex gap-3 bg-surface-container-low/50 shrink-0">
               <button onClick={cerrarModal} className="flex-1 py-3 rounded-2xl border-2 border-outline-variant/50 font-bold text-on-surface-variant">Cancelar</button>

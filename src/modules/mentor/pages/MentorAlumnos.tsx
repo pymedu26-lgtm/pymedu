@@ -18,7 +18,7 @@ export default function MentorAlumnos() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-3xl text-teal">groups</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-3xl text-teal">groups</span>
         <h1 className="text-2xl font-extrabold text-on-surface">Mis Emprendedores</h1>
       </div>
 
@@ -161,7 +161,7 @@ export default function MentorAlumnos() {
                 <ul className="space-y-1">
                   {seleccionado.metas.map((meta, i) => (
                     <li key={i} className="flex items-center gap-2 text-sm">
-                      <span className={`material-symbols-outlined text-lg ${meta.includes('✓') ? 'text-success' : 'text-outline'}`}>
+                      <span aria-hidden="true" className={`material-symbols-outlined text-lg ${meta.includes('✓') ? 'text-success' : 'text-outline'}`}>
                         {meta.includes('✓') ? 'check_circle' : 'radio_button_unchecked'}
                       </span>
                       <span className={meta.includes('✓') ? 'text-on-surface-variant line-through' : 'text-on-surface'}>{meta}</span>
@@ -176,7 +176,7 @@ export default function MentorAlumnos() {
                 <ul className="space-y-1">
                   {seleccionado.documentos.map((doc, i) => (
                     <li key={i} className="flex items-center gap-2 text-sm">
-                      <span className="material-symbols-outlined text-lg text-primary">description</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-lg text-primary">description</span>
                       <span className="text-on-surface">{doc}</span>
                     </li>
                   ))}
@@ -195,7 +195,7 @@ export default function MentorAlumnos() {
           </div>
         ) : (
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-8 text-center">
-            <span className="material-symbols-outlined text-5xl text-outline">touch_app</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-5xl text-outline">touch_app</span>
             <p className="mt-3 text-on-surface-variant font-bold">Selecciona un emprendedor</p>
             <p className="text-sm text-on-surface-variant">Haz click en un nombre para ver su ficha completa</p>
           </div>

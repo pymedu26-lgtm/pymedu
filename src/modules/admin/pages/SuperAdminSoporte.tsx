@@ -25,7 +25,7 @@ const categoriaConfig: Record<string, { color: string; label: string }> = {
   bug: { color: 'bg-error-container text-on-error-container', label: 'Bug' },
   feature: { color: 'bg-info-container text-on-info-container', label: 'Feature' },
   rendimiento: { color: 'bg-warning-container text-on-warning-container', label: 'Rendimiento' },
-  configuracion: { color: 'bg-info-container text-on-info-container', label: 'Configuracion' },
+  configuracion: { color: 'bg-info-container text-on-info-container', label: 'Configuración' },
 };
 
 export default function SuperAdminSoporte() {
@@ -50,14 +50,14 @@ export default function SuperAdminSoporte() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-warning">support_agent</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-warning">support_agent</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Soporte y Tickets</h1>
-            <p className="text-on-surface-variant">Gestion de incidencias, SLA y soporte tecnico avanzado</p>
+            <p className="text-on-surface-variant">Gestión de incidencias, SLA y soporte técnico avanzado</p>
           </div>
         </div>
         <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
-          <span className="material-symbols-outlined text-lg">add</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
           Nuevo Ticket
         </button>
       </div>
@@ -73,7 +73,7 @@ export default function SuperAdminSoporte() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
               <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined text-lg">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
             </div>
@@ -85,7 +85,7 @@ export default function SuperAdminSoporte() {
       {/* SLA overview */}
       <div className="bg-gradient-to-br from-warning to-error rounded-2xl p-5 text-inverse-on-surface">
         <div className="flex items-center gap-2 mb-3">
-          <span className="material-symbols-outlined">timer</span>
+          <span aria-hidden="true" className="material-symbols-outlined">timer</span>
           <h2 className="font-extrabold">Estado de SLA</h2>
         </div>
         <div className="grid grid-cols-3 gap-4">
@@ -172,7 +172,7 @@ export default function SuperAdminSoporte() {
                       {ticket.slaRestante}
                     </p>
                   </div>
-                  <span className="material-symbols-outlined text-on-surface-variant">
+                  <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">
                     {expanded === ticket.id ? 'expand_less' : 'expand_more'}
                   </span>
                 </div>
@@ -187,7 +187,7 @@ export default function SuperAdminSoporte() {
                     <p className="font-bold">{ticket.prioridad}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-on-surface-variant">Categoria</p>
+                    <p className="text-xs font-bold text-on-surface-variant">Categoría</p>
                     <p className="font-bold">{ticket.categoria}</p>
                   </div>
                   <div>

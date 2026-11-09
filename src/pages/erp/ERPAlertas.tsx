@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useERP } from '../../1.-ERP/context/ERPContext';
+import { formatearFechaLocal, hoyIso as hoyIsoLocal, parseFechaLocal } from '../../lib/fecha';
 
 type AlertaTipo = 'critica' | 'advertencia' | 'tributaria' | 'info' | 'exito';
 type AlertaOrigen = 'sistema' | 'sii' | 'municipalidad' | 'mentor';
@@ -48,7 +49,15 @@ export default function ERPAlertas() {
   const diaDelMes = hoy.getDate();
   const mes = hoy.getMonth();
   const anio = hoy.getFullYear();
-  const hoyIso = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(diaDelMes).padStart(2, '0')}`;
+  const hoyIso = hoyIsoLocal();
+
+  /** Días transcurridos entre dos fechas 'AAAA-MM-DD' sin corrimiento de zona. */
+  const diasEntre = (desde: string, hasta: string) => {
+    const a = parseFechaLocal(desde);
+    const b = parseFechaLocal(hasta);
+    if (!a || !b) return 0;
+    return Math.round((a.getTime() - b.getTime()) / 86400000);
+  };
 
   const alertas = useMemo(() => {
     const items: Alerta[] = [];
@@ -68,11 +77,11 @@ export default function ERPAlertas() {
 
     // 2. Cuentas por cobrar vencidas
     ventas.filter(v => getSaldoPendienteVenta(v.id) > 0 && v.fecha_vencimiento && v.fecha_vencimiento <= hoyIso).forEach(v => {
-      const dias = Math.ceil((new Date(hoyIso).getTime() - new Date(v.fecha_vencimiento!).getTime()) / 86400000);
+      const dias = diasEntre(hoyIso, v.fecha_vencimiento!);
       items.push({
         id: `cxc-ven-${v.id}`, tipo: 'critica', origen: 'sistema', icono: 'event_busy',
         titulo: `Cuenta por cobrar vencida: ${v.cliente}`,
-        detalle: `Saldo ${flt(getSaldoPendienteVenta(v.id))} · venció el ${new Date(v.fecha_vencimiento!).toLocaleDateString('es-CL')} (${dias} día(s) de atraso).`,
+        detalle: `Saldo ${flt(getSaldoPendienteVenta(v.id))} · venció el ${formatearFechaLocal(v.fecha_vencimiento)} (${dias} día(s) de atraso).`,
         accion_label: 'Ver CxC', accion_url: '/erp/cobrar',
       });
     });
@@ -91,11 +100,11 @@ export default function ERPAlertas() {
 
     // 4. Cuentas por pagar vencidas
     gastos.filter(g => getSaldoPendienteGasto(g.id) > 0 && g.fecha_vencimiento && g.fecha_vencimiento <= hoyIso).forEach(g => {
-      const dias = Math.ceil((new Date(hoyIso).getTime() - new Date(g.fecha_vencimiento!).getTime()) / 86400000);
+      const dias = diasEntre(hoyIso, g.fecha_vencimiento!);
       items.push({
         id: `cxp-ven-${g.id}`, tipo: 'critica', origen: 'sistema', icono: 'payments',
         titulo: `Cuenta por pagar vencida: ${g.proveedor}`,
-        detalle: `Saldo ${flt(getSaldoPendienteGasto(g.id))} · vencía el ${new Date(g.fecha_vencimiento!).toLocaleDateString('es-CL')} (${dias} día(s) de atraso).`,
+        detalle: `Saldo ${flt(getSaldoPendienteGasto(g.id))} · vencía el ${formatearFechaLocal(g.fecha_vencimiento)} (${dias} día(s) de atraso).`,
         accion_label: 'Ver CxP', accion_url: '/erp/pagar',
       });
     });
@@ -156,12 +165,12 @@ export default function ERPAlertas() {
 
     // 10. Flujo del mes positivo
     const ingresosDelMes = movimientos.filter(m => {
-      const d = new Date(m.fecha);
-      return d.getMonth() === mes && d.getFullYear() === anio && m.tipo === 'Ingreso';
+      const d = parseFechaLocal(m.fecha);
+      return !!d && d.getMonth() === mes && d.getFullYear() === anio && m.tipo === 'Ingreso';
     }).reduce((acc, m) => acc + m.monto, 0);
     const egresosDelMes = movimientos.filter(m => {
-      const d = new Date(m.fecha);
-      return d.getMonth() === mes && d.getFullYear() === anio && m.tipo === 'Egreso';
+      const d = parseFechaLocal(m.fecha);
+      return !!d && d.getMonth() === mes && d.getFullYear() === anio && m.tipo === 'Egreso';
     }).reduce((acc, m) => acc + m.monto, 0);
     if (ingresosDelMes > egresosDelMes && ingresosDelMes > 0) {
       items.push({
@@ -174,12 +183,12 @@ export default function ERPAlertas() {
 
     // 11. Promociones por vencer
     promociones.filter(p => p.estado === 'activa' && p.fechaFin && p.fechaFin >= hoyIso).forEach(p => {
-      const dias = Math.ceil((new Date(p.fechaFin + 'T23:59:59').getTime() - new Date(hoyIso + 'T00:00:00').getTime()) / 86400000);
+      const dias = diasEntre(p.fechaFin!, hoyIso);
       if (dias <= 3) {
         items.push({
           id: `promo-${p.id}`, tipo: 'info', origen: 'sistema', icono: 'local_fire_department',
           titulo: `Promoción "${p.nombre}" termina pronto`,
-          detalle: `Quedan ${dias} día(s) (${new Date(p.fechaFin).toLocaleDateString('es-CL')}).`,
+          detalle: `Quedan ${dias} día(s) (${formatearFechaLocal(p.fechaFin)}).`,
           accion_label: 'Ver promociones', accion_url: '/erp/promociones',
         });
       }
@@ -239,7 +248,7 @@ export default function ERPAlertas() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span className="material-symbols-outlined text-4xl">notifications_active</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-4xl">notifications_active</span>
             Centro de alertas
             {noLeidas > 0 && (
               <span className="bg-error text-inverse-on-surface text-sm px-3 py-1 rounded-full font-bold">
@@ -252,7 +261,7 @@ export default function ERPAlertas() {
         {noLeidas > 0 && (
           <button onClick={marcarTodasLeidas}
             className="flex items-center gap-2 px-4 py-2.5 border-2 border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary rounded-xl font-bold text-sm transition-colors">
-            <span className="material-symbols-outlined text-lg">done_all</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">done_all</span>
             Marcar todas como leídas
           </button>
         )}
@@ -263,7 +272,7 @@ export default function ERPAlertas() {
         {kpis.map(k => (
           <button key={k.tipo} onClick={() => setFiltro(k.tipo)}
             className={`p-4 rounded-2xl flex flex-col items-center gap-1 transition-all font-bold text-sm border-2 ${filtro === k.tipo ? 'border-primary bg-primary/5 shadow-sm' : 'border-transparent bg-surface-container-lowest dark-card hover:border-outline-variant/50'}`}>
-            <span className={`material-symbols-outlined text-2xl p-2 rounded-full ${k.cls}`}>{k.icon}</span>
+            <span aria-hidden="true" className={`material-symbols-outlined text-2xl p-2 rounded-full ${k.cls}`}>{k.icon}</span>
             <span className="text-on-surface text-lg font-extrabold">{k.count}</span>
             <span className="text-on-surface-variant text-xs">{k.label}</span>
           </button>
@@ -274,7 +283,7 @@ export default function ERPAlertas() {
       <div className="space-y-3">
         {alertasFiltradas.length === 0 && (
           <div className="rounded-3xl border border-dashed border-outline-variant bg-surface-container-lowest dark-card p-10 text-center">
-            <span className="material-symbols-outlined text-4xl text-outline">notifications_off</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-4xl text-outline">notifications_off</span>
             <p className="mt-3 font-bold text-on-surface">Sin alertas en esta categoría</p>
             <p className="text-sm text-on-surface-variant mt-1">Todo está al día.</p>
           </div>
@@ -288,7 +297,7 @@ export default function ERPAlertas() {
               className={`rounded-2xl border-2 p-5 transition-all ${estilo.border} ${estilo.bg} ${leida ? 'opacity-60' : ''}`}>
               <div className="flex items-start gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${estilo.icon_bg}`}>
-                  <span className={`material-symbols-outlined text-2xl ${estilo.icon_color}`}>{alerta.icono}</span>
+                  <span aria-hidden="true" className={`material-symbols-outlined text-2xl ${estilo.icon_color}`}>{alerta.icono}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -304,7 +313,7 @@ export default function ERPAlertas() {
                       <Link to={alerta.accion_url}
                         className="px-4 py-2 bg-surface-container-lowest dark-card font-bold text-xs text-on-surface border border-outline-variant hover:border-primary/50 rounded-xl transition-colors flex items-center gap-1 shadow-sm">
                         {alerta.accion_label}
-                        <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-sm">arrow_forward</span>
                       </Link>
                     )}
                     {!leida && (

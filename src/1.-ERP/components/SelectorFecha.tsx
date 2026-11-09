@@ -179,7 +179,7 @@ export default function SelectorFecha({
         aria-expanded={abierto}
         className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-outline-variant/50 bg-surface-container-lowest text-on-surface text-sm hover:border-primary/40 transition-colors"
       >
-        <span className="material-symbols-outlined text-outline text-lg">calendar_month</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-outline text-lg">calendar_month</span>
         <span className={cn('flex-1 text-left', !value && 'text-on-surface-variant/50')}>
           {value ? formatFecha(value) : placeholder}
         </span>
@@ -221,7 +221,7 @@ export default function SelectorFecha({
               aria-label="Mes anterior"
               className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors"
             >
-              <span className="material-symbols-outlined text-lg">chevron_left</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">chevron_left</span>
             </button>
             <select
               value={cursor.getMonth()}
@@ -245,7 +245,7 @@ export default function SelectorFecha({
               aria-label="Mes siguiente"
               className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors"
             >
-              <span className="material-symbols-outlined text-lg">chevron_right</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">chevron_right</span>
             </button>
           </div>
 

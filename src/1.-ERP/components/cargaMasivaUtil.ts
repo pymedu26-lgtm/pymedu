@@ -37,20 +37,32 @@ export function pad2(n: number | string): string {
   return String(n).padStart(2, '0');
 }
 
+/** Fecha local de un Date construido con componentes locales. */
 export function aISO(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * Fecha de un Date que representa un instante en UTC (los que crea xlsx con
+ * `cellDates: true`). Se leen los componentes UTC para no perder el día: en
+ * Chile un Date de medianoche UTC se ve como el día anterior en hora local.
+ */
+function aISOUTC(d: Date): string {
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 
 /** Serial de Excel (días desde 1899-12-30) → aaaa-mm-dd. */
 export function serialAISO(serial: number): string {
   const d = new Date(Math.round((serial - 25569) * 86400000));
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+  return aISOUTC(d);
 }
 
 /** Acepta Date de Excel, serial numérico y texto en formatos Chilean, ISO o compacto. */
 export function parseFecha(valor: unknown): string {
   if (valor === null || valor === undefined || valor === '') return '';
-  if (valor instanceof Date) return isNaN(valor.getTime()) ? '' : aISO(valor);
+  // xlsx entrega las fechas de celdas como Date en UTC (medianoche UTC). Si se
+  // leyeran con getDate() en America/Santiago, se guardaría el día anterior.
+  if (valor instanceof Date) return isNaN(valor.getTime()) ? '' : aISOUTC(valor);
   if (typeof valor === 'number' && Number.isFinite(valor)) {
     return valor < 20000 || valor > 60000 ? '' : serialAISO(valor);
   }

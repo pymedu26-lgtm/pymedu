@@ -9,6 +9,7 @@ import CampoMoneda from '../../components/CampoMoneda';
 import FiltroPeriodo from '../components/FiltroPeriodo';
 import SelectorDesplegable, { etiquetaRangoPeriodo } from '../../components/SelectorDesplegable';
 import { cn, formatFecha } from '@/lib/utils';
+import { hoyIso, formatearFechaHoraLocal, formatearFechaLocal, rangoMes as rangoMesLocal, timestampDesdeFechaLocal } from '@/lib/fecha';
 import { useColoresTema } from '@/lib/useColoresTema';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 
@@ -112,6 +113,8 @@ export default function ERPInventario() {
   const [activeTab, setActiveTab] = useState<'lista' | 'movimientos'>('lista');
   const [showModal, setShowModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
+  const [errorMovimiento, setErrorMovimiento] = useState('');
+  const [errorFormulario, setErrorFormulario] = useState('');
   const [showHistorialModal, setShowHistorialModal] = useState(false);
   const [showCargaMasiva, setShowCargaMasiva] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -128,12 +131,7 @@ export default function ERPInventario() {
   const [rangoMovimientos, setRangoMovimientos] = useState({ fechaInicio: '', fechaFin: '' });
 
   /** Rango de mes natural en ISO 'YYYY-MM-DD', igual que en Ventas. */
-  const rangoMes = (offset: number) => {
-    const hoy = new Date();
-    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1).toISOString().split('T')[0];
-    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0).toISOString().split('T')[0];
-    return { inicio, fin };
-  };
+  const rangoMes = (offset: number) => rangoMesLocal(offset);
 
   useEffect(() => {
     if (periodoMovimientos === 'personalizado') return;
@@ -324,7 +322,7 @@ export default function ERPInventario() {
 
   const exportToCSV = () => {
     descargarCSV(
-      `inventario_${new Date().toISOString().split('T')[0]}.csv`,
+      `inventario_${hoyIso()}.csv`,
       [...COLUMNAS_INVENTARIO],
       inventario.map(p => [
         p.nombre, p.codigo, p.codigoBarras, p.categoria, p.tipo, p.descripcion,
@@ -338,7 +336,7 @@ export default function ERPInventario() {
     tipo: 'ingreso',
     cantidad: 1,
     costoUnitario: 0,
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: hoyIso(),
     motivo: ''
   });
 
@@ -407,17 +405,19 @@ export default function ERPInventario() {
   const handleEditClick = (producto: Producto) => {
     setEditingId(producto.id);
     setNuevoProducto(producto);
+    setErrorFormulario('');
     setShowModal(true);
   };
 
   const handleMovimientoClick = (productoId: string) => {
     const producto = inventario.find(p => p.id === productoId);
+    setErrorMovimiento('');
     setNuevoMovimiento({
       productoId,
       tipo: 'ingreso',
       cantidad: 1,
       costoUnitario: producto?.costo || 0,
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: hoyIso(),
       motivo: ''
     });
     setShowMovimientoModal(true);
@@ -447,6 +447,28 @@ export default function ERPInventario() {
   };
 
   const handleGuardar = () => {
+    const nombre = (nuevoProducto.nombre || '').trim();
+    if (!nombre) {
+      setErrorFormulario('Indica el nombre del producto o servicio.');
+      return;
+    }
+    if (!nuevoProducto.categoria?.trim()) {
+      setErrorFormulario('Selecciona o crea una categoría.');
+      return;
+    }
+    if (tipoEnFormulario === 'producto') {
+      const stock = Number(nuevoProducto.stock);
+      const stockMinimo = Number(nuevoProducto.stockMinimo);
+      if (!Number.isFinite(stock) || stock < 0) {
+        setErrorFormulario('El stock actual debe ser un número igual o mayor que cero.');
+        return;
+      }
+      if (!Number.isFinite(stockMinimo) || stockMinimo < 0) {
+        setErrorFormulario('El stock mínimo debe ser un número igual o mayor que cero.');
+        return;
+      }
+    }
+    setErrorFormulario('');
     if (nuevoProducto.nombre && nuevoProducto.categoria) {
       const tf = tipoEnFormulario
       const esProducto = tf === 'producto'
@@ -472,7 +494,7 @@ export default function ERPInventario() {
           : Number(nuevoProducto.costo) || 0
 
       const productoData: Partial<Producto> = {
-        nombre: nuevoProducto.nombre,
+        nombre,
         codigo: nuevoProducto.codigo?.trim() || '',
         codigoBarras: esServicio ? '' : (nuevoProducto.codigoBarras?.trim() || ''),
         categoria: nuevoProducto.categoria,
@@ -511,22 +533,49 @@ export default function ERPInventario() {
       setMostrarInputCategoria(false);
       setNuevaCategoria('');
       setBarcodeManualEntry(false);
+      setErrorFormulario('');
       setNuevoProducto(CAMPOS_INICIALES('producto'));
     }
   };
 
   const handleGuardarMovimiento = () => {
-    if (nuevoMovimiento.productoId && nuevoMovimiento.cantidad && nuevoMovimiento.motivo) {
-      addMovimientoInventario({
-        productoId: nuevoMovimiento.productoId,
-        tipo: nuevoMovimiento.tipo as 'ingreso' | 'salida' | 'ajuste' | 'merma' | 'devolucion',
-        cantidad: Number(nuevoMovimiento.cantidad),
-        costoUnitario: Number(nuevoMovimiento.costoUnitario) || undefined,
-        fecha: new Date(nuevoMovimiento.fecha!).toISOString(),
-        motivo: nuevoMovimiento.motivo
-      });
-      setShowMovimientoModal(false);
+    const cantidad = Number(nuevoMovimiento.cantidad);
+    const motivo = (nuevoMovimiento.motivo || '').trim();
+    const producto = inventario.find(p => p.id === nuevoMovimiento.productoId);
+
+    if (!nuevoMovimiento.productoId || !producto) {
+      setErrorMovimiento('Selecciona un producto para registrar el movimiento.');
+      return;
     }
+    if (!Number.isFinite(cantidad) || cantidad === 0) {
+      setErrorMovimiento('La cantidad debe ser distinta de cero.');
+      return;
+    }
+    if (!motivo) {
+      setErrorMovimiento('Indica el motivo u observación del movimiento.');
+      return;
+    }
+    if (nuevoMovimiento.tipo !== 'ajuste' && cantidad < 0) {
+      setErrorMovimiento('La cantidad debe ser positiva. Usa "Ajuste (+/-)" para descontar o sumar manualmente.');
+      return;
+    }
+    if (nuevoMovimiento.tipo === 'salida' || nuevoMovimiento.tipo === 'merma') {
+      if (cantidad > producto.stock) {
+        setErrorMovimiento(`Stock insuficiente: disponible ${producto.stock} ${producto.unidadMedida || 'unidades'}.`);
+        return;
+      }
+    }
+
+    setErrorMovimiento('');
+    addMovimientoInventario({
+      productoId: nuevoMovimiento.productoId,
+      tipo: nuevoMovimiento.tipo as 'ingreso' | 'salida' | 'ajuste' | 'merma' | 'devolucion',
+      cantidad,
+      costoUnitario: Number(nuevoMovimiento.costoUnitario) || undefined,
+      fecha: timestampDesdeFechaLocal(nuevoMovimiento.fecha) || new Date().toISOString(),
+      motivo
+    });
+    setShowMovimientoModal(false);
   };
 
   return (
@@ -536,7 +585,7 @@ export default function ERPInventario() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <span className="material-symbols-outlined text-primary text-3xl">inventory_2</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-primary text-3xl">inventory_2</span>
             </div>
             <h2 className="text-3xl font-black text-on-surface tracking-tight">Gestión de Inventario</h2>
           </div>
@@ -546,12 +595,12 @@ export default function ERPInventario() {
         <div className="flex flex-wrap gap-3">
           <button onClick={() => setShowCargaMasiva(true)}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">upload_file</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportToCSV}
             className="px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full text-sm font-bold shadow-sm hover:bg-primary/5 transition-all flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg">download</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
           {puedeEditar && (
@@ -561,17 +610,18 @@ export default function ERPInventario() {
               setNuevaCategoria('')
               setBarcodeManualEntry(false)
               setNuevoProducto(CAMPOS_INICIALES('producto'))
+              setErrorFormulario('')
               setShowModal(true)
             }}
               className="px-6 py-3 bg-primary text-inverse-on-surface rounded-full text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2">
-              <span className="material-symbols-outlined text-lg">add_box</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">add_box</span>
               Nuevo Producto
             </button>
           )}
         </div>
         {!puedeEditar && (
           <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary/10 text-secondary border border-secondary/30 rounded-xl text-sm font-bold">
-            <span className="material-symbols-outlined text-lg">lock</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">lock</span>
             Solo lectura: tu rol no permite modificar el inventario
           </div>
         )}
@@ -606,7 +656,7 @@ export default function ERPInventario() {
                 activeTab === tab.id ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
               )}
             >
-              <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">{tab.icon}</span>
               {tab.label}
             </button>
           ))}
@@ -619,23 +669,23 @@ export default function ERPInventario() {
               Sin esto, cambiar de mes parece que el stock se hubiera alterado solo. */}
           {stockAlCierre && (
             <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold">
-              <span className="material-symbols-outlined text-lg">history</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">history</span>
               Stock al cierre de {etiquetaRangoMovimientos}. Ajustar o registrar movimientos sigue operando sobre el stock actual.
             </div>
           )}
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/20' },
-              { label: 'Valorización Costo', value: `$${valorInventario.toLocaleString('es-CL')}`, icon: 'payments', color: 'text-on-surface', bg: 'bg-surface-container-low', border: 'border-outline-variant/30' },
-              { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-on-success-container', bg: 'bg-success-container', border: 'border-success/30' },
-              { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant', bg: productosBajoStock > 0 ? 'bg-error/5' : 'bg-surface-container-low', border: productosBajoStock > 0 ? 'border-error/20' : 'border-outline-variant/30' },
+              { label: 'Productos Activos', value: String(totalProductos), icon: 'inventory_2', color: 'text-primary' },
+              { label: 'Valorización Costo', value: `$${valorInventario.toLocaleString('es-CL')}`, icon: 'payments', color: 'text-on-surface' },
+              { label: 'Valorización Venta', value: `$${valorVenta.toLocaleString('es-CL')}`, icon: 'sell', color: 'text-success' },
+              { label: 'Alertas de Stock', value: String(productosBajoStock), icon: 'warning', color: productosBajoStock > 0 ? 'text-error' : 'text-on-surface-variant' },
             ].map(k => (
-              <div key={k.label} className={cn('p-5 rounded-3xl border-2 transition-all hover:shadow-md', k.bg, k.border)}>
+              <div key={k.label} className="p-5 rounded-3xl border-2 border-outline-variant/30 bg-surface-container-low transition-all hover:shadow-md">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-[10px] font-black text-outline uppercase tracking-widest">{k.label}</p>
-                  <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center bg-surface-container-lowest shadow-sm', k.color)}>
-                    <span className="material-symbols-outlined text-lg">{k.icon}</span>
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-surface-container-lowest shadow-sm">
+                    <span className={cn('material-symbols-outlined text-lg', k.color)}>{k.icon}</span>
                   </div>
                 </div>
                 <p className={cn('text-2xl font-black', k.color)}>{k.value}</p>
@@ -648,15 +698,15 @@ export default function ERPInventario() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
               <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">show_chart</span>
-                Movimientos por Dia
+                <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">show_chart</span>
+                Movimientos por Día
               </h3>
               <p className="text-[11px] text-outline font-medium mb-4">
                 Entradas y salidas del periodo · {etiquetaRangoMovimientos}
               </p>
               {datosMovimientosPorDia.length === 0 ? (
                 <div className="h-[260px] flex flex-col items-center justify-center text-center">
-                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">event_busy</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-4xl text-outline/30 mb-2">event_busy</span>
                   <p className="text-on-surface-variant text-sm font-bold">Sin movimientos en el periodo</p>
                 </div>
               ) : (
@@ -681,15 +731,15 @@ export default function ERPInventario() {
 
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
               <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">trophy</span>
-                Top 5 Mas Solicitados
+                <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">trophy</span>
+                Top 5 Más Solicitados
               </h3>
               <p className="text-[11px] text-outline font-medium mb-4">
                 Productos y servicios con mas demanda en el periodo · {etiquetaRangoMovimientos}
               </p>
               {topMasSolicitados.length === 0 ? (
                 <div className="h-[260px] flex flex-col items-center justify-center text-center">
-                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">shopping_cart</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-4xl text-outline/30 mb-2">shopping_cart</span>
                   <p className="text-on-surface-variant text-sm font-bold">Sin solicitudes en el periodo</p>
                   <p className="text-outline text-xs mt-1">Aqui apareceran los productos y servicios mas pedidos.</p>
                 </div>
@@ -716,7 +766,7 @@ export default function ERPInventario() {
             {/* Pie Chart */}
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm">
               <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">pie_chart</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">pie_chart</span>
                 Distribución por Categoría
               </h3>
               <div className="h-[300px]">
@@ -743,7 +793,7 @@ export default function ERPInventario() {
             {/* Salud del Stock */}
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-outline-variant/20 p-6 shadow-sm flex flex-col">
               <h3 className="text-sm font-black text-outline uppercase tracking-widest mb-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">query_stats</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-primary text-xl">query_stats</span>
                 Salud del Stock
               </h3>
               <p className="text-[11px] text-outline font-medium mb-4">
@@ -751,7 +801,7 @@ export default function ERPInventario() {
               </p>
               {stockPorEstado.total === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center min-h-[200px]">
-                  <span className="material-symbols-outlined text-4xl text-outline/30 mb-2">inventory_2</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-4xl text-outline/30 mb-2">inventory_2</span>
                   <p className="text-on-surface-variant text-sm font-bold">Sin productos activos</p>
                 </div>
               ) : (
@@ -793,7 +843,7 @@ export default function ERPInventario() {
           {/* Filtros */}
           <div className="flex flex-col sm:flex-row gap-4 bg-surface-container-lowest p-4 rounded-3xl border-2 border-outline-variant/20">
             <div className="relative flex-1">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
+              <span aria-hidden="true" className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
               <input 
                 type="text" placeholder="Buscar por nombre, código o categoría..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-surface-container-low border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 outline-none font-medium text-on-surface" 
@@ -814,7 +864,7 @@ export default function ERPInventario() {
               encabezados y sin filas y, debajo, el mismo aviso otra vez. */}
           {inventarioFiltrado.length === 0 ? (
             <div className="bg-surface-container-lowest rounded-3xl border-2 border-dashed border-outline-variant/30 p-20 text-center">
-              <span className="material-symbols-outlined text-6xl text-outline/30 mb-4">inventory_2</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-6xl text-outline/30 mb-4">inventory_2</span>
               <h3 className="text-xl font-black text-on-surface-variant">No se encontraron productos</h3>
               <p className="text-outline text-sm mt-2">Prueba cambiando los filtros o la búsqueda.</p>
             </div>
@@ -824,9 +874,12 @@ export default function ERPInventario() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-surface-container-low border-b border-outline-variant/20">
                     <tr>
-                      {['Código', 'Nombre', 'Categoría', 'Stock', 'Costo', 'Precio Venta', 'Margen', 'Acciones'].map(h => (
-                        <th key={h} className="px-6 py-5 font-black text-outline uppercase tracking-widest text-[10px]">{h}</th>
-                      ))}
+                      {['Código', 'Nombre', 'Categoría', 'Stock', 'Costo', 'Precio Venta', 'Margen', 'Acciones'].map((h, i) => {
+                        const esOcultable = i === 2 || i === 4 || i === 5; // Categoría, Costo, Precio Venta
+                        return (
+                          <th key={h} className={cn('px-6 py-5 font-black text-outline uppercase tracking-widest text-[10px]', esOcultable ? 'hidden md:table-cell' : '')}>{h}</th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/20">
@@ -849,7 +902,7 @@ export default function ERPInventario() {
                               <span className="text-[10px] text-outline font-medium truncate max-w-[150px]">{producto.descripcion}</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 hidden md:table-cell">
                             <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-wider">
                               {producto.categoria}
                             </span>
@@ -878,14 +931,14 @@ export default function ERPInventario() {
                             ) : (
                               <div className="flex flex-col items-end gap-0.5">
                                 <span className="text-[9px] font-bold text-outline uppercase">{producto.unidadMedida || 'servicio'}</span>
-                                <span className="material-symbols-outlined text-outline/30">work</span>
+                                <span aria-hidden="true" className="material-symbols-outlined text-outline/30">work</span>
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-right font-bold text-on-surface-variant">
+                          <td className="px-6 py-4 text-right font-bold text-on-surface-variant hidden md:table-cell">
                             ${producto.costo.toLocaleString('es-CL')}
                           </td>
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-6 py-4 text-right hidden md:table-cell">
                             <div className="flex flex-col items-end">
                               <span className="font-black text-on-surface">${producto.precio.toLocaleString('es-CL')}</span>
                               <span className="text-[9px] text-outline font-bold uppercase">{producto.incluyeIva ? 'IVA inc.' : '+ IVA'}</span>
@@ -905,21 +958,23 @@ export default function ERPInventario() {
                                 <>
                                   <button onClick={() => handleMovimientoClick(producto.id)}
                                     className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Ajustar stock">
-                                    <span className="material-symbols-outlined text-lg">swap_horiz</span>
+                                    <span aria-hidden="true" className="material-symbols-outlined text-lg">swap_horiz</span>
                                   </button>
                                   <button onClick={() => handleEditClick(producto)}
+                                    aria-label={`Editar producto ${producto.nombre}`}
                                     className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Editar">
-                                    <span className="material-symbols-outlined text-lg">edit</span>
+                                    <span aria-hidden="true" className="material-symbols-outlined text-lg">edit</span>
                                   </button>
                                   <button onClick={() => { setItemToDelete(producto.id); setDeleteModalOpen(true); }}
+                                    aria-label={`Eliminar producto ${producto.nombre}`}
                                     className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-error/10 hover:text-error transition-all" title="Eliminar">
-                                    <span className="material-symbols-outlined text-lg">delete</span>
+                                    <span aria-hidden="true" className="material-symbols-outlined text-lg">delete</span>
                                   </button>
                                 </>
                               )}
                               <button onClick={() => { setSelectedProductId(producto.id); setShowHistorialModal(true); }}
                                 className="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:bg-primary/10 hover:text-primary transition-all" title="Historial">
-                                <span className="material-symbols-outlined text-lg">history</span>
+                                <span aria-hidden="true" className="material-symbols-outlined text-lg">history</span>
                               </button>
                             </div>
                           </td>
@@ -961,7 +1016,7 @@ export default function ERPInventario() {
                     return (
                       <tr key={mov.id} className="hover:bg-surface-container-low/50 transition-colors">
                         <td className="px-6 py-4 text-on-surface-variant font-medium">
-                          {new Date(mov.fecha).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {formatearFechaHoraLocal(mov.fecha)}
                         </td>
                         <td className="px-6 py-4 font-bold text-on-surface">{prod?.nombre || 'Producto eliminado'}</td>
                         <td className="px-6 py-4">
@@ -987,7 +1042,7 @@ export default function ERPInventario() {
               </table>
               {movimientosFiltrados.lista.length === 0 && (
                 <div className="p-16 text-center">
-                  <span className="material-symbols-outlined text-5xl text-outline/30 mb-3 block">event_busy</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-5xl text-outline/30 mb-3 block">event_busy</span>
                   <p className="text-on-surface-variant font-bold">Sin movimientos en el periodo seleccionado</p>
                   <p className="text-outline text-sm mt-1">
                     {movimientosInventario.length > 0
@@ -1007,8 +1062,8 @@ export default function ERPInventario() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50 shrink-0">
               <h3 className="text-xl font-bold text-primary">{editingId ? 'Editar Producto' : 'Registrar Nuevo Producto'}</h3>
-              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} className="text-on-surface-variant hover:text-error transition-colors">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} aria-label="Cerrar formulario de producto" className="text-on-surface-variant hover:text-error transition-colors">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto flex-grow">
@@ -1052,7 +1107,7 @@ export default function ERPInventario() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre</label>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Nombre <span className="text-error">*</span></label>
                       <input type="text" value={nuevoProducto.nombre} onChange={(e) => setNuevoProducto({...nuevoProducto, nombre: e.target.value})}
                         className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: Cuaderno Universitario" />
                     </div>
@@ -1064,7 +1119,7 @@ export default function ERPInventario() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría</label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Categoría <span className="text-error">*</span></label>
                     <SelectorDesplegable
                       className="w-full"
                       valor={nuevoProducto.categoria || ''}
@@ -1221,12 +1276,12 @@ export default function ERPInventario() {
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Actual</label>
-                        <input type="number" value={nuevoProducto.stock || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: Number(e.target.value)})}
+                        <input type="number" min="0" step="1" value={nuevoProducto.stock || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: Number(e.target.value)})}
                           className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" disabled={!!editingId} />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Stock Mínimo</label>
-                        <input type="number" value={nuevoProducto.stockMinimo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stockMinimo: Number(e.target.value)})}
+                        <input type="number" min="0" step="1" value={nuevoProducto.stockMinimo || ''} onChange={(e) => setNuevoProducto({...nuevoProducto, stockMinimo: Number(e.target.value)})}
                           className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="0" />
                       </div>
                       <div>
@@ -1249,9 +1304,17 @@ export default function ERPInventario() {
                   )}
                 </div>
               </div>
+
+              <p className="mt-3 text-[11px] text-on-surface-variant">Los campos marcados con <span className="text-error">*</span> son obligatorios.</p>
+              {errorFormulario && (
+                <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm font-semibold text-error">
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg leading-none">error</span>
+                  <span>{errorFormulario}</span>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50 shrink-0">
-              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
+              <button onClick={() => { setShowModal(false); setEditingId(null); setMostrarInputCategoria(false); setNuevaCategoria(''); setBarcodeManualEntry(false); setNuevoProducto(CAMPOS_INICIALES('producto')); setErrorFormulario(''); }} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 Cancelar
               </button>
               <button onClick={handleGuardar} className="px-6 py-2 bg-primary text-inverse-on-surface rounded-full font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
@@ -1268,8 +1331,8 @@ export default function ERPInventario() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/50">
               <h3 className="text-xl font-bold text-primary">Registrar Movimiento</h3>
-              <button onClick={() => setShowMovimientoModal(false)} className="text-on-surface-variant hover:text-error transition-colors">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={() => setShowMovimientoModal(false)} aria-label="Cerrar registro de movimiento" className="text-on-surface-variant hover:text-error transition-colors">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 space-y-4">
@@ -1296,8 +1359,8 @@ export default function ERPInventario() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad</label>
-                  <input type="number" value={nuevoMovimiento.cantidad || ''} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, cantidad: Number(e.target.value)})}
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Cantidad <span className="text-error">*</span></label>
+                  <input type="number" step="1" min={nuevoMovimiento.tipo === 'ajuste' ? undefined : 0} value={nuevoMovimiento.cantidad || ''} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, cantidad: Number(e.target.value)})}
                     className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" />
                 </div>
               </div>
@@ -1309,7 +1372,7 @@ export default function ERPInventario() {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Motivo / Observación</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Motivo / Observación <span className="text-error">*</span></label>
                 <input type="text" value={nuevoMovimiento.motivo} onChange={(e) => setNuevoMovimiento({...nuevoMovimiento, motivo: e.target.value})}
                   className="w-full px-4 py-3 rounded-xl border border-outline-variant/50 focus:ring-2 focus:ring-primary/20 outline-none text-on-surface bg-surface-container-lowest" placeholder="Ej: Compra a proveedor, conteo físico..." />
               </div>
@@ -1320,6 +1383,12 @@ export default function ERPInventario() {
                       onChange={fecha => setNuevoMovimiento({ ...nuevoMovimiento, fecha: fecha })}
                     />
               </div>
+              {errorMovimiento && (
+                <div role="alert" className="flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm font-semibold text-error">
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg leading-none">error</span>
+                  <span>{errorMovimiento}</span>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-outline-variant/20 flex justify-end gap-3 bg-surface-container-low/50">
               <button onClick={() => setShowMovimientoModal(false)} className="px-6 py-2 rounded-full font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors">
@@ -1342,11 +1411,11 @@ export default function ERPInventario() {
                 <h3 className="text-xl font-bold text-primary">Historial de Movimientos</h3>
                 <p className="text-sm text-on-surface-variant">{inventario.find(p => p.id === selectedProductId)?.nombre}</p>
               </div>
-              <button onClick={() => { setShowHistorialModal(false); setSelectedProductId(null); }} className="text-on-surface-variant hover:text-error transition-colors">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={() => { setShowHistorialModal(false); setSelectedProductId(null); }} aria-label="Cerrar historial de movimientos" className="text-on-surface-variant hover:text-error transition-colors">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="p-0 overflow-y-auto flex-1">
+            <div className="p-0 overflow-x-auto overflow-y-auto flex-1">
               <table className="w-full text-left text-sm">
                 <thead className="bg-surface-container-low text-on-surface-variant font-bold uppercase tracking-wider text-xs sticky top-0">
                   <tr>
@@ -1362,7 +1431,7 @@ export default function ERPInventario() {
                     .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
                     .map(mov => (
                     <tr key={mov.id} className="hover:bg-surface-container-low/30 transition-colors">
-                      <td className="px-6 py-4 text-on-surface-variant">{new Date(mov.fecha).toLocaleDateString('es-CL')}</td>
+                      <td className="px-6 py-4 text-on-surface-variant">{formatearFechaLocal(mov.fecha)}</td>
                       <td className="px-6 py-4">
                         <span className={cn('px-2 py-1 rounded-md text-xs font-bold capitalize',
                           mov.tipo === 'ingreso' || mov.tipo === 'devolucion' ? 'bg-success-container text-on-success-container' :

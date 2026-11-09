@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useERP } from '../1.-ERP/context/ERPContext';
+import { LIMITE_USOS_FREE, PLAN_FREE, PLAN_PRO, esPlanPago, formatearPrecio, planPorId } from '../lib/planes';
+import { formatearFechaLocal } from '../lib/fecha';
 
 type AlertaQuick = { icon: string; color: string; bg: string; titulo: string; desc: string; label: string; url: string };
 
@@ -18,7 +20,7 @@ export default function Dashboard() {
   const diaDelMes = hoy.getDate();
   const hoyIso = `${anioActual}-${String(mesActual + 1).padStart(2, '0')}-${String(diaDelMes).padStart(2, '0')}`;
   const mesIso = hoyIso.slice(0, 7);
-  const esPremium = perfil?.membresia_nivel === 'pro' || perfil?.membresia_nivel === 'premium';
+  const esPlanPagoActual = esPlanPago(perfil?.membresia_nivel);
 
   const negocioVacio = ventas.length === 0 && gastos.length === 0 && inventario.length === 0;
 
@@ -90,8 +92,10 @@ export default function Dashboard() {
   }
 
   const movimientosActuales = ventas.length + gastos.length + movimientosInventario.length;
-  const limitePlan = 30;
+  const limitePlan = LIMITE_USOS_FREE;
   const progresoCuota = Math.min(100, Math.round((movimientosActuales / limitePlan) * 100));
+  const fechaHoyTexto = hoy.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
+  const fechaHoyCapitalizada = fechaHoyTexto.charAt(0).toUpperCase() + fechaHoyTexto.slice(1);
 
   const pasosOnboarding = [
     { n: 1, icon: 'inventory_2', titulo: 'Carga tu inventario', desc: 'Agrega los productos o servicios que vendes.', label: 'Ir a Inventario', url: '/erp/inventario', color: 'text-primary bg-primary/15' },
@@ -107,15 +111,15 @@ export default function Dashboard() {
           <h2 className="text-3xl font-extrabold text-on-surface tracking-tight flex items-center gap-2">
             ¡Hola, {perfil?.nombre_completo?.split(' ')[0] || 'Emprendedor'}! <span className="text-3xl">👋</span>
           </h2>
-          <p className="text-on-surface-variant mt-1 font-medium capitalize">
-            {hoy.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })} · Resumen de tu negocio
+          <p className="text-on-surface-variant mt-1 font-medium">
+            {fechaHoyCapitalizada} · Resumen de tu negocio
           </p>
         </div>
 
-        {!esPremium ? (
-          <div className="flex flex-col gap-2 bg-surface-container-low p-4 rounded-2xl border border-outline-variant/30 min-w-[280px]">
+        {!esPlanPagoActual ? (
+          <div className="flex w-full min-w-0 flex-col gap-2 bg-surface-container-low p-4 rounded-2xl border border-outline-variant/30 md:min-w-[280px]">
             <div className="flex justify-between items-center text-sm font-bold">
-              <span className="text-on-surface-variant">Plan Básico (Gratis)</span>
+              <span className="text-on-surface-variant">Plan {PLAN_FREE.nombre} (Gratis)</span>
               <span className={progresoCuota > 80 ? 'text-error' : 'text-primary'}>
                 {movimientosActuales} / {limitePlan} Usos
               </span>
@@ -127,18 +131,18 @@ export default function Dashboard() {
               />
             </div>
             <Link to="/erp/suscripcion" className="mt-2 text-xs text-center font-bold text-warning bg-warning/10 hover:bg-warning/20 rounded-lg py-2 transition-colors glow-amber">
-              ⚡ Desbloquear uso ilimitado ($10.000)
+              ⚡ Desbloquear uso ilimitado ({formatearPrecio(PLAN_PRO.precio)})
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col items-start gap-1 bg-success/10 text-success px-6 py-4 rounded-2xl shadow-sm border border-success/20 glow-emerald min-w-[280px]">
+          <div className="flex w-full min-w-0 flex-col items-start gap-1 bg-success/10 text-success px-6 py-4 rounded-2xl shadow-sm border border-success/20 glow-emerald md:min-w-[280px]">
             <div className="flex items-center gap-2 font-bold">
-              <span className="material-symbols-outlined text-2xl">workspace_premium</span>
-              Plan {perfil?.membresia_nivel === 'pro' ? 'Pro' : 'Premium'} Activo
+              <span aria-hidden="true" className="material-symbols-outlined text-2xl">workspace_premium</span>
+              Plan {planPorId(perfil?.membresia_nivel).nombre} Activo
             </div>
             {perfil?.membresia_expira && (
               <span className="text-xs font-semibold text-success/80">
-                Vence el {new Date(perfil.membresia_expira).toLocaleDateString('es-CL')}
+                Vence el {formatearFechaLocal(perfil.membresia_expira)}
               </span>
             )}
           </div>
@@ -151,7 +155,7 @@ export default function Dashboard() {
           <div className="absolute top-0 right-0 w-40 h-40 bg-primary/20 rounded-full blur-3xl -mr-12 -mt-12" />
           <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
             <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center text-primary shrink-0">
-              <span className="material-symbols-outlined text-3xl">rocket_launch</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-3xl">rocket_launch</span>
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-xl font-extrabold text-on-surface mb-1">Tu negocio parte desde cero</h3>
@@ -163,7 +167,7 @@ export default function Dashboard() {
                   <Link key={p.url} to={p.url}
                     className="group flex items-start gap-3 p-4 bg-surface-container-low/60 hover:bg-surface-container-low rounded-2xl border border-outline-variant/20 hover:border-primary/30 transition-all hover:-translate-y-0.5">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${p.color}`}>
-                      <span className="material-symbols-outlined text-lg">{p.icon}</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-lg">{p.icon}</span>
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-on-surface-variant">Paso {p.n}</p>
@@ -189,7 +193,7 @@ export default function Dashboard() {
           <div key={k.label} className={`p-5 rounded-2xl border shadow-sm ${k.bg} ${k.border}`}>
             <div className="flex items-center justify-between mb-3">
               <p className={`text-xs font-bold uppercase tracking-wider ${k.color}`}>{k.label}</p>
-              <span className={`material-symbols-outlined text-xl ${k.color}`}>{k.icon}</span>
+              <span aria-hidden="true" className={`material-symbols-outlined text-xl ${k.color}`}>{k.icon}</span>
             </div>
             <p className={`text-2xl font-extrabold ${k.color}`}>{k.value}</p>
             <p className="text-xs text-on-surface-variant mt-1 font-medium">{k.sub}</p>
@@ -205,22 +209,22 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="bg-surface-container-lowest dark-card p-7 rounded-3xl shadow-sm hover:shadow-md transition-all hover:scale-[1.01] group">
               <div className="w-12 h-12 rounded-2xl bg-success/15 flex items-center justify-center text-success mb-5 group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-2xl">add_card</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-2xl">add_card</span>
               </div>
               <p className="text-success text-xs font-bold uppercase tracking-widest mb-1">Plata que entró hoy</p>
               <h3 className="text-3xl font-extrabold text-on-surface mb-4">{fmt(ingresosHoy)}</h3>
               <Link to="/erp/ventas" className="inline-flex items-center gap-1 text-sm font-bold text-success hover:text-success/80 transition-colors">
-                <span className="material-symbols-outlined text-lg">add_circle</span> Anotar venta
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">add_circle</span> Anotar venta
               </Link>
             </div>
             <div className="bg-surface-container-lowest dark-card p-7 rounded-3xl shadow-sm hover:shadow-md transition-all hover:scale-[1.01] group">
               <div className="w-12 h-12 rounded-2xl bg-error/15 flex items-center justify-center text-error mb-5 group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-2xl">shopping_cart_checkout</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-2xl">shopping_cart_checkout</span>
               </div>
               <p className="text-error text-xs font-bold uppercase tracking-widest mb-1">Plata que salió hoy</p>
               <h3 className="text-3xl font-extrabold text-on-surface mb-4">{fmt(egresosHoy)}</h3>
               <Link to="/erp/gastos" className="inline-flex items-center gap-1 text-sm font-bold text-error hover:text-error/80 transition-colors">
-                <span className="material-symbols-outlined text-lg">add_circle</span> Anotar gasto
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">add_circle</span> Anotar gasto
               </Link>
             </div>
           </div>
@@ -229,7 +233,7 @@ export default function Dashboard() {
           <div className="bg-surface-container-lowest dark-card rounded-3xl shadow-sm overflow-hidden">
             <div className="p-5 border-b border-outline-variant/30 flex justify-between items-center bg-surface-container-low/50">
               <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-warning">notifications_active</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-warning">notifications_active</span>
                 Tu negocio te avisa
               </h3>
               <Link to="/erp/alertas" className="text-xs font-bold text-primary hover:underline">
@@ -241,7 +245,7 @@ export default function Dashboard() {
                 <div key={i} className="p-5 flex items-center justify-between hover:bg-surface-container-low/50 transition-colors gap-4">
                   <div className="flex items-center gap-4 min-w-0">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${a.bg}`}>
-                      <span className={`material-symbols-outlined text-xl ${a.color}`}>{a.icon}</span>
+                      <span aria-hidden="true" className={`material-symbols-outlined text-xl ${a.color}`}>{a.icon}</span>
                     </div>
                     <div className="min-w-0">
                       <h4 className="text-sm font-bold text-on-surface truncate">{a.titulo}</h4>
@@ -270,7 +274,7 @@ export default function Dashboard() {
                 <Link key={a.url} to={a.url}
                   className={`flex flex-col items-center gap-2 p-3 rounded-2xl hover:shadow-md transition-all hover:-translate-y-0.5 group ${a.glow}`}>
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${a.color} group-hover:scale-110 transition-transform`}>
-                    <span className="material-symbols-outlined text-xl">{a.icon}</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-xl">{a.icon}</span>
                   </div>
                   <span className="text-xs font-bold text-on-surface-variant">{a.label}</span>
                 </Link>
@@ -298,7 +302,7 @@ export default function Dashboard() {
             </div>
             {metaCumplida && (
               <p className="mt-2 text-xs font-bold text-success flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">check_circle</span> ¡Meta del mes cumplida!
+                <span aria-hidden="true" className="material-symbols-outlined text-sm">check_circle</span> ¡Meta del mes cumplida!
               </p>
             )}
           </div>
@@ -324,15 +328,15 @@ export default function Dashboard() {
           </div>
 
           {/* CTA Premium */}
-          {!esPremium && (
+          {!esPlanPagoActual && (
             <div className="bg-gradient-to-br from-warning/10 to-warning/10 dark-card rounded-3xl shadow-sm p-7 text-center">
               <div className="w-14 h-14 bg-surface-container rounded-2xl shadow-sm flex items-center justify-center mx-auto text-warning mb-4">
-                <span className="material-symbols-outlined text-3xl">rocket_launch</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-3xl">rocket_launch</span>
               </div>
               <h3 className="text-lg font-bold text-warning mb-2">Crece sin límites</h3>
-              <p className="text-sm text-on-surface-variant mb-5 font-medium">Reportes SII, equipo ilimitado y mentorías premium por solo $10.000/mes.</p>
+              <p className="text-sm text-on-surface-variant mb-5 font-medium">Reportes SII, uso ilimitado y cuentas por cobrar/pagar por solo {formatearPrecio(PLAN_PRO.precio)}/mes.</p>
               <Link to="/erp/suscripcion" className="w-full inline-block bg-warning hover:bg-warning/90 text-surface font-bold py-3 px-4 rounded-2xl text-sm transition-all shadow-lg glow-amber">
-                Pásate a Premium
+                Pásate a Pro
               </Link>
             </div>
           )}

@@ -58,7 +58,7 @@ export default function ERPCursoDetalle() {
     return (
       <div className="p-8 text-center max-w-xl mx-auto">
         <div className="w-20 h-20 bg-error-container text-error rounded-3xl flex items-center justify-center mx-auto mb-6">
-          <span className="material-symbols-outlined text-4xl">error</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-4xl">error</span>
         </div>
         <h2 className="text-2xl font-black text-on-surface mb-2">Ups! Algo salio mal</h2>
         <p className="text-on-surface-variant mb-8">{error || 'El curso solicitado no esta disponible.'}</p>
@@ -83,7 +83,7 @@ export default function ERPCursoDetalle() {
           className="group flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors font-bold text-sm"
         >
           <div className="w-8 h-8 rounded-full bg-surface-container-high group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-            <span className="material-symbols-outlined text-lg">arrow_back</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">arrow_back</span>
           </div>
           Volver
         </button>

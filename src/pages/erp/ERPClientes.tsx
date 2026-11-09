@@ -5,6 +5,7 @@ import CampoMoneda from '../../components/CampoMoneda';
 import { cn } from '@/lib/utils';
 import { Plus, Search, Edit, Trash2, Upload, FileText } from "lucide-react";
 import ModalHistorialCliente from "../../1.-ERP/components/ModalHistorialCliente";
+import { hoyIso, parseFechaLocal } from '@/lib/fecha';
 
 const ModalCargaMasivaClientes = lazy(() => import('../../1.-ERP/components/ModalCargaMasivaClientes'));
 
@@ -84,15 +85,15 @@ export default function ERPClientes() {
 
   const fechaCorta = (iso: string) => {
     if (!iso) return '';
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
+    const d = parseFechaLocal(iso);
+    if (!d) return '';
     return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' });
   };
 
   const recenciaDe = (iso: string) => {
     if (!iso) return null;
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return null;
+    const d = parseFechaLocal(iso);
+    if (!d) return null;
     const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
     const texto = dias <= 0 ? 'Compró hoy' : dias === 1 ? 'Hace 1 día' : dias < 30 ? `Hace ${dias} días` : dias < 60 ? 'Hace 1 mes' : `Hace ${Math.floor(dias / 30)} meses`;
     const clase = dias <= 30 ? 'bg-success/10 text-success' : dias <= 90 ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error';
@@ -200,7 +201,7 @@ export default function ERPClientes() {
         c.notas || '',
       ];
     });
-    descargarCSV(`clientes_${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+    descargarCSV(`clientes_${hoyIso()}.csv`, headers, rows);
   };
 
   return (
@@ -208,7 +209,7 @@ export default function ERPClientes() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-            <span className="material-symbols-outlined text-4xl">groups</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-4xl">groups</span>
             Clientes
           </h2>
           <p className="text-on-surface-variant mt-1 text-sm">Administra tus clientes y su deuda pendiente.</p>
@@ -216,17 +217,17 @@ export default function ERPClientes() {
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => setShowCargaMasiva(true)}
             className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
-            <span className="material-symbols-outlined text-lg">upload_file</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">upload_file</span>
             Carga Masiva
           </button>
           <button onClick={exportarClientesCSV}
             className="flex items-center gap-2 px-6 py-3 bg-surface-container-lowest text-primary border border-primary/30 rounded-full font-bold text-sm shadow-sm hover:bg-primary/5 transition-all">
-            <span className="material-symbols-outlined text-lg">download</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">download</span>
             Exportar
           </button>
           <button onClick={abrirNuevo}
             className="flex items-center gap-2 px-6 py-3 bg-primary text-inverse-on-surface rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
-            <span className="material-symbols-outlined text-lg">person_add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">person_add</span>
             Nuevo Cliente
           </button>
         </div>
@@ -250,7 +251,7 @@ export default function ERPClientes() {
       </div>
 
       <div className="relative">
-        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
+        <span aria-hidden="true" className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">search</span>
         <input type="text" placeholder="Buscar por nombre, RUT o correo..." value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 border-2 border-outline-variant/50 rounded-xl text-sm focus:border-primary outline-none bg-surface-container-lowest text-on-surface" />
@@ -311,21 +312,24 @@ export default function ERPClientes() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => abrirEditar(c)}
+                          aria-label={`Editar cliente ${c.nombre}`}
                           className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
                           title="Editar">
-                          <span className="material-symbols-outlined text-base">edit</span>
+                          <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
                         </button>
                         <button
                           onClick={() => setHistorialCliente(c)}
+                          aria-label={`Ver historial de ${c.nombre}`}
                           className="p-1.5 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary/10"
                           title="Historial de pagos/deudas">
-                          <span className="material-symbols-outlined text-base">history</span>
+                          <span aria-hidden="true" className="material-symbols-outlined text-base">history</span>
                         </button>
                         <button
                           onClick={() => { setItemToDelete(c.id); setDeleteModalOpen(true); }}
+                          aria-label={`Eliminar cliente ${c.nombre}`}
                           className="p-1.5 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error/10"
                           title="Eliminar">
-                          <span className="material-symbols-outlined text-base">delete</span>
+                          <span aria-hidden="true" className="material-symbols-outlined text-base">delete</span>
                         </button>
                       </div>
                     </td>
@@ -342,8 +346,8 @@ export default function ERPClientes() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
               <h3 className="text-lg font-bold text-primary">{editandoId ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
-              <button onClick={cerrarModal} className="text-on-surface-variant hover:text-on-surface">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={cerrarModal} aria-label="Cerrar formulario de cliente" className="text-on-surface-variant hover:text-on-surface">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto">
@@ -382,7 +386,7 @@ export default function ERPClientes() {
               ))}
               {rutError && (
                 <p className="md:col-span-2 flex items-center gap-1.5 text-xs font-bold text-error">
-                  <span className="material-symbols-outlined text-sm">error</span> {rutError}
+                  <span aria-hidden="true" className="material-symbols-outlined text-sm">error</span> {rutError}
                 </p>
               )}
             </div>

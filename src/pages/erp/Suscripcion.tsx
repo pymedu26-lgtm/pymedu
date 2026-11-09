@@ -1,77 +1,51 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
+import { PLANES as PLANES_BASE, formatearPrecio, type PlanId } from '../../lib/planes';
 
-type PlanId = 'free' | 'pro' | 'premium';
-
-interface Plan {
+interface PlanUI {
   id: PlanId;
   nombre: string;
   precio: number;
+  destacado?: boolean;
   icon: string;
   color: string;
   bg: string;
   iconBg: string;
   border: string;
-  destacado?: boolean;
   features: string[];
 }
 
-const PLANES: Plan[] = [
-  {
-    id: 'free',
-    nombre: 'Básico',
-    precio: 0,
+const ESTILOS_PLAN: Record<PlanId, Omit<PlanUI, 'id' | 'nombre' | 'precio' | 'destacado' | 'features'>> = {
+  free: {
     icon: 'storefront',
     color: 'text-on-surface',
     bg: 'bg-surface-container-low',
     iconBg: 'bg-primary/15 text-primary',
     border: 'border-outline-variant/30',
-    features: [
-      'Ventas, gastos e inventario',
-      'Hasta 30 usos al mes',
-      'Academia gratuita',
-      'Alertas tributarias básicas',
-    ],
   },
-  {
-    id: 'pro',
-    nombre: 'Pro',
-    precio: 10000,
+  pro: {
     icon: 'trending_up',
     color: 'text-success',
     bg: 'bg-success/5',
     iconBg: 'bg-success/15 text-success',
     border: 'border-success/30',
-    destacado: true,
-    features: [
-      'Todo lo del plan Básico',
-      'Uso ilimitado del ERP',
-      'Reportes SII y F29 preparado',
-      'Clientes y proveedores ilimitados',
-      'Cuentas por cobrar y pagar',
-    ],
   },
-  {
-    id: 'premium',
-    nombre: 'Premium',
-    precio: 20000,
+  premium: {
     icon: 'workspace_premium',
     color: 'text-warning',
     bg: 'bg-warning/5',
     iconBg: 'bg-warning/15 text-warning',
     border: 'border-warning/30',
-    features: [
-      'Todo lo del plan Pro',
-      'Equipo y remuneraciones',
-      'Mentorías premium',
-      'Mercados públicos y Muni Conecta',
-      'Soporte prioritario',
-    ],
   },
-];
+};
 
-const fmt = (n: number) => `$${n.toLocaleString('es-CL')}`;
+const PLANES: PlanUI[] = PLANES_BASE.map((plan) => ({
+  ...plan,
+  ...ESTILOS_PLAN[plan.id],
+}));
+
+const fmt = formatearPrecio;
 
 export default function Suscripcion() {
   const { perfil, user } = useAuth();
@@ -117,7 +91,7 @@ export default function Suscripcion() {
       {/* Header */}
       <div className="text-center mb-10">
         <div className="w-14 h-14 rounded-2xl bg-warning/15 flex items-center justify-center mx-auto text-warning mb-4">
-          <span className="material-symbols-outlined text-3xl">workspace_premium</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl">workspace_premium</span>
         </div>
         <h2 className="text-3xl font-extrabold text-on-surface tracking-tight">Elige tu plan</h2>
         <p className="text-on-surface-variant mt-2 font-medium max-w-xl mx-auto">
@@ -147,7 +121,7 @@ export default function Suscripcion() {
                 </span>
               )}
               <div className={`w-11 h-11 rounded-2xl flex items-center justify-center mb-4 ${plan.iconBg}`}>
-                <span className="material-symbols-outlined text-2xl">{plan.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-2xl">{plan.icon}</span>
               </div>
               <h3 className="text-lg font-extrabold text-on-surface">{plan.nombre}</h3>
               <p className="mt-2">
@@ -159,7 +133,7 @@ export default function Suscripcion() {
               <ul className="flex-1 mt-5 space-y-2.5">
                 {plan.features.map(f => (
                   <li key={f} className="flex items-start gap-2 text-sm text-on-surface-variant font-medium">
-                    <span className={`material-symbols-outlined text-base mt-0.5 ${plan.id === 'free' ? 'text-on-surface-variant' : plan.color}`}>check_circle</span>
+                    <span aria-hidden="true" className={`material-symbols-outlined text-base mt-0.5 ${plan.id === 'free' ? 'text-on-surface-variant' : plan.color}`}>check_circle</span>
                     {f}
                   </li>
                 ))}
@@ -191,7 +165,7 @@ export default function Suscripcion() {
       {/* Info ambiente integración */}
       <div className="max-w-3xl mx-auto bg-surface-container-lowest dark-card rounded-3xl shadow-sm p-6">
         <h3 className="text-sm font-bold text-on-surface flex items-center gap-2 mb-3">
-          <span className="material-symbols-outlined text-lg text-info">info</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-lg text-info">info</span>
           Pago seguro con Webpay Plus
         </h3>
         <p className="text-xs text-on-surface-variant font-medium leading-relaxed">

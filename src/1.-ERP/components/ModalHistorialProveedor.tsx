@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Proveedor, Gasto, Abono } from '../context/ERPContext'
 import { cn } from '@/lib/utils'
+import { parseFechaLocal } from '@/lib/fecha'
 
 interface Props {
   proveedor: Proveedor
@@ -10,8 +11,8 @@ interface Props {
 }
 
 function getYM(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '0000-00'
+  const d = parseFechaLocal(iso)
+  if (!d) return '0000-00'
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
@@ -111,7 +112,7 @@ export default function ModalHistorialProveedor({ proveedor, gastos, abonos, onC
             </p>
           </div>
           <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface transition-colors" aria-label="Cerrar">
-            <span className="material-symbols-outlined">close</span>
+            <span aria-hidden="true" className="material-symbols-outlined">close</span>
           </button>
         </div>
 

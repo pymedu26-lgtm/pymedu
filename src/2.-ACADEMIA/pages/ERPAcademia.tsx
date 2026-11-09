@@ -75,7 +75,7 @@ const CourseCard = ({ course }: { course: any; key?: string }) => {
             {course.level}
           </span>
           <span className="text-xs font-bold text-outline flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm">schedule</span> {course.duration}
+            <span aria-hidden="true" className="material-symbols-outlined text-sm">schedule</span> {course.duration}
           </span>
         </div>
         <h3 className="font-black text-on-surface text-lg mb-2 leading-tight group-hover:text-primary transition-colors h-14 overflow-hidden">{course.title}</h3>
@@ -99,7 +99,7 @@ const CourseCard = ({ course }: { course: any; key?: string }) => {
               className="inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-black text-inverse-on-surface transition-colors hover:bg-primary/90"
             >
               Empezar
-              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-sm">arrow_forward</span>
             </button>
           </div>
         </div>
@@ -134,7 +134,7 @@ const CourseSection = ({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className={cn('flex h-12 w-12 items-center justify-center rounded-2xl', toneClass)}>
-            <span className="material-symbols-outlined text-2xl">{icon}</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-2xl">{icon}</span>
           </div>
           <div>
             <h3 className="text-xl font-black text-on-surface">{title}</h3>
@@ -172,7 +172,7 @@ export default function ERPAcademia() {
           )}
         >
           <span className="flex items-center gap-2 font-black">
-            <span className="material-symbols-outlined text-lg">storefront</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">storefront</span>
             Crecimiento del negocio
           </span>
           <span className={cn("mt-1 block text-xs leading-5", activeTab === 'comercial' ? 'text-white/68' : 'text-on-surface-variant')}>
@@ -189,7 +189,7 @@ export default function ERPAcademia() {
           )}
         >
           <span className="flex items-center gap-2 font-black">
-            <span className="material-symbols-outlined text-lg">assignment_turned_in</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">assignment_turned_in</span>
             Cumplimiento y documentos
           </span>
           <span className={cn("mt-1 block text-xs leading-5", activeTab === 'legal' ? 'text-white/68' : 'text-on-surface-variant')}>

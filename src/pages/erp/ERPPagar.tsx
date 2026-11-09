@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useERP, MetodoPago } from '../../1.-ERP/context/ERPContext';
 import SelectorFecha from '../../1.-ERP/components/SelectorFecha';
 import CampoMoneda from '../../components/CampoMoneda';
+import VencimientoBadge from '../../components/VencimientoBadge';
 import { cn, formatFecha } from '@/lib/utils';
+import { hoyIso } from '@/lib/fecha';
 import { DOCUMENT_LABELS, normalizeDocumentType } from '../../1.-ERP/services/documentCompliance';
 
 const METODOS: { value: MetodoPago; label: string }[] = [
@@ -22,7 +24,7 @@ export default function ERPPagar() {
   } = useERP();
   const [deudaModal, setDeudaModal] = useState<Deuda | null>(null);
   const [activeTab, setActiveTab] = useState<'pagar' | 'cobrar'>('pagar');
-  const [form, setForm] = useState({ monto: '', metodo_pago: 'efectivo' as MetodoPago, fecha: new Date().toISOString().split('T')[0] });
+  const [form, setForm] = useState({ monto: '', metodo_pago: 'efectivo' as MetodoPago, fecha: hoyIso() });
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('es-CL')}`;
 
@@ -70,14 +72,14 @@ export default function ERPPagar() {
       });
     }
     setDeudaModal(null);
-    setForm({ monto: '', metodo_pago: 'efectivo', fecha: new Date().toISOString().split('T')[0] });
+    setForm({ monto: '', metodo_pago: 'efectivo', fecha: hoyIso() });
   };
 
   return (
     <div className="p-8 space-y-8">
       <div>
         <h2 className="text-3xl font-extrabold text-primary flex items-center gap-3">
-          <span className="material-symbols-outlined text-4xl">account_balance_wallet</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-4xl">account_balance_wallet</span>
           Cuentas por Pagar y Cobrar
         </h2>
         <p className="text-on-surface-variant mt-1 text-sm">
@@ -99,7 +101,7 @@ export default function ERPPagar() {
                 activeTab === tab.id ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
               )}
             >
-              <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">{tab.icon}</span>
               {tab.label}
             </button>
           ))}
@@ -111,7 +113,7 @@ export default function ERPPagar() {
         <section className="space-y-4 animate-in fade-in duration-500">
           {porPagar.length === 0 && (
             <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-12 text-center">
-              <span className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
               <h3 className="mt-4 text-lg font-bold text-on-surface">Todo al día</h3>
               <p className="mt-1 text-sm text-on-surface-variant">No tienes cuentas por pagar pendientes a proveedores.</p>
             </div>
@@ -143,12 +145,12 @@ export default function ERPPagar() {
                             <td className="p-4 font-bold text-on-surface">{g.proveedor}</td>
                             <td className="p-4 font-bold text-on-surface">{fmt(g.monto)}</td>
                             <td className="p-4 font-extrabold text-error">{fmt(saldo)}</td>
-                            <td className="p-4 text-on-surface-variant text-xs">{formatFecha(g.fecha_vencimiento)}</td>
+                            <td className="p-4"><VencimientoBadge fecha={g.fecha_vencimiento} /></td>
                             <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
                             <td className="p-4">
                               <button onClick={() => setDeudaModal({ tipo: 'pago', id: g.id })}
                                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-error text-inverse-on-surface text-xs font-bold hover:bg-error/80 transition-colors">
-                                <span className="material-symbols-outlined text-sm">savings</span>
+                                <span aria-hidden="true" className="material-symbols-outlined text-sm">savings</span>
                                 Pagar
                               </button>
                             </td>
@@ -169,7 +171,7 @@ export default function ERPPagar() {
         <section className="space-y-4 animate-in fade-in duration-500">
           {porCobrar.length === 0 && (
             <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/20 shadow-sm p-12 text-center">
-              <span className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-5xl text-secondary">task_alt</span>
               <h3 className="mt-4 text-lg font-bold text-on-surface">Todo al día</h3>
               <p className="mt-1 text-sm text-on-surface-variant">No tienes boletas o facturas por cobrar pendientes de los clientes.</p>
             </div>
@@ -206,12 +208,12 @@ export default function ERPPagar() {
                             </td>
                             <td className="p-4 font-bold text-on-surface">{fmt(v.monto)}</td>
                             <td className="p-4 font-extrabold text-secondary">{fmt(saldo)}</td>
-                            <td className="p-4 text-on-surface-variant text-xs">{formatFecha(v.fecha_vencimiento)}</td>
+                            <td className="p-4"><VencimientoBadge fecha={v.fecha_vencimiento} /></td>
                             <td className="p-4 text-on-surface-variant text-xs">{abonos.length ? abonos.length : '—'}</td>
                             <td className="p-4">
                               <button onClick={() => setDeudaModal({ tipo: 'cobro', id: v.id })}
                                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-secondary text-inverse-on-surface text-xs font-bold hover:bg-secondary/80 transition-colors">
-                                <span className="material-symbols-outlined text-sm">payments</span>
+                                <span aria-hidden="true" className="material-symbols-outlined text-sm">payments</span>
                                 Cobrar
                               </button>
                             </td>
@@ -245,8 +247,8 @@ export default function ERPPagar() {
                   </h3>
                   <p className="text-xs text-on-surface-variant mt-1">{nombre} · saldo {fmt(saldo)}</p>
                 </div>
-                <button onClick={() => setDeudaModal(null)} className="text-on-surface-variant hover:text-on-surface">
-                  <span className="material-symbols-outlined">close</span>
+                <button onClick={() => setDeudaModal(null)} aria-label="Cerrar registro de pago" className="text-on-surface-variant hover:text-on-surface">
+                  <span aria-hidden="true" className="material-symbols-outlined">close</span>
                 </button>
               </div>
               <div className="p-6 space-y-4">

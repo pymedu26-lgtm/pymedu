@@ -65,7 +65,7 @@ export default function Login() {
       <div className="w-full max-w-md bg-surface-container-lowest rounded-3xl p-8 shadow-xl">
         <div className="text-center mb-8">
           <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-white">login</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-white">login</span>
           </div>
           <h2 className="text-3xl font-extrabold text-on-surface">Bienvenido</h2>
           <p className="text-on-surface-variant mt-2">Ingresa a tu cuenta PymEdu</p>
@@ -124,8 +124,8 @@ export default function Login() {
           <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center">
               <h3 className="text-lg font-bold text-primary">Recuperar contraseña</h3>
-              <button onClick={() => setShowForgot(false)} className="text-on-surface-variant hover:text-on-surface">
-                <span className="material-symbols-outlined">close</span>
+              <button onClick={() => setShowForgot(false)} aria-label="Cerrar recuperación de contraseña" className="text-on-surface-variant hover:text-on-surface">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
             <form onSubmit={handleForgot} className="p-6 space-y-4">

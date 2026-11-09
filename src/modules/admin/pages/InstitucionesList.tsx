@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
 const organizaciones = [
-  { id: 'o1', nombre: 'Municipalidad de Santiago', codigo: 'MUNI-SCL', tipo: 'Municipalidad', plan: 'Premium', usuarios: 128, emprendedores: 63, coord: 4, mentores: 8, estado: 'activa' as const, fechaCreacion: '01 Ene 2026', region: 'Metropolitana', modulos: ['ERP', 'Academia', 'Mentoría', 'Comunidad'] },
-  { id: 'o2', nombre: 'Incubadora Innova', codigo: 'INNOVA-01', tipo: 'Incubadora', plan: 'Profesional', usuarios: 85, emprendedores: 42, coord: 3, mentores: 6, estado: 'activa' as const, fechaCreacion: '15 Feb 2026', region: 'Valparaíso', modulos: ['ERP', 'Academia', 'Mentoría'] },
-  { id: 'o3', nombre: 'Universidad Católica', codigo: 'UC-001', tipo: 'Universidad', plan: 'Premium', usuarios: 210, emprendedores: 95, coord: 6, mentores: 12, estado: 'activa' as const, fechaCreacion: '01 Mar 2026', region: 'Metropolitana', modulos: ['ERP', 'Academia', 'Mentoría', 'Comunidad', 'Laboratorio'] },
-  { id: 'o4', nombre: 'Fundación Emprende', codigo: 'FE-CHI', tipo: 'Fundación', plan: 'Básico', usuarios: 34, emprendedores: 18, coord: 1, mentores: 2, estado: 'activa' as const, fechaCreacion: '20 Abr 2026', region: 'Biobío', modulos: ['Academia'] },
-  { id: 'o5', nombre: 'Municipalidad de Temuco', codigo: 'MUNI-TEM', tipo: 'Municipalidad', plan: 'Profesional', usuarios: 78, emprendedores: 35, coord: 2, mentores: 5, estado: 'suspendida' as const, fechaCreacion: '01 Mar 2026', region: 'Araucanía', modulos: ['ERP', 'Academia', 'Mentoría'] },
-  { id: 'o6', nombre: 'Sello Verde SpA', codigo: 'SELLO-V', tipo: 'Empresa', plan: 'Básico', usuarios: 12, emprendedores: 8, coord: 1, mentores: 1, estado: 'activa' as const, fechaCreacion: '10 Jul 2026', region: 'O\'Higgins', modulos: ['Academia'] },
+  { id: 'o1', nombre: 'Municipalidad de Santiago', codigo: 'MUNI-SCL', tipo: 'Municipalidad', plan: 'Premium Institucional', usuarios: 128, emprendedores: 63, coord: 4, mentores: 8, estado: 'activa' as const, fechaCreacion: '01 Ene 2026', region: 'Metropolitana', modulos: ['ERP', 'Academia', 'Mentoría', 'Comunidad'] },
+  { id: 'o2', nombre: 'Incubadora Innova', codigo: 'INNOVA-01', tipo: 'Incubadora', plan: 'Profesional Institucional', usuarios: 85, emprendedores: 42, coord: 3, mentores: 6, estado: 'activa' as const, fechaCreacion: '15 Feb 2026', region: 'Valparaíso', modulos: ['ERP', 'Academia', 'Mentoría'] },
+  { id: 'o3', nombre: 'Universidad Católica', codigo: 'UC-001', tipo: 'Universidad', plan: 'Premium Institucional', usuarios: 210, emprendedores: 95, coord: 6, mentores: 12, estado: 'activa' as const, fechaCreacion: '01 Mar 2026', region: 'Metropolitana', modulos: ['ERP', 'Academia', 'Mentoría', 'Comunidad', 'Laboratorio'] },
+  { id: 'o4', nombre: 'Fundación Emprende', codigo: 'FE-CHI', tipo: 'Fundación', plan: 'Básico Institucional', usuarios: 34, emprendedores: 18, coord: 1, mentores: 2, estado: 'activa' as const, fechaCreacion: '20 Abr 2026', region: 'Biobío', modulos: ['Academia'] },
+  { id: 'o5', nombre: 'Municipalidad de Temuco', codigo: 'MUNI-TEM', tipo: 'Municipalidad', plan: 'Profesional Institucional', usuarios: 78, emprendedores: 35, coord: 2, mentores: 5, estado: 'suspendida' as const, fechaCreacion: '01 Mar 2026', region: 'Araucanía', modulos: ['ERP', 'Academia', 'Mentoría'] },
+  { id: 'o6', nombre: 'Sello Verde SpA', codigo: 'SELLO-V', tipo: 'Empresa', plan: 'Básico Institucional', usuarios: 12, emprendedores: 8, coord: 1, mentores: 1, estado: 'activa' as const, fechaCreacion: '10 Jul 2026', region: 'O\'Higgins', modulos: ['Academia'] },
 ];
 
 const tipoConfig: Record<string, { color: string; icon: string }> = {
@@ -41,7 +41,7 @@ export default function InstitucionesList() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-info">apartment</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-info">apartment</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Organizaciones</h1>
             <p className="text-on-surface-variant">{stats.total} organizaciones · {stats.activas} activas · {stats.suspendidas} suspendidas</p>
@@ -51,7 +51,7 @@ export default function InstitucionesList() {
           onClick={() => setShowCrear(!showCrear)}
           className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors"
         >
-          <span className="material-symbols-outlined text-lg">add_business</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-lg">add_business</span>
           Nueva Organización
         </button>
       </div>
@@ -67,7 +67,7 @@ export default function InstitucionesList() {
           <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-2 mb-2">
               <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${stat.color} text-inverse-on-surface`}>
-                <span className="material-symbols-outlined text-lg">{stat.icon}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-lg">{stat.icon}</span>
               </span>
               <span className="text-xs font-bold text-on-surface-variant">{stat.label}</span>
             </div>
@@ -80,7 +80,7 @@ export default function InstitucionesList() {
       {showCrear && (
         <div className="bg-surface-container-lowest rounded-2xl border-2 border-primary/30 p-6 space-y-4">
           <h2 className="font-extrabold text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">add_business</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-primary">add_business</span>
             Crear Nueva Organización
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -164,7 +164,7 @@ export default function InstitucionesList() {
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-start gap-4">
                 <span className={`flex h-12 w-12 items-center justify-center rounded-xl ${tipoConfig[org.tipo].color}`}>
-                  <span className="material-symbols-outlined">{tipoConfig[org.tipo].icon}</span>
+                  <span aria-hidden="true" className="material-symbols-outlined">{tipoConfig[org.tipo].icon}</span>
                 </span>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -189,23 +189,23 @@ export default function InstitucionesList() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <button className="p-2 rounded-lg hover:bg-surface-container-high transition-colors" title="Editar">
-                  <span className="material-symbols-outlined text-on-surface-variant">edit</span>
+                <button aria-label={`Editar ${org.nombre}`} className="p-2 rounded-lg hover:bg-surface-container-high transition-colors" title="Editar">
+                  <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">edit</span>
                 </button>
-                <button className="p-2 rounded-lg hover:bg-surface-container-high transition-colors" title="Configurar módulos">
-                  <span className="material-symbols-outlined text-on-surface-variant">extension</span>
+                <button aria-label={`Configurar módulos de ${org.nombre}`} className="p-2 rounded-lg hover:bg-surface-container-high transition-colors" title="Configurar módulos">
+                  <span aria-hidden="true" className="material-symbols-outlined text-on-surface-variant">extension</span>
                 </button>
                 {org.estado === 'activa' ? (
-                  <button className="p-2 rounded-lg hover:bg-warning-container transition-colors" title="Suspender">
-                    <span className="material-symbols-outlined text-warning">block</span>
+                  <button aria-label={`Suspender ${org.nombre}`} className="p-2 rounded-lg hover:bg-warning-container transition-colors" title="Suspender">
+                    <span aria-hidden="true" className="material-symbols-outlined text-warning">block</span>
                   </button>
                 ) : (
-                  <button className="p-2 rounded-lg hover:bg-success-container transition-colors" title="Reactivar">
-                    <span className="material-symbols-outlined text-success">check_circle</span>
+                  <button aria-label={`Reactivar ${org.nombre}`} className="p-2 rounded-lg hover:bg-success-container transition-colors" title="Reactivar">
+                    <span aria-hidden="true" className="material-symbols-outlined text-success">check_circle</span>
                   </button>
                 )}
-                <button className="p-2 rounded-lg hover:bg-error-container transition-colors" title="Eliminar">
-                  <span className="material-symbols-outlined text-error">delete</span>
+                <button className="p-2 rounded-lg hover:bg-error-container transition-colors" aria-label={`Eliminar ${org.nombre}`} title="Eliminar">
+                  <span aria-hidden="true" className="material-symbols-outlined text-error">delete</span>
                 </button>
               </div>
             </div>

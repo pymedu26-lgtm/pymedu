@@ -159,7 +159,7 @@ export default function BuscadorCliente({
   return (
     <div ref={contenedorRef} className={cn('relative', className)}>
       <div className="relative">
-        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none text-lg">
+        <span aria-hidden="true" className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none text-lg">
           search
         </span>
         <input
@@ -213,12 +213,12 @@ export default function BuscadorCliente({
                     activa ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-surface-container-low'
                   )}
                 >
-                  <span className="material-symbols-outlined text-sm text-outline">person</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-sm text-outline">person</span>
                   <span className="flex-1 min-w-0">
                     <span className={cn('block text-sm truncate', activa ? 'font-black' : 'font-bold')}>{c.nombre}</span>
                     {c.rut && <span className="block text-[10px] text-on-surface-variant/60 font-medium">{c.rut}</span>}
                   </span>
-                  {activa && <span className="material-symbols-outlined text-sm text-primary">check</span>}
+                  {activa && <span aria-hidden="true" className="material-symbols-outlined text-sm text-primary">check</span>}
                 </button>
               );
             })

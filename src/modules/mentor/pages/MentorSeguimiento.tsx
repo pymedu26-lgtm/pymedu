@@ -121,7 +121,7 @@ export default function MentorSeguimiento() {
     return (
       <div className="p-8 text-center max-w-xl mx-auto">
         <div className="w-20 h-20 bg-warning-container text-on-warning-container rounded-3xl flex items-center justify-center mx-auto mb-6">
-          <span className="material-symbols-outlined text-4xl">person_off</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-4xl">person_off</span>
         </div>
         <h2 className="text-2xl font-black text-on-surface mb-2">Emprendedor no encontrado</h2>
         <p className="text-on-surface-variant mb-8">El caso que buscas no existe o ya no está asignado a ti.</p>
@@ -139,7 +139,7 @@ export default function MentorSeguimiento() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-teal">assignment</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-teal">assignment</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Seguimiento — {emprendedor.nombre}</h1>
             <p className="text-on-surface-variant">{emprendedor.negocio} · {emprendedor.rubro}</p>
@@ -205,7 +205,7 @@ export default function MentorSeguimiento() {
                 : 'text-on-surface-variant hover:bg-primary/5'
             }`}
           >
-            <span className="material-symbols-outlined text-lg">{t.icon}</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">{t.icon}</span>
             {t.label}
           </button>
         ))}
@@ -218,7 +218,7 @@ export default function MentorSeguimiento() {
             <div key={sesion.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 overflow-hidden">
               <div className="p-5 border-b border-outline-variant/30 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-info">event</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-info">event</span>
                   <div>
                     <p className="font-extrabold text-on-surface">{sesion.tema}</p>
                     <p className="text-sm text-on-surface-variant">{sesion.fecha} · {sesion.hora} · {sesion.tipo}</p>
@@ -235,7 +235,7 @@ export default function MentorSeguimiento() {
                   <ul className="space-y-1">
                     {sesion.acuerdos.map((acuerdo, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm">
-                        <span className="material-symbols-outlined text-lg text-primary mt-0.5">check_circle</span>
+                        <span aria-hidden="true" className="material-symbols-outlined text-lg text-primary mt-0.5">check_circle</span>
                         <span className="text-on-surface">{acuerdo}</span>
                       </li>
                     ))}
@@ -281,7 +281,7 @@ export default function MentorSeguimiento() {
                   onClick={agregarTarea}
                   className="px-4 py-3 bg-primary text-inverse-on-surface rounded-xl font-bold text-sm hover:bg-primary/90 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-lg">add</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
                 </button>
               </div>
             </div>
@@ -300,7 +300,7 @@ export default function MentorSeguimiento() {
                     }`}
                   >
                     {tarea.estado === 'completada' && (
-                      <span className="material-symbols-outlined text-sm">check</span>
+                      <span aria-hidden="true" className="material-symbols-outlined text-sm">check</span>
                     )}
                   </button>
                   <div className="flex-1 min-w-0">

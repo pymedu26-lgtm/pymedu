@@ -34,8 +34,8 @@ export default function CoordMentores() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-teal">school</span>
-          <h1 className="text-2xl font-extrabold text-on-surface">Gestion de Mentores y Cohortes</h1>
+          <span aria-hidden="true" className="material-symbols-outlined text-3xl text-teal">school</span>
+          <h1 className="text-2xl font-extrabold text-on-surface">Gestión de mentores y cohortes</h1>
         </div>
       </div>
 
@@ -54,7 +54,7 @@ export default function CoordMentores() {
                 : 'text-on-surface-variant hover:bg-primary/5'
             }`}
           >
-            <span className="material-symbols-outlined text-lg">{t.icon}</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">{t.icon}</span>
             {t.label}
           </button>
         ))}
@@ -65,7 +65,7 @@ export default function CoordMentores() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
-              <span className="material-symbols-outlined text-lg">person_add</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">person_add</span>
               Asignar Mentor
             </button>
           </div>
@@ -124,7 +124,7 @@ export default function CoordMentores() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <button className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface font-bold rounded-xl hover:bg-primary/90 transition-colors">
-              <span className="material-symbols-outlined text-lg">add</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">add</span>
               Nueva Cohorte
             </button>
           </div>
@@ -157,7 +157,7 @@ export default function CoordMentores() {
                   </div>
                   <div className="bg-surface-container-low rounded-xl p-3 text-center">
                     <p className="text-2xl font-extrabold text-info">3</p>
-                    <p className="text-xs text-on-surface-variant">Modulos activos</p>
+                    <p className="text-xs text-on-surface-variant">Módulos activos</p>
                   </div>
                 </div>
 
