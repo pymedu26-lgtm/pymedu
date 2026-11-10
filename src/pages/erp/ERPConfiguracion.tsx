@@ -233,17 +233,25 @@ export default function ERPConfiguracion() {
   };
 
   // ══ Equipo ════════════════════════════════════════
-  const puedeGestionarEquipo = !!perfil && ['superadmin', 'admin_institucional'].includes(perfil.rol) && !!perfil.institucion_id;
+  const puedeGestionarEquipo = !!perfil && (
+    ['superadmin', 'admin_institucional', 'emprendedor', 'dueño'].includes(perfil.rol)
+  ) && (!!perfil.institucion_id || perfil.rol === 'emprendedor' || perfil.rol === 'dueño');
   const [equipo, setEquipo] = useState<Record<string, unknown>[] | null>(null);
 
   useEffect(() => {
-    if (!puedeGestionarEquipo || !perfil?.institucion_id) return;
-    let activo = true;
-    api.getUsuariosInstitucion(perfil.institucion_id)
-      .then(({ data }) => { if (activo) setEquipo(data); })
-      .catch(() => { if (activo) setEquipo([]); });
-    return () => { activo = false; };
-  }, [puedeGestionarEquipo, perfil?.institucion_id]);
+    if (!puedeGestionarEquipo) return;
+    if (['superadmin', 'admin_institucional'].includes(perfil.rol) && !!perfil?.institucion_id) {
+      let activo = true;
+      api.getUsuariosInstitucion(perfil.institucion_id)
+        .then(({ data }) => { if (activo) setEquipo(data as unknown as Record<string, unknown>[]); })
+        .catch(() => { if (activo) setEquipo([]); });
+      return () => { activo = false; };
+    } else {
+      // Emprendedor/dueño de PYME: equipo vacío, se llena al crear usuarios
+      setEquipo([]);
+      return;
+    }
+  }, [puedeGestionarEquipo, perfil?.institucion_id, perfil?.rol]);
 
   // ══ Integraciones / SII ═══════════════════════════
   const siiModoPrueba = configuracionCumplimiento.modoIntegracion === 'sandbox' || configuracionCumplimiento.ambiente !== 'produccion';
