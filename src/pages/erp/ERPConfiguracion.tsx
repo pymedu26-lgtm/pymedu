@@ -100,6 +100,71 @@ export default function ERPConfiguracion() {
     }
   };
 
+  // ══ Equipo: crear usuarios PYME ══════════════════════════════════════════════════════════════════════════
+  const ROLES_PYME: { valor: 'vendedor' | 'gestor' | 'empleado'; label: string; icono: string }[] = [
+    { valor: 'vendedor', label: 'Vendedor (VAR1)', icono: 'point_of_sale' },
+    { valor: 'gestor', label: 'Bodeguero (VAR2)', icono: 'inventory_2' },
+    { valor: 'empleado', label: 'Asistente (VAR3)', icono: 'person' },
+  ];
+
+  const [formNuevoUsuario, setFormNuevoUsuario] = useState({
+    nombre: '',
+    apellido: '',
+    rol: 'vendedor' as 'vendedor' | 'gestor' | 'empleado',
+    password: '',
+  });
+  const [mostrarFormNuevoUsuario, setMostrarFormNuevoUsuario] = useState(false);
+  const [usuariosEquipo, setUsuariosEquipo] = useState<{ id: string; nombre_completo: string; email: string; rol: string }[]>([]);
+  const [guardandoUsuario, setGuardandoUsuario] = useState(false);
+
+  const negocioCompleto = !!(
+    formNegocio.negocio_nombre?.trim() &&
+    formNegocio.negocio_rut?.trim() &&
+    formNegocio.negocio_rubro?.trim()
+  );
+
+  const generarEmail = (nombre: string, apellido: string): string => {
+    const inicial = nombre.trim().charAt(0).toLowerCase();
+    const ap = apellido.trim().toLowerCase().replace(/\s+/g, '');
+    return `${inicial}.${ap}@pymedu.cl`;
+  };
+
+  const emailPreview = useMemo(() => generarEmail(formNuevoUsuario.nombre, formNuevoUsuario.apellido),
+    [formNuevoUsuario.nombre, formNuevoUsuario.apellido]);
+
+  const crearUsuarioPyme = async () => {
+    if (!perfil) return;
+    if (!negocioCompleto) {
+      notificar('error', 'Primero completa los datos del negocio en la pestaña Mi Negocio');
+      return;
+    }
+    if (!formNuevoUsuario.nombre.trim() || !formNuevoUsuario.apellido.trim()) {
+      notificar('error', 'Nombre y apellido son requeridos');
+      return;
+    }
+    setGuardandoUsuario(true);
+    try {
+      const { ok, usuario } = await api.crearUsuarioPyme({
+        nombre: formNuevoUsuario.nombre.trim(),
+        apellido: formNuevoUsuario.apellido.trim(),
+        rol: formNuevoUsuario.rol,
+        password: formNuevoUsuario.password.trim() || undefined,
+      });
+      if (ok && usuario) {
+        setUsuariosEquipo(prev => [...prev, usuario]);
+        setFormNuevoUsuario({ nombre: '', apellido: '', rol: 'vendedor', password: '' });
+        setMostrarFormNuevoUsuario(false);
+        notificar('ok', `Usuario ${usuario.email} creado correctamente`);
+      } else {
+        notificar('error', 'No se pudo crear el usuario');
+      }
+    } catch (e) {
+      notificar('error', e instanceof Error ? e.message : 'Error al crear usuario');
+    } finally {
+      setGuardandoUsuario(false);
+    }
+  };
+
   const subirLogo = (archivo: File) => {
     if (archivo.size > 2 * 1024 * 1024) {
       notificar('error', 'El logo debe ser menor a 2MB');
@@ -421,12 +486,173 @@ export default function ERPConfiguracion() {
               )}
             </div>
 
+            {!negocioCompleto && puedeGestionarEquipo ? (
+              <div className="p-6 rounded-2xl border border-warning/40 bg-warning/10">
+                <div className="flex gap-3">
+                  <span className="material-symbols-outlined text-warning">error</span>
+                  <div>
+                    <p className="font-bold text-on-surface text-sm">Configura primero los datos del negocio</p>
+                    <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">Para crear usuarios del equipo, completa Nombre del negocio, RUT y Rubro en la pestaña «Mi Negocio».</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {puedeGestionarEquipo && negocioCompleto ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setMostrarFormNuevoUsuario(true)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold hover:bg-primary/90 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-base">person_add</span>
+                  Agregar Usuario
+                </button>
+              </div>
+            ) : null}
             {puedeGestionarEquipo ? (
               equipo === null ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">
                   <span className="material-symbols-outlined animate-spin inline-block">autorenew</span>
                 </div>
               ) : equipo.length === 0 ? (
+                <div className="p-8 text-center text-on-surface-variant text-sm">Aún no hay miembros en tu institución.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="text-on-surface-variant">
+                        <th className="px-8 py-4 font-bold uppercase text-[10px]">Email</th>
+                        <th className="px-8 py-4 font-bold uppercase text-[10px]">Rol</th>
+                        <th className="px-8 py-4 font-bold uppercase text-[10px]">Estado</th>
+                        <th className="px-8 py-4 font-bold uppercase text-[10px] text-right">Suscripción</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/10">
+                      {equipo.map((m) => (
+                        <tr key={String(m.id)} className="hover:bg-surface-container/50 transition-colors">
+                          <td className="px-8 py-4">
+                            <p className="font-bold text-on-surface">{String(m.nombre_completo || '—')}</p>
+                            <p className="text-xs text-on-surface-variant">{String(m.email)}</p>
+                          </td>
+                          <td className="px-8 py-4">
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary capitalize">
+                              {String(m.rol ?? '—').replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="px-8 py-4">
+                            <span className={cn('flex items-center gap-1.5 text-[10px] font-black uppercase', m.activo ? 'text-success' : 'text-error')}>
+                              <span className={cn('w-1.5 h-1.5 rounded-full', m.activo ? 'bg-success' : 'bg-error')}></span>
+                              {m.activo ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                          <td className="px-8 py-4 text-right text-xs font-bold text-on-surface-variant capitalize">
+                            {planPorId(String(m.membresia_nivel ?? 'free')).nombre}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            ) : (
+              <div className="p-8 space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-primary">group</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-on-surface">Tu equipo se gestiona desde la Administración</p>
+                    <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
+                      Los colaboradores, roles y permisos del ERP se administran según tu vinculación a una institución.
+                      Como tu rol actual es <strong className="text-on-surface capitalize">{perfil.rol.replace(/_/g, ' ')}</strong>, puedes
+                      gestionar tu empleo o vincular tu negocio desde tu institución.
+                    </p>
+                  </div>
+                </div>
+                <Link to="/erp/mi-institucion"
+                  className="inline-flex items-center gap-2 px-5 py-3 border-2 border-outline-variant rounded-xl text-sm font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">domain</span>
+                  Ver mi institución
+                </Link>
+              </div>
+            )}
+            {mostrarFormNuevoUsuario && puedeGestionarEquipo && negocioCompleto ? (
+              <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6 space-y-5">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary">person_add</span>
+                  <h3 className="text-sm font-black text-on-surface-variant uppercase tracking-widest">Nuevo Usuario del Equipo</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre</label>
+                    <input
+                      value={formNuevoUsuario.nombre}
+                      onChange={e => setFormNuevoUsuario(p => ({ ...p, nombre: e.target.value }))}
+                      placeholder="Ej: Mario"
+                      className="w-full px-4 py-3 rounded-xl border-2 border-outline-variant/60 focus:border-primary outline-none text-sm font-bold text-on-surface bg-surface-container-lowest transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Apellido</label>
+                    <input
+                      value={formNuevoUsuario.apellido}
+                      onChange={e => setFormNuevoUsuario(p => ({ ...p, apellido: e.target.value }))}
+                      placeholder="Ej: Tapia"
+                      className="w-full px-4 py-3 rounded-xl border-2 border-outline-variant/60 focus:border-primary outline-none text-sm font-bold text-on-surface bg-surface-container-lowest transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Rol</label>
+                    <select
+                      value={formNuevoUsuario.rol}
+                      onChange={e => setFormNuevoUsuario(p => ({ ...p, rol: e.target.value as 'vendedor' | 'gestor' | 'empleado' }))}
+                      className="w-full px-4 py-3 rounded-xl border-2 border-outline-variant/60 focus:border-primary outline-none text-sm font-bold text-on-surface bg-surface-container-lowest transition-colors"
+                    >
+                      {ROLES_PYME.map(r => (
+                        <option key={r.valor} value={r.valor}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Contraseña (opcional)</label>
+                    <input
+                      type="password"
+                      value={formNuevoUsuario.password}
+                      onChange={e => setFormNuevoUsuario(p => ({ ...p, password: e.target.value }))}
+                      placeholder="Deja vacío para contraseña por defecto"
+                      className="w-full px-4 py-3 rounded-xl border-2 border-outline-variant/60 focus:border-primary outline-none text-sm font-bold text-on-surface bg-surface-container-lowest transition-colors"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="flex items-center gap-2 p-3 rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-low/50">
+                      <span className="material-symbols-outlined text-outline text-sm">email</span>
+                      <p className="text-xs font-bold text-on-surface">Correo de acceso:</p>
+                      <span className="ml-2 font-mono text-sm font-bold text-primary">{emailPreview || '—'}</span>
+                      <p className="text-[10px] text-on-surface-variant ml-2 mt-1">Formato: inicial.nombre + apellido + @pymedu.cl</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/20">
+                  <button
+                    onClick={() => setMostrarFormNuevoUsuario(false)}
+                    className="px-5 py-2.5 rounded-xl border border-outline-variant/40 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={crearUsuarioPyme}
+                    disabled={guardandoUsuario || !negocioCompleto}
+                    className="px-6 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+                  >
+                    {guardandoUsuario ? 'Creando…' : 'Crear Usuario'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {puedeGestionarEquipo ? (
+              equipo.length === 0 ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">Aún no hay miembros en tu institución.</div>
               ) : (
                 <div className="overflow-x-auto">
