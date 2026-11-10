@@ -23,10 +23,30 @@ const REGIONES = [
   'Biobío', 'La Araucanía', 'Los Ríos', 'Los Lagos', 'Aysén', 'Magallanes',
 ];
 
+// ── Comunas por región (catalogo para el campo Comuna) ──────────────────────
+const REGIONES_COMUNAS: Record<string, string[]> = {
+  'Arica y Parinacota': ['Arica', 'General Lagos', 'Putre', 'Azapa', 'Camarones'],
+  'Tarapacá': ['Iquique', 'Alto Hospicio', 'Pozo Almonte', 'Pica', 'Camiña', 'Colchane', 'Huara', 'Cobre'],
+  'Antofagasta': ['Antofagasta', 'Mejillones', 'Coper', 'Díaz', 'Mataraca', 'Matías Vergara', 'Salaverria', 'María Elena', 'elo'],
+  'Atacama': ['Copiapó', 'Caldera', 'Tierra Amarilla', 'Chañaral', 'Diego de Almagro', 'Vallenar', 'Alto del Carmen', 'Freirina', 'Huasco'],
+  'Coquimbo': ['Coquimbo', 'La Serena', 'Ovalle', 'Combarbalá', 'Illapel', 'Canela', 'Vicuña', 'Netarí', 'Aloto'],
+  'Valparaíso': ['Valparaíso', 'Viña del Mar', 'Santo Domingo', 'Jardín', 'Concon', 'Puchuncaví', 'Quilpué', 'Quintero', 'Algarrobo', 'El Tabo', 'Santo Tomás', 'Cartagena', 'Caleu', 'Nancagua', 'San Antonio'],
+  'Metropolitana de Santiago': ['Santiago', 'Providencia', 'Vitacura', 'Las Condes', 'Lo Barnechea', 'Lo Prado', 'Pedro Aguirre Cerda', 'San Joaquín', 'Cerro Navia', 'Plaza de Maipo', 'Puente Alto', 'Padre Hurtado', 'Pirque', 'Renca', 'La Pintana', 'La Florida', 'Bellavista', 'Macul', 'Ñuñoa', 'San Ramón', 'Colina', 'Tiltil', 'Cerrillos', 'Quilicura', 'Conchalí', 'Independencia', 'Recoleta', 'Huechuraba', 'Estación Central'],
+  "O'Higgins": ['Rancagua', 'Río de los Cipreses', 'Mostazal', 'Requínoa', 'Malloa', "Peñaflor", 'Pichilemu', 'San Fernando', 'Nancagua'],
+  'Maule': ['Talca', 'Maule', 'Pelarco', 'Curepto', 'Del Cerro', 'Constitución', 'Curicó', 'Hualañé', 'Río Claro', 'Molina', 'Rauco', 'Estacion', 'Chanco'],
+  'Ñuble': ['Chillán', 'Chillán Viejo', 'El Carmen', 'El Guadalupe', 'Ninhue', 'San Carlos', 'Cobquecura', 'Yungay', 'Portezuelo', 'Ránquil', 'Bulnes', 'Cabrero', 'Ninhue'],
+  'Biobío': ['Concepción', 'Coronel', 'Talcahuano', 'Hualpén', 'Florida', 'Penco', 'Santa Juana', 'Los Ángeles', 'Tucapel', 'Yumbel', 'Chillán', 'Negrete', 'Laja', 'San Rosendo', 'Talcahuano', 'Cañete', 'Chiguayante', 'San Pedro de la Paz', 'Orrobamba', 'Bulnes'],
+  'La Araucanía': ['Temuco', 'Padre las Casas', 'Victoria', 'Teodoro Schmidt', 'Carahue', 'Cunco', 'Curarrehue', 'Freire', 'Galvarino', 'Lautaro', 'Loncoche', 'Melipeuco', 'Nueva Imperial', 'Pucón', 'Saavedra', 'Vilcún', 'Cholchol', 'Perquenco', 'Pucón'],
+  'Los Ríos': ['Valdivia', 'Lanco', 'Mariquina', 'Los Lagos', 'Mafil', 'Paillaco', 'Corral', 'Lanco', 'Máfil', 'Paillaco'],
+  'Los Lagos': ['Puerto Montt', 'Calbuco', 'Puerto Varas', 'Frutillar', 'Los Muermos', 'Ancud', 'Castro', 'Achao', 'Quellón', 'Cochamó', 'Chonchi', 'Dalcahue', 'Puqueldón', 'Queilén', 'Natales', 'Cochamó'],
+  'Aysén': ['Coyhaique', 'Aysén', 'Carrillo', 'Chile Chico', 'Nueve', 'Río Bravo', 'Seara', 'Timaukel'],
+  'Magallanes': ['Punta Arenas', 'Laguna Blanca', 'Río Verde', 'San Gregorio', 'Cabo de Hornos'],
+};
+
 const SEGMENTOS = [
-  { valor: 'A', label: 'Perfil A — Almacén (1 a 5 empleados)' },
-  { valor: 'B', label: 'Perfil B — Minimarket (6 a 20 empleados)' },
-  { valor: 'C', label: 'Perfil C — Cadena (21 a 100 empleados)' },
+  { valor: 'A', label: 'Segmento 1 - 1 a 10 empleados' },
+  { valor: 'B', label: 'Segmento 2 - 11 a 20 empleados' },
+  { valor: 'C', label: 'Segmento 3 - 21 o mas empleados' },
 ] as const;
 
 const MODO_SII: Record<string, string> = {
@@ -69,23 +89,26 @@ export default function ERPConfiguracion() {
     negocio_region: perfil?.negocio_region ?? '',
     negocio_comuna: perfil?.negocio_comuna ?? '',
     negocio_direccion: perfil?.negocio_direccion ?? '',
-    segmento_negocio: (perfil?.segmento_negocio ?? 'C') as 'A' | 'B' | 'C',
+    segmento_negocio: (perfil?.segmento_negocio as 'A' | 'B' | 'C') ?? 'C',
     logo_url: perfil?.logo_url ?? '',
   });
 
+  // Solapa el valor inicial con el formateo, en caso de que el RUT guardado
+  // ya fuera escrito con formato (ej. "99.999.999-9").
   useEffect(() => {
     if (!perfil) return;
-    setFormNegocio({
-      negocio_nombre: perfil.negocio_nombre ?? '',
-      negocio_rut: perfil.negocio_rut ?? '',
-      negocio_rubro: perfil.negocio_rubro ?? '',
-      negocio_region: perfil.negocio_region ?? '',
-      negocio_comuna: perfil.negocio_comuna ?? '',
-      negocio_direccion: perfil.negocio_direccion ?? '',
-      segmento_negocio: (perfil.segmento_negocio as 'A' | 'B' | 'C') ?? 'C',
-      logo_url: typeof perfil.logo_url === 'string' ? perfil.logo_url : '',
-    });
+    const rut = perfil.negocio_rut ?? '';
+    setFormNegocio(prev => ({ ...prev, negocio_rut: formatearRut(rut) }));
   }, [perfil?.id]);
+
+  const formatearRut = (rut: string): string => {
+    const soloDigitos = rut.replace(/\D/g, '');
+    if (soloDigitos.length <= 1) return soloDigitos;
+    const cuerpo = soloDigitos.slice(0, -1);
+    const dv = soloDigitos.slice(-1);
+    const cuerpoFormateado = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${cuerpoFormateado}-${dv}`;
+  };
 
   const guardarNegocio = async () => {
     if (!perfil) return;
@@ -320,7 +343,17 @@ export default function ERPConfiguracion() {
             </div>
             <div>
               <label className={labelCls}>RUT de la empresa</label>
-              <input value={formNegocio.negocio_rut} onChange={e => setFormNegocio(p => ({ ...p, negocio_rut: e.target.value }))}
+              <input value={formNegocio.negocio_rut} onChange={e => {
+                const soloDigitos = e.target.value.replace(/\D/g, '');
+                if (soloDigitos.length <= 1) {
+                  setFormNegocio(p => ({ ...p, negocio_rut: soloDigitos }));
+                  return;
+                }
+                const cuerpo = soloDigitos.slice(0, -1);
+                const dv = soloDigitos.slice(-1);
+                const cuerpoFormateado = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                setFormNegocio(p => ({ ...p, negocio_rut: `${cuerpoFormateado}-${dv}` }));
+              }}
                 placeholder="76.543.210-K" className={inputCls} />
             </div>
             <div>
@@ -346,7 +379,7 @@ export default function ERPConfiguracion() {
             <div>
               <label className={labelCls}>Región</label>
               <select value={formNegocio.negocio_region}
-                onChange={e => setFormNegocio(p => ({ ...p, negocio_region: e.target.value }))}
+                onChange={e => setFormNegocio(p => ({ ...p, negocio_region: e.target.value, negocio_comuna: '' }))}
                 className={inputCls}>
                 <option value="" disabled>Selecciona una región</option>
                 {REGIONES.map(r => <option key={r} value={r}>{r}</option>)}
@@ -354,8 +387,16 @@ export default function ERPConfiguracion() {
             </div>
             <div>
               <label className={labelCls}>Comuna</label>
-              <input value={formNegocio.negocio_comuna} onChange={e => setFormNegocio(p => ({ ...p, negocio_comuna: e.target.value }))}
-                placeholder="Ej: Providencia" className={inputCls} />
+              <select value={formNegocio.negocio_comuna}
+                onChange={e => setFormNegocio(p => ({ ...p, negocio_comuna: e.target.value }))}
+                className={inputCls}
+                disabled={!formNegocio.negocio_region}>
+                <option value="" disabled>Comunas de {formNegocio.negocio_region || 'región no seleccionada'}</option>
+                {(formNegocio.negocio_region
+                  ? (REGIONES_COMUNAS[formNegocio.negocio_region] ?? [])
+                  : []
+                ).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
             <div className="md:col-span-2">
               <label className={labelCls}>Dirección <span className="font-normal normal-case text-on-surface-variant/60">(opcional)</span></label>
