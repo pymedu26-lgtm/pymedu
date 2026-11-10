@@ -129,12 +129,11 @@ const roleNavItems: Record<string, { label: string; path: string; icon: string }
   ],
 };
 
-function RoleNavSidebar() {
+function RoleNavSidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (v: boolean) => void }) {
   const { perfil, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const items = roleNavItems[perfil?.rol ?? ''] ?? [];
-  const [collapsed, setCollapsed] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
@@ -202,9 +201,10 @@ function RoleNavSidebar() {
 }
 
 function RoleProtectedLayout() {
+  const [collapsed, setCollapsed] = useState(false);
   return (
     <div className="flex min-h-screen bg-surface text-on-surface">
-      <RoleNavSidebar />
+      <RoleNavSidebar collapsed={collapsed} setCollapsed={setCollapsed} />
       <main className={`flex-1 overflow-y-auto ${collapsed ? 'ml-[64px]' : 'ml-[216px]'}`}>
         <Outlet />
       </main>
