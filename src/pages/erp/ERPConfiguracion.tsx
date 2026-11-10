@@ -315,17 +315,30 @@ export default function ERPConfiguracion() {
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-surface-container-lowest dark-card p-1 rounded-2xl w-fit max-w-full overflow-x-auto hide-scrollbar">
-        {TABS.map(({ id, icono, label }) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={cn('flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap',
-              tab === id ? 'bg-primary text-inverse-on-surface shadow-md' : 'text-on-surface-variant hover:text-on-surface')}>
-            <span className="material-symbols-outlined text-base">{icono}</span>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Sidebar + Content layout */}
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Sidebar menu */}
+        <div className="flex flex-col gap-1 p-2 rounded-xl bg-surface-container-lowest dark-card border border-outline-variant/10 w-full md:w-[220px] shrink-0">
+          {TABS.map(({ id, icono, label }) => (
+            <button key={id} onClick={() => setTab(id)}
+              className={cn('flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all duration-150',
+                tab === id
+                  ? 'bg-primary text-inverse-on-surface shadow-md shadow-primary/20'
+                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface')}>
+              <span className={cn('material-symbols-outlined text-base flex-shrink-0',
+                tab === id ? 'text-primary' : 'text-on-surface-variant')}>
+                {icono}
+              </span>
+              <span className="truncate">{label}</span>
+              {tab === id && (
+                <span className="ml-auto w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Content area */}
+        <div className="flex-1 min-w-0">
 
       {/* ══ Mi Negocio ══ */}
       {tab === 'negocio' && (
@@ -443,8 +456,13 @@ export default function ERPConfiguracion() {
             {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
-        </div>
-      )}
+      </div>
+    </div>
+  </div>
+</div>
+<div className='flex-1 min-w-0'>
+
+      {/***** Mi Cuenta ****/}
 
       {/* ══ Mi Cuenta ══ */}
       {tab === 'cuenta' && (
