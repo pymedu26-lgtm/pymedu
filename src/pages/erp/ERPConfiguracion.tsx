@@ -5,6 +5,7 @@ import { useERP } from '../../1.-ERP/context/ERPContext';
 import { CATEGORIAS, CONFIG_ALERTAS_DEFECTO } from '../../1.-ERP/services/alertas';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import SelectorDesplegable from '../../components/SelectorDesplegable';
 import { formatCLP, formatFecha } from '../../lib/fechas';
 import { PLANES, planPorId, WEBPAY_MODO_PRUEBA } from '../../lib/planes';
 
@@ -55,14 +56,14 @@ const MODO_SII: Record<string, string> = {
   api_integrated: 'Integrado por API',
 };
 
-const TABS: { id: Tab; icono: string; label: string }[] = [
-  { id: 'negocio', icono: 'storefront', label: 'Mi Negocio' },
-  { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta' },
-  { id: 'equipo', icono: 'group', label: 'Equipo' },
-  { id: 'inventario', icono: 'inventory_2', label: 'Inventario' },
-  { id: 'alertas', icono: 'notifications', label: 'Alertas' },
-  { id: 'integraciones', icono: 'cloud_sync', label: 'Integraciones' },
-  { id: 'facturacion', icono: 'credit_card', label: 'Suscripción' },
+const TABS: { id: Tab; icono: string; label: string; descripcion: string }[] = [
+  { id: 'negocio', icono: 'storefront', label: 'Mi Negocio', descripcion: 'Datos, logo y ubicación' },
+  { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta', descripcion: 'Perfil y notificaciones' },
+  { id: 'equipo', icono: 'group', label: 'Equipo', descripcion: 'Usuarios y permisos' },
+  { id: 'inventario', icono: 'inventory_2', label: 'Inventario', descripcion: 'Categorías y stock' },
+  { id: 'alertas', icono: 'notifications', label: 'Alertas', descripcion: 'Avisos y recordatorios' },
+  { id: 'integraciones', icono: 'cloud_sync', label: 'Integraciones', descripcion: 'SII, pagos y APIs' },
+  { id: 'facturacion', icono: 'credit_card', label: 'Suscripción', descripcion: 'Plan y pagos' },
 ];
 
 export default function ERPConfiguracion() {
@@ -295,6 +296,22 @@ export default function ERPConfiguracion() {
   const labelCls = 'flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5';
   const campoCls = 'flex flex-col items-start gap-2 text-on-surface-variant text-sm';
 
+  const opcionesRegion = [
+    { valor: '', etiqueta: 'Selecciona una región' },
+    ...REGIONES.map(r => ({ valor: r, etiqueta: r })),
+  ];
+  const comunasRegion = formNegocio.negocio_region
+    ? (REGIONES_COMUNAS[formNegocio.negocio_region] ?? [])
+    : [];
+  const opcionesComuna = comunasRegion.length > 0
+    ? comunasRegion.map(c => ({ valor: c, etiqueta: c }))
+    : [{ valor: '', etiqueta: formNegocio.negocio_region ? 'Sin comunas disponibles' : 'Selecciona una región primero' }];
+  const opcionesSegmento = SEGMENTOS.map(s => ({ valor: s.valor, etiqueta: s.label }));
+  const opcionesRubro = [
+    { valor: '', etiqueta: 'Selecciona un rubro' },
+    ...RUBROS.map(r => ({ valor: r, etiqueta: r })),
+  ];
+
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-8">
       {/* Header */}
@@ -318,24 +335,52 @@ export default function ERPConfiguracion() {
       {/* Sidebar + Content layout */}
       <div className="flex flex-col md:flex-row gap-6">
         {/* Sidebar menu */}
-        <div className="flex flex-col gap-1 p-2 rounded-xl bg-surface-container-lowest dark-card border border-outline-variant/10 w-full md:w-[220px] shrink-0">
-          {TABS.map(({ id, icono, label }) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={cn('flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-bold transition-all duration-150',
-                tab === id
-                  ? 'bg-primary text-inverse-on-surface shadow-md shadow-primary/20'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface')}>
-              <span className={cn('material-symbols-outlined text-base flex-shrink-0',
-                tab === id ? 'text-primary' : 'text-on-surface-variant')}>
-                {icono}
+        <aside className="w-full md:w-[260px] shrink-0">
+          <div className="md:sticky md:top-4 overflow-hidden rounded-3xl bg-surface-container-lowest dark-card border border-outline-variant/20 shadow-sm">
+            <div className="flex items-center gap-3 border-b border-outline-variant/15 px-4 py-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <span className="material-symbols-outlined text-xl">tune</span>
               </span>
-              <span className="truncate">{label}</span>
-              {tab === id && (
-                <span className="ml-auto w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-              )}
-            </button>
-          ))}
-        </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-on-surface-variant/60">Ajustes</p>
+                <p className="truncate text-sm font-black text-on-surface">Configuración del ERP</p>
+              </div>
+            </div>
+
+            <nav className="space-y-1 p-2">
+              {TABS.map(({ id, icono, label, descripcion }) => {
+                const activa = tab === id;
+                return (
+                  <button key={id} onClick={() => setTab(id)}
+                    className={cn('group relative flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all duration-150',
+                      activa
+                        ? 'border-primary/20 bg-primary/10'
+                        : 'border-transparent hover:border-outline-variant/30 hover:bg-surface-container')}>
+                    <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
+                      activa
+                        ? 'bg-primary text-inverse-on-surface shadow-md shadow-primary/20'
+                        : 'bg-surface-container text-on-surface-variant group-hover:bg-surface-container-high')}>
+                      <span className="material-symbols-outlined text-lg"
+                        style={{ fontVariationSettings: activa ? "'FILL' 1" : "'FILL' 0" }}>
+                        {icono}
+                      </span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={cn('block truncate text-[13px] font-bold', activa ? 'text-primary' : 'text-on-surface')}>
+                        {label}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-on-surface-variant/60">{descripcion}</span>
+                    </span>
+                    <span className={cn('material-symbols-outlined text-sm transition-transform duration-200',
+                      activa ? 'translate-x-0 text-primary' : '-translate-x-1 text-transparent group-hover:translate-x-0 group-hover:text-on-surface-variant/40')}>
+                      chevron_right
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
 
         {/* Content area */}
         <div className="flex-1 min-w-0">
@@ -371,45 +416,43 @@ export default function ERPConfiguracion() {
             </div>
             <div>
               <label className={labelCls}>Perfil de negocio (segmento)</label>
-              <select value={formNegocio.segmento_negocio}
-                onChange={e => setFormNegocio(p => ({ ...p, segmento_negocio: e.target.value as 'A' | 'B' | 'C' }))}
-                className={inputCls}>
-                {SEGMENTOS.map(s => <option key={s.valor} value={s.valor}>{s.label}</option>)}
-              </select>
+              <SelectorDesplegable
+                variante="campo"
+                valor={formNegocio.segmento_negocio}
+                opciones={opcionesSegmento}
+                onChange={v => setFormNegocio(p => ({ ...p, segmento_negocio: v as 'A' | 'B' | 'C' }))}
+              />
               <p className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed uppercase font-bold tracking-tighter">
                 Define qué módulos y funcionalidades estarán visibles según el tamaño de tu empresa.
               </p>
             </div>
             <div>
               <label className={labelCls}>Giro / Rubro</label>
-              <select value={formNegocio.negocio_rubro}
-                onChange={e => setFormNegocio(p => ({ ...p, negocio_rubro: e.target.value }))}
-                className={inputCls}>
-                <option value="" disabled>Selecciona un rubro</option>
-                {RUBROS.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
+              <SelectorDesplegable
+                variante="campo"
+                valor={formNegocio.negocio_rubro}
+                opciones={opcionesRubro}
+                onChange={v => setFormNegocio(p => ({ ...p, negocio_rubro: v }))}
+              />
             </div>
             <div>
               <label className={labelCls}>Región</label>
-              <select value={formNegocio.negocio_region}
-                onChange={e => setFormNegocio(p => ({ ...p, negocio_region: e.target.value, negocio_comuna: '' }))}
-                className={inputCls}>
-                <option value="" disabled>Selecciona una región</option>
-                {REGIONES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
+              <SelectorDesplegable
+                variante="campo"
+                valor={formNegocio.negocio_region}
+                opciones={opcionesRegion}
+                onChange={v => setFormNegocio(p => ({ ...p, negocio_region: v, negocio_comuna: '' }))}
+              />
             </div>
             <div>
               <label className={labelCls}>Comuna</label>
-              <select value={formNegocio.negocio_comuna}
-                onChange={e => setFormNegocio(p => ({ ...p, negocio_comuna: e.target.value }))}
-                className={inputCls}
-                disabled={!formNegocio.negocio_region}>
-                <option value="" disabled>Comunas de {formNegocio.negocio_region || 'región no seleccionada'}</option>
-                {(formNegocio.negocio_region
-                  ? (REGIONES_COMUNAS[formNegocio.negocio_region] ?? [])
-                  : []
-                ).map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <SelectorDesplegable
+                variante="campo"
+                valor={formNegocio.negocio_comuna}
+                opciones={opcionesComuna}
+                onChange={v => setFormNegocio(p => ({ ...p, negocio_comuna: v }))}
+                disabled={!formNegocio.negocio_region || comunasRegion.length === 0}
+              />
             </div>
             <div className="md:col-span-2">
               <label className={labelCls}>Dirección <span className="font-normal normal-case text-on-surface-variant/60">(opcional)</span></label>
@@ -539,13 +582,24 @@ export default function ERPConfiguracion() {
       {tab === 'equipo' && (
         <div className="space-y-6">
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
-            <div className="px-8 py-6 border-b border-outline-variant/20 flex items-center justify-between bg-surface-container dark-card">
-              <h3 className="text-sm font-black text-on-surface-variant uppercase tracking-widest">Miembros del Equipo</h3>
-              {equipo && (
-                <span className="px-3 py-1 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-[10px] font-black text-on-surface-variant">
-                  {equipo.length} USUARIOS
-                </span>
-              )}
+            <div className="px-8 py-6 border-b border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-container dark-card">
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-black text-on-surface-variant uppercase tracking-widest">Miembros del Equipo</h3>
+                {equipo && (
+                  <span className="px-3 py-1 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-[10px] font-black text-on-surface-variant">
+                    {equipo.length} USUARIOS
+                  </span>
+                )}
+              </div>
+              {puedeGestionarEquipo && negocioCompleto ? (
+                <button
+                  onClick={() => setMostrarFormNuevoUsuario(true)}
+                  className="flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold hover:bg-primary/90 transition-colors shrink-0"
+                >
+                  <span className="material-symbols-outlined text-base">person_add</span>
+                  Agregar Usuario
+                </button>
+              ) : null}
             </div>
 
             {!negocioCompleto && puedeGestionarEquipo ? (
@@ -557,17 +611,6 @@ export default function ERPConfiguracion() {
                     <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">Para crear usuarios del equipo, completa Nombre del negocio, RUT y Rubro en la pestaña «Mi Negocio».</p>
                   </div>
                 </div>
-              </div>
-            ) : null}
-            {puedeGestionarEquipo && negocioCompleto ? (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setMostrarFormNuevoUsuario(true)}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold hover:bg-primary/90 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-base">person_add</span>
-                  Agregar Usuario
-                </button>
               </div>
             ) : null}
             {puedeGestionarEquipo ? (

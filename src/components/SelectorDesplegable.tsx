@@ -70,6 +70,8 @@ interface SelectorDesplegableProps {
   /** Etiqueta mostrada a la derecha del valor actual (ej. el rango de fechas). */
   hint?: string | null;
   disabled?: boolean;
+  /** 'filtro' (por defecto) = barra compacta; 'campo' = mismo alto y estilo que los inputs del formulario. */
+  variante?: 'filtro' | 'campo';
 }
 
 /**
@@ -88,8 +90,10 @@ export default function SelectorDesplegable({
   icono,
   className,
   hint,
-  disabled
+  disabled,
+  variante = 'filtro'
 }: SelectorDesplegableProps) {
+  const esCampo = variante === 'campo';
   const [abierto, setAbierto] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
@@ -193,12 +197,20 @@ export default function SelectorDesplegable({
         aria-haspopup="listbox"
         aria-expanded={abierto}
         className={cn(
-          'w-full flex items-center gap-2 bg-surface-container-lowest px-4 py-2 rounded-xl border border-outline-variant/50 shadow-sm transition-colors',
+          'w-full flex items-center gap-2 bg-surface-container-lowest transition-colors',
+          esCampo
+            ? 'px-4 py-3 rounded-xl border-2 border-outline-variant/60 outline-none focus:border-primary'
+            : 'px-4 py-2 rounded-xl border border-outline-variant/50 shadow-sm',
           disabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-primary/40'
         )}
       >
         {icono && <span aria-hidden="true" className="material-symbols-outlined text-outline text-sm">{icono}</span>}
-        <span className="flex-1 min-w-0 truncate text-left text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+        <span className={cn(
+          'flex-1 min-w-0 truncate text-left',
+          esCampo
+            ? 'text-sm font-bold text-on-surface'
+            : 'text-xs font-bold text-on-surface-variant uppercase tracking-wider'
+        )}>
           {seleccionada?.etiqueta}
         </span>
         {hint && (
@@ -211,7 +223,8 @@ export default function SelectorDesplegable({
         )}
         <span
           className={cn(
-            'material-symbols-outlined text-outline text-sm transition-transform duration-200',
+            'material-symbols-outlined text-outline transition-transform duration-200',
+            esCampo ? 'text-base' : 'text-sm',
             abierto && 'rotate-180'
           )}
         >
@@ -264,7 +277,10 @@ export default function SelectorDesplegable({
                 <span className="flex-1 min-w-0">
                   <span
                     className={cn(
-                      'block truncate text-xs uppercase tracking-wider',
+                      'block truncate',
+                      esCampo
+                        ? 'text-sm'
+                        : 'text-xs uppercase tracking-wider',
                       activa ? 'font-black' : 'font-bold'
                     )}
                   >
