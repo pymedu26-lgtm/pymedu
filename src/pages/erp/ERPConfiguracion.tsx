@@ -475,25 +475,25 @@ export default function ERPConfiguracion() {
 
       {/* ══ Roles: crear roles y permisos de lo que cada uno puede hacer y revisar ══ */}
       {tab === 'roles' && (
-        <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm">
-          {puedeGestionarRoles ? (
+        puedeGestionarRoles ? (
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-4 sm:p-8 overflow-hidden">
             <GestorRoles ambitoInicial="negocio" titulo="Roles y permisos del equipo" compacto />
-          ) : (
-            <div className="p-8 space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
-                </div>
-                <div>
-                  <p className="font-bold text-on-surface">No puedes gestionar roles</p>
-                  <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
-                    Solo el administrador del negocio puede crear roles y definir los permisos del equipo.
-                  </p>
-                </div>
+          </div>
+        ) : (
+          <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-8 space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
+              </div>
+              <div>
+                <p className="font-bold text-on-surface">No puedes gestionar roles</p>
+                <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
+                  Solo el administrador del negocio puede crear roles y definir los permisos del equipo.
+                </p>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )
       )}
 
       {/* ══ Mi Cuenta ══ */}

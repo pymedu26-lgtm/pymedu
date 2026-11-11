@@ -135,7 +135,7 @@ export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Ro
         </aside>
 
         {rol && (
-          <section className="min-w-0 rounded-3xl border border-outline-variant/20 bg-surface-container-lowest shadow-sm">
+          <section className={cn('min-w-0 rounded-3xl border border-outline-variant/20 shadow-sm', compacto ? 'bg-surface-container dark-card' : 'bg-surface-container-lowest dark-card')}>
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-outline-variant/20 p-5">
               <div className="min-w-0">
                 <h3 className="text-xl font-black text-on-surface">{rol.nombre}</h3>
@@ -163,7 +163,7 @@ export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Ro
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-surface-container-low">
+                <thead className={compacto ? 'bg-surface-container-high' : 'bg-surface-container-low'}>
                   <tr>
                     <th className="p-3 text-left text-[10px] font-black uppercase tracking-widest text-outline">Módulo</th>
                     {ACCIONES.map(([, etiqueta]) => <th key={etiqueta} className="p-3 text-center text-[10px] font-black uppercase tracking-widest text-outline">{etiqueta}</th>)}
