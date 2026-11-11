@@ -583,14 +583,10 @@ export default function ERPConfiguracion() {
         <div className="space-y-6">
           <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm overflow-hidden">
             <div className="px-8 py-6 border-b border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-container dark-card">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-black text-on-surface-variant uppercase tracking-widest">Miembros del Equipo</h3>
-                {equipo && (
-                  <span className="px-3 py-1 bg-surface-container-lowest border border-outline-variant/40 rounded-full text-[10px] font-black text-on-surface-variant">
-                    {equipo.length} USUARIOS
-                  </span>
-                )}
-              </div>
+              <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">group</span>
+                Miembros del Equipo
+              </h3>
               {puedeGestionarEquipo && negocioCompleto ? (
                 <button
                   onClick={() => setMostrarFormNuevoUsuario(true)}
