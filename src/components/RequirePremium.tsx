@@ -1,6 +1,9 @@
 import { Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { PLAN_PREMIUM, formatearPrecio } from '../lib/planes';
+import { planPorId, periodoPlan } from '../lib/planes';
+import { formatCLP } from '../lib/fechas';
+
+const PLAN_PREMIUM = planPorId('premium');
 
 /**
  * Candado de plan para rutas exclusivas de Premium.
@@ -35,16 +38,16 @@ export default function RequirePremium() {
             Plan {PLAN_PREMIUM.nombre}
           </p>
           <p className="mt-1 text-3xl font-black text-on-surface">
-            {formatearPrecio(PLAN_PREMIUM.precio)}
-            <span className="ml-1 text-sm font-semibold text-on-surface-variant">/ mes</span>
+            {formatCLP(PLAN_PREMIUM.precio)}
+            <span className="ml-1 text-sm font-semibold text-on-surface-variant">{periodoPlan(PLAN_PREMIUM)}</span>
           </p>
           <ul className="mt-3 space-y-1.5 text-sm text-on-surface-variant">
             {PLAN_PREMIUM.features.map((feature) => (
-              <li key={feature} className="flex items-start gap-2">
+              <li key={feature.texto} className="flex items-start gap-2">
                 <span aria-hidden="true" className="material-symbols-outlined text-base text-success">
                   check
                 </span>
-                {feature}
+                {feature.texto}
               </li>
             ))}
           </ul>

@@ -456,13 +456,8 @@ export default function ERPConfiguracion() {
             {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
-      </div>
-    </div>
-  </div>
-</div>
-<div className='flex-1 min-w-0'>
-
-      {/***** Mi Cuenta ****/}
+        </div>
+      )}
 
       {/* ══ Mi Cuenta ══ */}
       {tab === 'cuenta' && (
@@ -986,6 +981,8 @@ export default function ERPConfiguracion() {
           Tu rol actual no tiene permiso para editar los datos del negocio.
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }
