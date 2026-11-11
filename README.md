@@ -122,9 +122,21 @@ SUPERADMIN (ve todo, segmentado por institución)
 │   ├── COORDINADOR
 │   │   └── MENTOR
 │   │       └── EMPRENDEDOR
-└── ADMINISTRADOR INSTITUCIONAL 3
-    └── ...
+├── ADMINISTRADOR INSTITUCIONAL 3
+│   └── ...
+├── EMPRENDEDOR (negocio individual, sin equipo)
+└── PYME / PEQUEÑA EMPRESA (dueño)
+    ├── VENDEDOR (VAR1)
+    ├── BODEGUERO (VAR2, rol 'gestor')
+    └── ASISTENTE (VAR3, rol 'empleado')
 ```
+
+**Regla EMPRENDEDOR → PYME:** si el emprendedor crea usuarios dentro de su misma cuenta
+(`POST /api/usuarios/pyme`, tab *Equipo* del ERP), su cuenta deja de ser individual y pasa a ser
+**PYME / Pequeña Empresa**: su rol cambia automáticamente de `emprendedor` a `dueño` (Dueño / Admin
+PYME), y los usuarios creados quedan vinculados a su cuenta (`perfiles.reporta_a`) con los roles de
+equipo Vendedor (VAR1), Bodeguero (VAR2) y Asistente (VAR3). La transición se audita en
+`cuentas.auditoria_roles`.
 
 ## Comandos Útiles
 

@@ -69,7 +69,7 @@ const TABS: { id: Tab; icono: string; label: string }[] = [
 ];
 
 export default function ERPConfiguracion() {
-  const { perfil, actualizarPerfil, puedeHacer, tienePermiso } = useAuth();
+  const { perfil, actualizarPerfil, recargarPerfil, puedeHacer, tienePermiso } = useAuth();
   const {
     configuracionCumplimiento, updatePpmTasa, metodoCosteo, setMetodoCosteo, politicaEnvaseAbierto, permitirMezclarEnvases, setPoliticaInventario,
     plantillasSubcategoria, actualizarPlantilla, eliminarPlantilla, margenObjetivo, setMargenObjetivo, configAlertas, setConfigAlertas,
@@ -141,8 +141,9 @@ export default function ERPConfiguracion() {
     password: '',
   });
   const [mostrarFormNuevoUsuario, setMostrarFormNuevoUsuario] = useState(false);
-  const [usuariosEquipo, setUsuariosEquipo] = useState<{ id: string; nombre_completo: string; email: string; rol: string }[]>([]);
   const [guardandoUsuario, setGuardandoUsuario] = useState(false);
+  /** Credenciales generadas del último miembro creado (se muestran una sola vez). */
+  const [credencialTemporal, setCredencialTemporal] = useState<{ email: string; password: string } | null>(null);
 
   const negocioCompleto = !!(
     formNegocio.negocio_nombre?.trim() &&
@@ -171,17 +172,25 @@ export default function ERPConfiguracion() {
     }
     setGuardandoUsuario(true);
     try {
-      const { ok, usuario } = await api.crearUsuarioPyme({
+      const { ok, usuario, password_temporal, promocion_pyme } = await api.crearUsuarioPyme({
         nombre: formNuevoUsuario.nombre.trim(),
         apellido: formNuevoUsuario.apellido.trim(),
         rol: formNuevoUsuario.rol,
         password: formNuevoUsuario.password.trim() || undefined,
       });
       if (ok && usuario) {
-        setUsuariosEquipo(prev => [...prev, usuario]);
+        if (password_temporal) setCredencialTemporal({ email: usuario.email, password: password_temporal });
         setFormNuevoUsuario({ nombre: '', apellido: '', rol: 'vendedor', password: '' });
         setMostrarFormNuevoUsuario(false);
-        notificar('ok', `Usuario ${usuario.email} creado correctamente`);
+        // Regla de estructura de roles: al crear usuarios dentro de su cuenta, el
+        // emprendedor pasa a ser PYME / Pequeña Empresa (rol dueño).
+        if (promocion_pyme) {
+          await recargarPerfil();
+          notificar('ok', `Usuario ${usuario.email} creado. ¡Tu cuenta ahora es una PYME / Pequeña Empresa!`);
+        } else {
+          notificar('ok', `Usuario ${usuario.email} creado correctamente`);
+        }
+        await cargarEquipo();
       } else {
         notificar('error', 'No se pudo crear el usuario');
       }
@@ -268,6 +277,16 @@ export default function ERPConfiguracion() {
   ) && (!!perfil.institucion_id || perfil.rol === 'emprendedor' || perfil.rol === 'dueño');
   const [equipo, setEquipo] = useState<Record<string, unknown>[] | null>(null);
 
+  // Miembros creados dentro de la cuenta del titular (sub-usuarios de la PYME).
+  const cargarEquipo = async () => {
+    try {
+      const { data } = await api.getUsuariosPyme();
+      setEquipo(data as unknown as Record<string, unknown>[]);
+    } catch {
+      setEquipo([]);
+    }
+  };
+
   useEffect(() => {
     if (!puedeGestionarEquipo) return;
     if (['superadmin', 'admin_institucional'].includes(perfil.rol) && !!perfil?.institucion_id) {
@@ -276,11 +295,9 @@ export default function ERPConfiguracion() {
         .then(({ data }) => { if (activo) setEquipo(data as unknown as Record<string, unknown>[]); })
         .catch(() => { if (activo) setEquipo([]); });
       return () => { activo = false; };
-    } else {
-      // Emprendedor/dueño de PYME: equipo vacío, se llena al crear usuarios
-      setEquipo([]);
-      return;
     }
+    // Emprendedor/dueño de PYME: su equipo son los usuarios creados en su cuenta.
+    cargarEquipo();
   }, [puedeGestionarEquipo, perfil?.institucion_id, perfil?.rol]);
 
   // ══ Integraciones / SII ═══════════════════════════
@@ -603,13 +620,58 @@ export default function ERPConfiguracion() {
                 </div>
               </div>
             ) : null}
+
+            {/* Regla de estructura de roles: al crear usuarios, el emprendedor pasa a PYME */}
+            {perfil.rol === 'emprendedor' && puedeGestionarEquipo && negocioCompleto ? (
+              <div className="p-5 rounded-2xl border border-primary/30 bg-primary/5">
+                <div className="flex gap-3">
+                  <span className="material-symbols-outlined text-primary">storefront</span>
+                  <div>
+                    <p className="font-bold text-on-surface text-sm">Al agregar tu primer usuario, tu cuenta pasa a ser PYME / Pequeña Empresa</p>
+                    <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                      Según la estructura de roles, un emprendedor con equipo deja de ser una cuenta individual: tu rol pasará a
+                      <strong className="text-on-surface"> Dueño / Admin PYME</strong> y podrás gestionar Vendedores (VAR1), Bodegueros (VAR2) y Asistentes (VAR3).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Credenciales del último miembro creado: se muestran una sola vez */}
+            {credencialTemporal ? (
+              <div className="p-5 rounded-2xl border border-success/40 bg-success/10">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex gap-3">
+                    <span className="material-symbols-outlined text-success">key</span>
+                    <div className="min-w-0">
+                      <p className="font-bold text-on-surface text-sm">Guarda estas credenciales y entrégalas al nuevo miembro</p>
+                      <p className="mt-2 text-sm text-on-surface-variant">
+                        Correo: <span className="font-mono font-bold text-on-surface break-all">{credencialTemporal.email}</span>
+                      </p>
+                      <p className="text-sm text-on-surface-variant">
+                        Contraseña: <span className="font-mono font-bold text-on-surface break-all">{credencialTemporal.password}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCredencialTemporal(null)}
+                    aria-label="Cerrar"
+                    className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {puedeGestionarEquipo ? (
               equipo === null ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">
                   <span className="material-symbols-outlined animate-spin inline-block">autorenew</span>
                 </div>
               ) : equipo.length === 0 ? (
-                <div className="p-8 text-center text-on-surface-variant text-sm">Aún no hay miembros en tu institución.</div>
+                <div className="p-8 text-center text-on-surface-variant text-sm">Aún no hay miembros en tu equipo.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">

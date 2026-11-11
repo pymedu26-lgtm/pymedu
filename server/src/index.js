@@ -13,6 +13,7 @@ import membresiaRouter from './membresia.js';
 import adminRouter from './admin.js';
 import rolesRouter from './cuentas/rutas.js';
 import mentoriasRouter from './mentorias/rutas.js';
+import usuariosRouter from './usuariosPyme.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,6 +65,7 @@ app.use('/api/membresia', membresiaRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/roles', rolesRouter);          // Núcleo: roles dinámicos
 app.use('/api/mentorias', mentoriasRouter);  // App Mentorías
+app.use('/api/usuarios', usuariosRouter);   // Equipo PYME (regla emprendedor → PYME)
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, servicio: 'PymEdu API', entorno: process.env.RAILWAY_ENV || 'local', baseDatos: modoBD(), ts: Date.now() });

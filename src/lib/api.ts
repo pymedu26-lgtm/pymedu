@@ -187,16 +187,30 @@ export const api = {
   auditoriaRol: (id: string) =>
     request<{ data: { id: number; accion: string; usuario: string | null; creado_en: string; antes: unknown; despues: unknown }[] }>(`/api/roles/${encodeURIComponent(id)}/auditoria`),
 
-  // ── Usuarios PYME (emprendedor/dueño crea vendedor, bodegue, asistente) ──
+  // ── Usuarios PYME (emprendedor/dueño crea vendedor, bodeguero, asistente) ──
   crearUsuarioPyme: (datos: {
     nombre: string;
     apellido: string;
     rol: 'vendedor' | 'gestor' | 'empleado';
     password?: string;
   }) =>
-    request<{ ok: boolean; usuario: { id: string; email: string; nombre_completo: string; rol: string } }>(
+    request<{
+      ok: boolean;
+      usuario: { id: string; email: string; nombre_completo: string; rol: string };
+      /** Solo si el titular no definió contraseña: clave generada para entregar al nuevo miembro. */
+      password_temporal?: string;
+      /** true cuando el creador pasó de EMPRENDEDOR a PYME / Pequeña Empresa (rol dueño). */
+      promocion_pyme?: boolean;
+      perfil?: Record<string, unknown>;
+    }>(
       '/api/usuarios/pyme',
       json(datos)
+    ),
+
+  /** Miembros creados dentro de la cuenta del titular (perfiles.reporta_a). */
+  getUsuariosPyme: () =>
+    request<{ data: { id: string; email: string; nombre_completo: string; rol: string; activo: number; membresia_nivel: string }[] }>(
+      '/api/usuarios/pyme'
     ),
 
   // ── Pagos Webpay ──────────────────────────────────────
