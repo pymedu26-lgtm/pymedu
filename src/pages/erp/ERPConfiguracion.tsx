@@ -137,28 +137,31 @@ export default function ERPConfiguracion() {
   const [formNuevoUsuario, setFormNuevoUsuario] = useState({
     nombre: '',
     apellido: '',
+    email: '',
     rol: 'vendedor' as 'vendedor' | 'gestor' | 'empleado',
-    password: '',
   });
   const [mostrarFormNuevoUsuario, setMostrarFormNuevoUsuario] = useState(false);
   const [guardandoUsuario, setGuardandoUsuario] = useState(false);
-  /** Credenciales generadas del último miembro creado (se muestran una sola vez). */
-  const [credencialTemporal, setCredencialTemporal] = useState<{ email: string; password: string } | null>(null);
+  /** Credenciales del último miembro creado (se muestran una sola vez). */
+  const [credencialTemporal, setCredencialTemporal] = useState<{ email: string; password: string; pagina: string } | null>(null);
+  /** Campo de credenciales recién copiado ('correo' | 'contrasena' | 'pagina' | null). */
+  const [copiado, setCopiado] = useState<string | null>(null);
+
+  const copiarCredencial = async (campo: string, texto: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(campo);
+      setTimeout(() => setCopiado(null), 1500);
+    } catch {
+      notificar('error', 'No se pudo copiar; selecciónalo manualmente');
+    }
+  };
 
   const negocioCompleto = !!(
     formNegocio.negocio_nombre?.trim() &&
     formNegocio.negocio_rut?.trim() &&
     formNegocio.negocio_rubro?.trim()
   );
-
-  const generarEmail = (nombre: string, apellido: string): string => {
-    const inicial = nombre.trim().charAt(0).toLowerCase();
-    const ap = apellido.trim().toLowerCase().replace(/\s+/g, '');
-    return `${inicial}.${ap}@pymedu.cl`;
-  };
-
-  const emailPreview = useMemo(() => generarEmail(formNuevoUsuario.nombre, formNuevoUsuario.apellido),
-    [formNuevoUsuario.nombre, formNuevoUsuario.apellido]);
 
   const crearUsuarioPyme = async () => {
     if (!perfil) return;
@@ -170,25 +173,30 @@ export default function ERPConfiguracion() {
       notificar('error', 'Nombre y apellido son requeridos');
       return;
     }
+    const emailNuevo = formNuevoUsuario.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNuevo)) {
+      notificar('error', 'Ingresa el correo personal de la persona');
+      return;
+    }
     setGuardandoUsuario(true);
     try {
-      const { ok, usuario, password_temporal, promocion_pyme } = await api.crearUsuarioPyme({
+      const { ok, usuario, password_temporal, pagina_acceso, promocion_pyme } = await api.crearUsuarioPyme({
         nombre: formNuevoUsuario.nombre.trim(),
         apellido: formNuevoUsuario.apellido.trim(),
+        email: emailNuevo,
         rol: formNuevoUsuario.rol,
-        password: formNuevoUsuario.password.trim() || undefined,
       });
       if (ok && usuario) {
-        if (password_temporal) setCredencialTemporal({ email: usuario.email, password: password_temporal });
-        setFormNuevoUsuario({ nombre: '', apellido: '', rol: 'vendedor', password: '' });
+        setCredencialTemporal({ email: usuario.email, password: password_temporal, pagina: pagina_acceso });
+        setFormNuevoUsuario({ nombre: '', apellido: '', email: '', rol: 'vendedor' });
         setMostrarFormNuevoUsuario(false);
         // Regla de estructura de roles: al crear usuarios dentro de su cuenta, el
         // emprendedor pasa a ser PYME / Pequeña Empresa (rol dueño).
         if (promocion_pyme) {
           await recargarPerfil();
-          notificar('ok', `Usuario ${usuario.email} creado. ¡Tu cuenta ahora es una PYME / Pequeña Empresa!`);
+          notificar('ok', `Usuario creado. Copia sus credenciales. ¡Tu cuenta ahora es una PYME / Pequeña Empresa!`);
         } else {
-          notificar('ok', `Usuario ${usuario.email} creado correctamente`);
+          notificar('ok', 'Usuario creado. Copia sus credenciales antes de cerrar');
         }
         await cargarEquipo();
       } else {
@@ -629,8 +637,8 @@ export default function ERPConfiguracion() {
                   <div>
                     <p className="font-bold text-on-surface text-sm">Al agregar tu primer usuario, tu cuenta pasa a ser PYME / Pequeña Empresa</p>
                     <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
-                      Según la estructura de roles, un emprendedor con equipo deja de ser una cuenta individual: tu rol pasará a
-                      <strong className="text-on-surface"> Dueño / Admin PYME</strong> y podrás gestionar Vendedores (VAR1), Bodegueros (VAR2) y Asistentes (VAR3).
+                      Según la estructura de roles, un emprendedor con equipo deja de ser una cuenta individual: tu cuenta pasará a ser
+                      <strong className="text-on-surface"> PYME / Pequeña Empresa</strong>, de la que serás el administrador, y podrás crear las cuentas locales de tu equipo: Vendedores (VAR1), Bodegueros (VAR2) y Asistentes (VAR3), con los permisos que tú definas.
                     </p>
                   </div>
                 </div>
@@ -641,16 +649,44 @@ export default function ERPConfiguracion() {
             {credencialTemporal ? (
               <div className="p-5 rounded-2xl border border-success/40 bg-success/10">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 min-w-0 flex-1">
                     <span className="material-symbols-outlined text-success">key</span>
-                    <div className="min-w-0">
-                      <p className="font-bold text-on-surface text-sm">Guarda estas credenciales y entrégalas al nuevo miembro</p>
-                      <p className="mt-2 text-sm text-on-surface-variant">
-                        Correo: <span className="font-mono font-bold text-on-surface break-all">{credencialTemporal.email}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-on-surface text-sm">Copia estas credenciales y entrégalas al nuevo miembro</p>
+                      <p className="mt-1 text-xs text-on-surface-variant">
+                        Se muestran una sola vez: la contraseña no se puede recuperar después.
                       </p>
-                      <p className="text-sm text-on-surface-variant">
-                        Contraseña: <span className="font-mono font-bold text-on-surface break-all">{credencialTemporal.password}</span>
-                      </p>
+                      <div className="mt-3 space-y-2">
+                        {([
+                          { campo: 'pagina', etiqueta: 'Página de acceso', valor: credencialTemporal.pagina },
+                          { campo: 'correo', etiqueta: 'Correo', valor: credencialTemporal.email },
+                          { campo: 'contrasena', etiqueta: 'Contraseña', valor: credencialTemporal.password },
+                        ] as const).map(({ campo, etiqueta, valor }) => (
+                          <div
+                            key={campo}
+                            className="flex items-center justify-between gap-3 rounded-xl bg-surface-container-lowest border border-outline-variant/30 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">{etiqueta}</p>
+                              <p className="font-mono text-sm font-bold text-on-surface break-all">{valor}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => copiarCredencial(campo, valor)}
+                              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                                copiado === campo
+                                  ? 'bg-success-container text-on-success-container'
+                                  : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-base">
+                                {copiado === campo ? 'check' : 'content_copy'}
+                              </span>
+                              {copiado === campo ? 'Copiado' : 'Copiar'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <button
@@ -1068,24 +1104,28 @@ export default function ERPConfiguracion() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Contraseña (opcional)</label>
+                  <label className={labelCls}>Correo personal</label>
                   <input
-                    type="password"
-                    value={formNuevoUsuario.password}
-                    onChange={e => setFormNuevoUsuario(p => ({ ...p, password: e.target.value }))}
-                    placeholder="Por defecto si se deja vacía"
+                    type="email"
+                    value={formNuevoUsuario.email}
+                    onChange={e => setFormNuevoUsuario(p => ({ ...p, email: e.target.value }))}
+                    placeholder="persona@correo.cl"
                     className={inputCls}
                   />
+                  <p className="mt-1.5 text-[10px] text-on-surface-variant">
+                    Será su usuario de acceso a PymEdu
+                  </p>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-low/50 p-3">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-outline text-base">email</span>
-                  <p className="text-xs font-bold text-on-surface">Correo de acceso:</p>
-                  <span className="truncate font-mono text-sm font-bold text-primary">{emailPreview || '—'}</span>
+                  <span className="material-symbols-outlined text-outline text-base">key</span>
+                  <p className="text-xs font-bold text-on-surface">
+                    La contraseña se genera automáticamente: al crear el usuario te mostraremos su correo, contraseña y
+                    página de acceso (www.pymedu.cl) para que los copies y se los entregues.
+                  </p>
                 </div>
-                <p className="mt-1 text-[10px] text-on-surface-variant">Formato: inicial del nombre + apellido + @pymedu.cl</p>
               </div>
             </div>
 

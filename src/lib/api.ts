@@ -191,14 +191,17 @@ export const api = {
   crearUsuarioPyme: (datos: {
     nombre: string;
     apellido: string;
+    /** Correo personal de la persona: será su usuario de acceso. */
+    email: string;
     rol: 'vendedor' | 'gestor' | 'empleado';
-    password?: string;
   }) =>
     request<{
       ok: boolean;
       usuario: { id: string; email: string; nombre_completo: string; rol: string };
-      /** Solo si el titular no definió contraseña: clave generada para entregar al nuevo miembro. */
-      password_temporal?: string;
+      /** Clave generada automáticamente: se muestra una sola vez para copiarla. */
+      password_temporal: string;
+      /** Página de acceso del nuevo miembro (misma que el resto de la plataforma). */
+      pagina_acceso: string;
       /** true cuando el creador pasó de EMPRENDEDOR a PYME / Pequeña Empresa (rol dueño). */
       promocion_pyme?: boolean;
       perfil?: Record<string, unknown>;

@@ -8,7 +8,7 @@ const ROLES_CREABLES = [
   { value: 'coordinador', label: 'Coordinador' },
   { value: 'mentor', label: 'Mentor' },
   { value: 'emprendedor', label: 'Emprendedor' },
-  { value: 'dueño', label: 'Dueño' },
+  { value: 'dueño', label: 'PYME / Pequeña Empresa' },
   { value: 'vendedor', label: 'Vendedor' },
   { value: 'gestor', label: 'Gestor' },
   { value: 'encargado_rrhh', label: 'Enc. RRHH' },
@@ -34,7 +34,7 @@ const rolConfig: Record<string, { label: string; color: string; icon: string }> 
   coordinador: { label: 'Coordinador', color: 'bg-info-container text-on-info-container', icon: 'supervisor_account' },
   mentor: { label: 'Mentor', color: 'bg-teal-container text-on-teal-container', icon: 'school' },
   emprendedor: { label: 'Emprendedor', color: 'bg-success-container text-on-success-container', icon: 'storefront' },
-  dueño: { label: 'Dueño', color: 'bg-success-container text-on-success-container', icon: 'storefront' },
+  dueño: { label: 'PYME / Pequeña Empresa', color: 'bg-success-container text-on-success-container', icon: 'storefront' },
   vendedor: { label: 'Vendedor', color: 'bg-warning-container text-on-warning-container', icon: 'point_of_sale' },
   gestor: { label: 'Gestor', color: 'bg-teal-container text-on-teal-container', icon: 'manage_accounts' },
   encargado_rrhh: { label: 'Enc. RRHH', color: 'bg-info-container text-on-info-container', icon: 'badge' },
@@ -79,6 +79,11 @@ export default function UsuariosGlobales() {
     activo: true,
     password: '',
   });
+
+  // Cuentas locales de cada PYME (se cargan al expandir la fila del titular).
+  const [pymeAbierta, setPymeAbierta] = useState<string | null>(null);
+  const [miembrosPyme, setMiembrosPyme] = useState<Record<string, Record<string, unknown>[]>>({});
+  const [cargandoMiembros, setCargandoMiembros] = useState<string | null>(null);
 
   const fetchInstituciones = useCallback(async () => {
     try {
@@ -210,6 +215,21 @@ export default function UsuariosGlobales() {
     }
   };
 
+  const togglePyme = async (u: Record<string, unknown>) => {
+    const id = u.id as string;
+    if (pymeAbierta === id) { setPymeAbierta(null); return; }
+    setPymeAbierta(id);
+    if (miembrosPyme[id]) return;
+    setCargandoMiembros(id);
+    try {
+      const res = await api.getPerfiles({ cuenta_de: id, page: '1', pageSize: '100' });
+      setMiembrosPyme(prev => ({ ...prev, [id]: res.data as unknown as Record<string, unknown>[] }));
+    } catch (err) {
+      console.error('Error cargando cuentas locales:', err);
+    }
+    setCargandoMiembros(null);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -217,7 +237,7 @@ export default function UsuariosGlobales() {
           <span className="material-symbols-outlined text-3xl text-info">group</span>
           <div>
             <h1 className="text-2xl font-extrabold text-on-surface">Todos los Usuarios</h1>
-            <p className="text-on-surface-variant">{total} usuarios en {instituciones.length} instituciones</p>
+            <p className="text-on-surface-variant">{total} cuentas en {instituciones.length} instituciones</p>
           </div>
         </div>
         <button
@@ -285,51 +305,136 @@ export default function UsuariosGlobales() {
             <tbody className="divide-y divide-outline-variant/30">
               {loading ? (
                 <tr><td colSpan={6} className="p-8 text-center text-on-surface-variant">Cargando...</td></tr>
-              ) : usuarios.map((u) => (
-                <tr key={u.id as string} className="hover:bg-surface-container-low/50 transition-colors">
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-info-container text-on-info-container text-sm font-extrabold shrink-0">
-                        {(u.nombre_completo as string)?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+              ) : usuarios.flatMap((u) => {
+                const esPyme = u.rol === 'dueño';
+                const idPyme = u.id as string;
+                const abierta = pymeAbierta === idPyme;
+                const nLocales = Number(u.cuentas_locales ?? 0);
+                const filas = [(
+                  <tr key={idPyme} className="hover:bg-surface-container-low/50 transition-colors">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        {esPyme ? (
+                          <button
+                            onClick={() => togglePyme(u)}
+                            className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors shrink-0"
+                            title={abierta ? 'Ocultar cuentas locales de esta PYME' : 'Ver cuentas locales de esta PYME'}
+                          >
+                            <span className="material-symbols-outlined text-on-surface-variant text-lg">{abierta ? 'expand_less' : 'expand_more'}</span>
+                          </button>
+                        ) : (
+                          <span className="w-8 shrink-0"></span>
+                        )}
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-info-container text-on-info-container text-sm font-extrabold shrink-0">
+                          {(u.nombre_completo as string)?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-on-surface text-sm">{u.nombre_completo as string}</p>
+                          <p className="text-xs text-on-surface-variant">{u.email as string}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-on-surface text-sm">{u.nombre_completo as string}</p>
-                        <p className="text-xs text-on-surface-variant">{u.email as string}</p>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${rolConfig[u.rol as string]?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
+                        {rolConfig[u.rol as string]?.label ?? u.rol as string}
+                      </span>
+                      {esPyme && nLocales > 0 && (
+                        <p className="mt-1 text-[10px] font-bold text-on-surface-variant">
+                          {nLocales} cuenta{nLocales !== 1 ? 's' : ''} local{nLocales !== 1 ? 'es' : ''}
+                        </p>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${membresiaConfig[(u.membresia_nivel as string) ?? 'free']?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
+                        {membresiaConfig[(u.membresia_nivel as string) ?? 'free']?.label ?? (u.membresia_nivel as string) ?? 'Gratis'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-sm text-on-surface-variant">
+                      {getInstName(u.institucion_id as string)}
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                        u.activo ? 'bg-success-container text-on-success-container' : 'bg-surface-container text-on-surface-variant'
+                      }`}>
+                        {u.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleEditar(u)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Editar">
+                          <span className="material-symbols-outlined text-on-surface-variant text-lg">edit</span>
+                        </button>
+                        <button className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Cambiar rol">
+                          <span className="material-symbols-outlined text-on-surface-variant text-lg">swap_horiz</span>
+                        </button>
                       </div>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${rolConfig[u.rol as string]?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
-                      {rolConfig[u.rol as string]?.label ?? u.rol as string}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${membresiaConfig[(u.membresia_nivel as string) ?? 'free']?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
-                      {membresiaConfig[(u.membresia_nivel as string) ?? 'free']?.label ?? (u.membresia_nivel as string) ?? 'Gratis'}
-                    </span>
-                  </td>
-                  <td className="p-4 text-sm text-on-surface-variant">
-                    {getInstName(u.institucion_id as string)}
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                      u.activo ? 'bg-success-container text-on-success-container' : 'bg-surface-container text-on-surface-variant'
-                    }`}>
-                      {u.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleEditar(u)} className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Editar">
-                        <span className="material-symbols-outlined text-on-surface-variant text-lg">edit</span>
-                      </button>
-                      <button className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors" title="Cambiar rol">
-                        <span className="material-symbols-outlined text-on-surface-variant text-lg">swap_horiz</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                )];
+                // Cuentas locales de la PYME: se anidan bajo el titular, sin
+                // acceso propio ni gestión directa del superadmin.
+                if (esPyme && abierta) {
+                  const miembros = miembrosPyme[idPyme];
+                  if (cargandoMiembros === idPyme) {
+                    filas.push(
+                      <tr key={`${idPyme}-cargando`} className="bg-surface-container-low/30">
+                        <td colSpan={6} className="py-3 pl-16 text-xs font-bold text-on-surface-variant">Cargando cuentas locales...</td>
+                      </tr>
+                    );
+                  } else if (!miembros || miembros.length === 0) {
+                    filas.push(
+                      <tr key={`${idPyme}-vacio`} className="bg-surface-container-low/30">
+                        <td colSpan={6} className="py-3 pl-16 text-xs text-on-surface-variant">Esta PYME aún no tiene cuentas locales en su equipo.</td>
+                      </tr>
+                    );
+                  } else {
+                    for (const m of miembros) {
+                      filas.push(
+                        <tr key={m.id as string} className="bg-surface-container-low/30">
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-3">
+                              <span className="material-symbols-outlined text-lg text-on-surface-variant/50 shrink-0">subdirectory_arrow_right</span>
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-extrabold shrink-0">
+                                {(m.nombre_completo as string)?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div>
+                                <p className="font-bold text-on-surface text-xs">{m.nombre_completo as string}</p>
+                                <p className="text-[11px] text-on-surface-variant">{m.email as string}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${rolConfig[m.rol as string]?.color ?? 'bg-surface-container text-on-surface-variant'}`}>
+                                {rolConfig[m.rol as string]?.label ?? m.rol as string}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-container text-on-surface-variant">Cuenta local</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-on-surface-variant">—</td>
+                          <td className="px-4 py-2.5 text-sm text-on-surface-variant">—</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                              m.activo ? 'bg-success-container text-on-success-container' : 'bg-surface-container text-on-surface-variant'
+                            }`}>
+                              {m.activo ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span
+                              className="material-symbols-outlined text-base text-on-surface-variant/50"
+                              title="Cuenta local de la PYME: la gestiona su titular, no el superadmin"
+                            >
+                              lock
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    }
+                  }
+                }
+                return filas;
+              })}
             </tbody>
           </table>
         </div>

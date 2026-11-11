@@ -133,10 +133,20 @@ SUPERADMIN (ve todo, segmentado por institución)
 
 **Regla EMPRENDEDOR → PYME:** si el emprendedor crea usuarios dentro de su misma cuenta
 (`POST /api/usuarios/pyme`, tab *Equipo* del ERP), su cuenta deja de ser individual y pasa a ser
-**PYME / Pequeña Empresa**: su rol cambia automáticamente de `emprendedor` a `dueño` (Dueño / Admin
-PYME), y los usuarios creados quedan vinculados a su cuenta (`perfiles.reporta_a`) con los roles de
-equipo Vendedor (VAR1), Bodeguero (VAR2) y Asistente (VAR3). La transición se audita en
-`cuentas.auditoria_roles`.
+**PYME / Pequeña Empresa**: su rol cambia automáticamente de `emprendedor` a `dueño` (mostrado como
+"PYME / Pequeña Empresa"), y queda como **administrador de la cuenta**. Los usuarios creados son
+**cuentas locales** de esa PYME (no cuentas independientes): quedan vinculados con
+`perfiles.reporta_a` con los roles de equipo Vendedor (VAR1), Bodeguero (VAR2) y Asistente (VAR3),
+con los permisos que defina el titular. La transición se audita en `cuentas.auditoria_roles`.
+
+Cada miembro se crea con su **correo personal** (es su usuario de acceso). La contraseña se genera
+automáticamente y, junto con el correo y la página de acceso (`www.pymedu.cl`, la misma que el resto
+de la plataforma; el rol define lo que se ve), se muestra **una sola vez en pantalla** con botones
+de copiar para que el titular los entregue al miembro.
+
+Para el superadmin, las cuentas locales **no aparecen como usuarios independientes** en
+*Usuarios Globales* ni en los conteos por rol (`GET /api/perfiles` las excluye por defecto); se
+listan anidadas bajo la fila de su PYME, expandibles con `?cuenta_de=<id del titular>`.
 
 ## Comandos Útiles
 

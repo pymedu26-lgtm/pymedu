@@ -91,7 +91,7 @@ app.get('/api/instituciones', async (req, res) => {
 
 app.get('/api/perfiles/stats', requireAuth, async (req, res) => {
   try {
-    const total = await db.prepare('SELECT COUNT(*)::int AS n FROM perfiles WHERE activo = 1').get();
+    const total = await db.prepare('SELECT COUNT(*)::int AS n FROM perfiles WHERE activo = 1 AND reporta_a IS NULL').get();
     const coordinadores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol = 'coordinador' AND activo = 1").get();
     const mentores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol = 'mentor' AND activo = 1").get();
     const emprendedores = await db.prepare("SELECT COUNT(*)::int AS n FROM perfiles WHERE rol IN ('emprendedor','dueño','dueno') AND activo = 1").get();
@@ -128,7 +128,7 @@ app.get('/api/perfiles/stats/institucion/:id', requireAuth, async (req, res) => 
 
 app.get('/api/perfiles', requireAuth, async (req, res) => {
   try {
-    const { rol, institucion_id, busqueda, page = '1', pageSize = '20', sort = 'nombre_completo', dir = 'asc', excluir_superadmin = '1' } = req.query;
+    const { rol, institucion_id, busqueda, page = '1', pageSize = '20', sort = 'nombre_completo', dir = 'asc', excluir_superadmin = '1', cuenta_de } = req.query;
     const limite = parseInt(pageSize, 10) || 20;
     const offset = ((parseInt(page, 10) || 1) - 1) * limite;
     const condiciones = [];
@@ -141,12 +141,22 @@ app.get('/api/perfiles', requireAuth, async (req, res) => {
       const term = `%${String(busqueda).replace(/[%_]/g, (m) => `\\${m}`)}%`;
       parametros.push(term, term);
     }
+    // Las cuentas creadas por el titular de una PYME son cuentas locales de esa
+    // cuenta mayor: no se listan como usuarios independientes salvo que se pidan
+    // explícitamente con ?cuenta_de=<id del titular>.
+    if (cuenta_de) {
+      condiciones.push('reporta_a = ?');
+      parametros.push(String(cuenta_de));
+    } else {
+      condiciones.push('reporta_a IS NULL');
+    }
     const where = condiciones.length ? ` WHERE ${condiciones.join(' AND ')}` : '';
     const columnaOrden = ['nombre_completo', 'email', 'rol', 'created_at', 'membresia_nivel'].includes(sort) ? sort : 'nombre_completo';
     const direccion = dir === 'desc' ? 'DESC' : 'ASC';
     const totalRow = await db.prepare(`SELECT COUNT(*)::int AS n FROM perfiles${where}`).get(...parametros);
     const filas = await db.prepare(
-      `SELECT id, email, nombre_completo, rol, institucion_id, reporta_a, activo, membresia_nivel, membresia_expira, segmento_negocio, created_at
+      `SELECT id, email, nombre_completo, rol, institucion_id, reporta_a, activo, membresia_nivel, membresia_expira, segmento_negocio, created_at,
+        (SELECT COUNT(*)::int FROM perfiles miembro WHERE miembro.reporta_a = perfiles.id) AS cuentas_locales
        FROM perfiles${where} ORDER BY ${columnaOrden} ${direccion} LIMIT ? OFFSET ?`
     ).all(...parametros, limite, offset);
     res.json({ data: filas, total: totalRow.n, hasMore: offset + filas.length < totalRow.n });

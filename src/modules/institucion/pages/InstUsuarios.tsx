@@ -6,7 +6,7 @@ const rolConfig: Record<string, { label: string; color: string; icon: string }> 
   coordinador: { label: 'Coordinador', color: 'bg-info-container text-on-info-container', icon: 'supervisor_account' },
   mentor: { label: 'Mentor', color: 'bg-teal-container text-on-teal-container', icon: 'school' },
   emprendedor: { label: 'Emprendedor', color: 'bg-info-container text-on-info-container', icon: 'storefront' },
-  dueño: { label: 'Dueño', color: 'bg-success-container text-on-success-container', icon: 'storefront' },
+  dueño: { label: 'PYME / Pequeña Empresa', color: 'bg-success-container text-on-success-container', icon: 'storefront' },
 };
 
 interface SolicitudVinculacion {
@@ -260,7 +260,7 @@ export default function InstUsuarios() {
                     className="w-full p-3 rounded-xl border-2 border-surface-container-high focus:border-primary/50 outline-none text-sm"
                   >
                     <option value="emprendedor">Emprendedor</option>
-                    <option value="dueño">Dueño</option>
+                    <option value="dueño">PYME / Pequeña Empresa</option>
                     <option value="mentor">Mentor</option>
                     <option value="coordinador">Coordinador</option>
                   </select>

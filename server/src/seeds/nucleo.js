@@ -47,6 +47,12 @@ export async function sembrarNucleo() {
     await db.prepare('UPDATE cuentas.rol SET rol_padre_id = ? WHERE id = ? AND rol_padre_id IS NULL').run(ids[r.padre], ids[r.codigo]);
   }
 
+  // Renombrado (regla PYME): la cuenta promovida se presenta como PYME /
+  // Pequeña Empresa, no como "Dueño". Idempotente para bases existentes.
+  await db.prepare(
+    "UPDATE cuentas.rol SET nombre = 'PYME / Pequeña Empresa' WHERE organizacion_id IS NULL AND codigo = 'dueño' AND nombre = 'Dueño / Admin PYME'"
+  ).run();
+
   // Cada usuario sin asignaciones recibe la plantilla equivalente a su rol actual.
   await db.prepare(`
     INSERT INTO cuentas.asignacion_rol (usuario_id, rol_id, organizacion_id, otorgado_por)

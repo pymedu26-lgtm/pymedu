@@ -226,11 +226,11 @@
     "config": "rw"
    }
   },
-  {
-   "codigo": "dueño",
-   "nombre": "Dueño / Admin PYME",
-   "grupo": "pyme",
-   "descripcion": "Administrador de la PYME. Gestiona el negocio completo y define los tipos de rol de su equipo (ej: Vendedor, Cajero).",
+   {
+    "codigo": "dueño",
+    "nombre": "PYME / Pequeña Empresa",
+    "grupo": "pyme",
+    "descripcion": "Cuenta PYME / Pequeña Empresa. Su titular (el antiguo Emprendedor) administra el negocio completo y define los permisos de las cuentas locales de su equipo.",
    "matriz": {
     "dashboard": "rw",
     "comunidad": "r",

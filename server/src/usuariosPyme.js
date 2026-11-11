@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
 import db from './db.js';
-import { requireAuth, sanitizarPerfil, MIN_CONTRASENA } from './auth.js';
+import { requireAuth, sanitizarPerfil } from './auth.js';
 import { auditarRol } from './cuentas/servicio.js';
 
 const router = Router();
@@ -32,17 +32,9 @@ function soloTitular(req, res, next) {
   return next();
 }
 
-/** Email interno del equipo: inicial del nombre + apellido + @pymedu.cl (mismo formato que muestra el ERP). */
-async function generarEmailEquipo(nombre, apellido) {
-  const inicial = nombre.trim().charAt(0).toLowerCase();
-  const ap = apellido.trim().toLowerCase().replace(/\s+/g, '');
-  const base = `${inicial}.${ap}`;
-  let candidato = `${base}@pymedu.cl`;
-  for (let n = 2; ; n++) {
-    const ocupado = await db.prepare('SELECT id FROM perfiles WHERE email = ?').get(candidato);
-    if (!ocupado) return candidato;
-    candidato = `${base}${n}@pymedu.cl`;
-  }
+/** Email del nuevo miembro: su correo personal (con ese entra a PymEdu). */
+function emailValido(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email ?? '').trim().toLowerCase());
 }
 
 /** Contraseña temporal entregable al titular cuando no define una para el nuevo miembro. */
@@ -66,12 +58,20 @@ router.get('/pyme', soloTitular, async (req, res) => {
 
 router.post('/pyme', soloTitular, async (req, res) => {
   try {
-    const { nombre, apellido, rol, password } = req.body ?? {};
+    const { nombre, apellido, rol, email } = req.body ?? {};
     const nombreLimpio = String(nombre ?? '').trim();
     const apellidoLimpio = String(apellido ?? '').trim();
+    const emailLimpio = String(email ?? '').trim().toLowerCase();
 
     if (!nombreLimpio || !apellidoLimpio) {
       return res.status(400).json({ error: 'Nombre y apellido son obligatorios.' });
+    }
+    if (!emailValido(emailLimpio)) {
+      return res.status(400).json({ error: 'Ingresa un correo personal válido para el nuevo miembro.' });
+    }
+    const ocupado = await db.prepare('SELECT id FROM perfiles WHERE email = ?').get(emailLimpio);
+    if (ocupado) {
+      return res.status(409).json({ error: 'Ese correo ya tiene una cuenta en PymEdu.' });
     }
     if (!ROLES_EQUIPO.includes(rol)) {
       return res.status(400).json({ error: `Rol de equipo inválido: ${rol}. Puede crear vendedor, gestor (bodeguero) o empleado (asistente).` });
@@ -80,12 +80,10 @@ router.post('/pyme', soloTitular, async (req, res) => {
     if (!req.perfil.negocio_nombre || !req.perfil.negocio_rut || !req.perfil.negocio_rubro) {
       return res.status(400).json({ error: 'Completa primero los datos del negocio (nombre, RUT y rubro) en Mi Negocio.' });
     }
-    const contrasena = password !== undefined && String(password).trim() !== '' ? String(password).trim() : generarPasswordTemporal();
-    if (contrasena.length < MIN_CONTRASENA) {
-      return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres.` });
-    }
+    // La contraseña siempre se genera automáticamente: se muestra una sola vez
+    // en pantalla (con el correo y la página de acceso) para copiarla y entregarla.
+    const contrasena = generarPasswordTemporal();
 
-    const email = await generarEmailEquipo(nombreLimpio, apellidoLimpio);
     const id = randomUUID();
     const flags = FLAGS_POR_ROL[rol];
 
@@ -97,7 +95,7 @@ router.post('/pyme', soloTitular, async (req, res) => {
          puede_crear_ventas, puede_crear_gastos)
       VALUES (?, ?, ?, ?, ?, ?, 1, 'free', 'C', ?, ?, ?, ?, ?)
     `).run(
-      id, email, bcrypt.hashSync(contrasena, 10), `${nombreLimpio} ${apellidoLimpio}`,
+      id, emailLimpio, bcrypt.hashSync(contrasena, 10), `${nombreLimpio} ${apellidoLimpio}`,
       rol, req.perfil.id,
       flags.puede_ver_remuneraciones, flags.puede_ver_caja, flags.puede_ver_reportes,
       flags.puede_crear_ventas, flags.puede_crear_gastos
@@ -148,8 +146,9 @@ router.post('/pyme', soloTitular, async (req, res) => {
     res.status(201).json({
       ok: true,
       usuario,
-      // Solo cuando el titular no definió contraseña: se muestra una vez para entregarla.
-      ...(password === undefined || String(password ?? '').trim() === '' ? { password_temporal: contrasena } : {}),
+      // Contraseña generada: se muestra una sola vez en pantalla para copiarla.
+      password_temporal: contrasena,
+      pagina_acceso: `${process.env.FRONT_URL || 'https://www.pymedu.cl'}/login`,
       ...(promocionPyme ? { promocion_pyme: true, perfil: sanitizarPerfil(perfil) } : {}),
     });
   } catch (error) {

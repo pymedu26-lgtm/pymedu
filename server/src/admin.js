@@ -30,7 +30,9 @@ function soloSuperadmin(req, res, next) {
 // Panel /admin/usuarios: conteo de usuarios por rol
 router.get('/perfiles/conteo-por-rol', soloSuperadmin, async (req, res) => {
   try {
-    const filas = await db.prepare('SELECT rol, COUNT(*)::int AS n FROM perfiles GROUP BY rol').all();
+    // Solo cuentas titulares: las cuentas locales de una PYME (reporta_a) no
+    // cuentan como usuarios independientes.
+    const filas = await db.prepare('SELECT rol, COUNT(*)::int AS n FROM perfiles WHERE reporta_a IS NULL GROUP BY rol').all();
     const conteo = {};
     for (const f of filas) conteo[f.rol] = f.n;
     res.json({ data: conteo });

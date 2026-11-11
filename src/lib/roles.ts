@@ -211,14 +211,14 @@ export const ROLES: RolDefinicion[] = [
   },
   {
     id: 'dueño',
-    label: 'Dueño / Admin PYME',
+    label: 'PYME / Pequeña Empresa',
     color: 'bg-cat-7',
     badge: 'bg-cat-7-container text-on-cat-7-container',
     icon: 'storefront',
     nivel: 5,
     grupo: 'pyme',
     definidoPor: 'sistema',
-    descripcion: 'Administrador de la PYME. Gestiona el negocio completo y define los tipos de rol de su equipo (ej: Vendedor, Cajero).',
+    descripcion: 'Cuenta PYME / Pequeña Empresa. Su titular (el antiguo Emprendedor) es el administrador: gestiona el negocio completo y define los permisos de las cuentas locales de su equipo.',
     permisosApp: [
       'ver_mi_perfil', 'editar_mi_negocio', 'ver_academia',
       'ver_inventario', 'ver_clientes', 'ver_proveedores',
