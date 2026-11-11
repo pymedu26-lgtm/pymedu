@@ -130,6 +130,7 @@ export default function ERPConfiguracion() {
     { valor: 'gestor', label: 'Bodeguero (VAR2)', icono: 'inventory_2' },
     { valor: 'empleado', label: 'Asistente (VAR3)', icono: 'person' },
   ];
+  const opcionesRolUsuario = ROLES_PYME.map(r => ({ valor: r.valor, etiqueta: r.label }));
 
   const [formNuevoUsuario, setFormNuevoUsuario] = useState({
     nombre: '',
@@ -642,81 +643,6 @@ export default function ERPConfiguracion() {
                 </Link>
               </div>
             )}
-            {mostrarFormNuevoUsuario && puedeGestionarEquipo && negocioCompleto ? (
-              <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm p-6 space-y-5">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary">person_add</span>
-                  <h3 className="text-sm font-black text-on-surface-variant uppercase tracking-widest">Nuevo Usuario del Equipo</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Nombre</label>
-                    <input
-                      value={formNuevoUsuario.nombre}
-                      onChange={e => setFormNuevoUsuario(p => ({ ...p, nombre: e.target.value }))}
-                      placeholder="Ej: Mario"
-                      className="w-full px-4 py-3 rounded-xl border-2 border-outline-variant/60 focus:border-primary outline-none text-sm font-bold text-on-surface bg-surface-container-lowest transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Apellido</label>
-                    <input
-                      value={formNuevoUsuario.apellido}
-                      onChange={e => setFormNuevoUsuario(p => ({ ...p, apellido: e.target.value }))}
-                      placeholder="Ej: Tapia"
-                      className="w-full px-4 py-3 rounded-xl border-2 border-outline-variant/60 focus:border-primary outline-none text-sm font-bold text-on-surface bg-surface-container-lowest transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Rol</label>
-                    <select
-                      value={formNuevoUsuario.rol}
-                      onChange={e => setFormNuevoUsuario(p => ({ ...p, rol: e.target.value as 'vendedor' | 'gestor' | 'empleado' }))}
-                      className="w-full px-4 py-3 rounded-xl border-2 border-outline-variant/60 focus:border-primary outline-none text-sm font-bold text-on-surface bg-surface-container-lowest transition-colors"
-                    >
-                      {ROLES_PYME.map(r => (
-                        <option key={r.valor} value={r.valor}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Contraseña (opcional)</label>
-                    <input
-                      type="password"
-                      value={formNuevoUsuario.password}
-                      onChange={e => setFormNuevoUsuario(p => ({ ...p, password: e.target.value }))}
-                      placeholder="Deja vacío para contraseña por defecto"
-                      className="w-full px-4 py-3 rounded-xl border-2 border-outline-variant/60 focus:border-primary outline-none text-sm font-bold text-on-surface bg-surface-container-lowest transition-colors"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="flex items-center gap-2 p-3 rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-low/50">
-                      <span className="material-symbols-outlined text-outline text-sm">email</span>
-                      <p className="text-xs font-bold text-on-surface">Correo de acceso:</p>
-                      <span className="ml-2 font-mono text-sm font-bold text-primary">{emailPreview || '—'}</span>
-                      <p className="text-[10px] text-on-surface-variant ml-2 mt-1">Formato: inicial.nombre + apellido + @pymedu.cl</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/20">
-                  <button
-                    onClick={() => setMostrarFormNuevoUsuario(false)}
-                    className="px-5 py-2.5 rounded-xl border border-outline-variant/40 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={crearUsuarioPyme}
-                    disabled={guardandoUsuario || !negocioCompleto}
-                    className="px-6 py-2.5 bg-primary text-inverse-on-surface rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
-                  >
-                    {guardandoUsuario ? 'Creando…' : 'Crear Usuario'}
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       )}
@@ -987,6 +913,113 @@ export default function ERPConfiguracion() {
       )}
         </div>
       </div>
+
+      {/* Modal Nuevo Usuario — mismo patrón que «Nueva Venta» en el módulo de ventas */}
+      {mostrarFormNuevoUsuario && puedeGestionarEquipo && negocioCompleto && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-scrim/50 backdrop-blur-sm sm:items-center sm:p-4"
+          onClick={() => { if (!guardandoUsuario) setMostrarFormNuevoUsuario(false); }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Nuevo usuario del equipo"
+            onClick={e => e.stopPropagation()}
+            className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-surface-container-lowest shadow-2xl sm:max-h-[90vh] sm:rounded-3xl"
+          >
+            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-outline-variant/20 bg-surface-container-low/50 px-5 py-4 sm:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <span className="material-symbols-outlined text-xl">person_add</span>
+                </span>
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-bold text-primary">Nuevo usuario</h3>
+                  <p className="truncate text-xs font-semibold text-on-surface-variant">Se sumará al equipo de tu negocio</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMostrarFormNuevoUsuario(false)}
+                disabled={guardandoUsuario}
+                aria-label="Cerrar"
+                className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-error disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </header>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelCls}>Nombre</label>
+                  <input
+                    value={formNuevoUsuario.nombre}
+                    onChange={e => setFormNuevoUsuario(p => ({ ...p, nombre: e.target.value }))}
+                    placeholder="Ej: Mario"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Apellido</label>
+                  <input
+                    value={formNuevoUsuario.apellido}
+                    onChange={e => setFormNuevoUsuario(p => ({ ...p, apellido: e.target.value }))}
+                    placeholder="Ej: Tapia"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Rol</label>
+                  <SelectorDesplegable
+                    variante="campo"
+                    valor={formNuevoUsuario.rol}
+                    opciones={opcionesRolUsuario}
+                    onChange={v => setFormNuevoUsuario(p => ({ ...p, rol: v as 'vendedor' | 'gestor' | 'empleado' }))}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Contraseña (opcional)</label>
+                  <input
+                    type="password"
+                    value={formNuevoUsuario.password}
+                    onChange={e => setFormNuevoUsuario(p => ({ ...p, password: e.target.value }))}
+                    placeholder="Por defecto si se deja vacía"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-low/50 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-outline text-base">email</span>
+                  <p className="text-xs font-bold text-on-surface">Correo de acceso:</p>
+                  <span className="truncate font-mono text-sm font-bold text-primary">{emailPreview || '—'}</span>
+                </div>
+                <p className="mt-1 text-[10px] text-on-surface-variant">Formato: inicial del nombre + apellido + @pymedu.cl</p>
+              </div>
+            </div>
+
+            <footer className="flex shrink-0 justify-end gap-3 border-t border-outline-variant/20 bg-surface-container-low/30 px-5 py-4 sm:px-6">
+              <button
+                type="button"
+                onClick={() => setMostrarFormNuevoUsuario(false)}
+                disabled={guardandoUsuario}
+                className="min-h-11 rounded-full px-5 text-sm font-bold text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={crearUsuarioPyme}
+                disabled={guardandoUsuario || !negocioCompleto}
+                className="min-h-11 rounded-full bg-primary px-6 text-sm font-bold text-inverse-on-surface hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {guardandoUsuario ? 'Creando…' : 'Crear usuario'}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
