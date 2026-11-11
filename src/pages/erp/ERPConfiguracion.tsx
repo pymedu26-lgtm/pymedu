@@ -56,14 +56,14 @@ const MODO_SII: Record<string, string> = {
   api_integrated: 'Integrado por API',
 };
 
-const TABS: { id: Tab; icono: string; label: string; descripcion: string }[] = [
-  { id: 'negocio', icono: 'storefront', label: 'Mi Negocio', descripcion: 'Datos, logo y ubicación' },
-  { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta', descripcion: 'Perfil y notificaciones' },
-  { id: 'equipo', icono: 'group', label: 'Equipo', descripcion: 'Usuarios y permisos' },
-  { id: 'inventario', icono: 'inventory_2', label: 'Inventario', descripcion: 'Categorías y stock' },
-  { id: 'alertas', icono: 'notifications', label: 'Alertas', descripcion: 'Avisos y recordatorios' },
-  { id: 'integraciones', icono: 'cloud_sync', label: 'Integraciones', descripcion: 'SII, pagos y APIs' },
-  { id: 'facturacion', icono: 'credit_card', label: 'Suscripción', descripcion: 'Plan y pagos' },
+const TABS: { id: Tab; icono: string; label: string }[] = [
+  { id: 'negocio', icono: 'storefront', label: 'Mi Negocio' },
+  { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta' },
+  { id: 'equipo', icono: 'group', label: 'Equipo' },
+  { id: 'inventario', icono: 'inventory_2', label: 'Inventario' },
+  { id: 'alertas', icono: 'notifications', label: 'Alertas' },
+  { id: 'integraciones', icono: 'cloud_sync', label: 'Integraciones' },
+  { id: 'facturacion', icono: 'credit_card', label: 'Suscripción' },
 ];
 
 export default function ERPConfiguracion() {
@@ -332,58 +332,23 @@ export default function ERPConfiguracion() {
         )}
       </div>
 
-      {/* Sidebar + Content layout */}
-      <div className="flex flex-col md:flex-row gap-6">
-        {/* Sidebar menu */}
-        <aside className="w-full md:w-[260px] shrink-0">
-          <div className="md:sticky md:top-4 overflow-hidden rounded-3xl bg-surface-container-lowest dark-card border border-outline-variant/20 shadow-sm">
-            <div className="flex items-center gap-3 border-b border-outline-variant/15 px-4 py-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <span className="material-symbols-outlined text-xl">tune</span>
-              </span>
-              <div className="min-w-0">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-on-surface-variant/60">Ajustes</p>
-                <p className="truncate text-sm font-black text-on-surface">Configuración del ERP</p>
-              </div>
-            </div>
-
-            <nav className="space-y-1 p-2">
-              {TABS.map(({ id, icono, label, descripcion }) => {
-                const activa = tab === id;
-                return (
-                  <button key={id} onClick={() => setTab(id)}
-                    className={cn('group relative flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all duration-150',
-                      activa
-                        ? 'border-primary/20 bg-primary/10'
-                        : 'border-transparent hover:border-outline-variant/30 hover:bg-surface-container')}>
-                    <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
-                      activa
-                        ? 'bg-primary text-inverse-on-surface shadow-md shadow-primary/20'
-                        : 'bg-surface-container text-on-surface-variant group-hover:bg-surface-container-high')}>
-                      <span className="material-symbols-outlined text-lg"
-                        style={{ fontVariationSettings: activa ? "'FILL' 1" : "'FILL' 0" }}>
-                        {icono}
-                      </span>
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={cn('block truncate text-[13px] font-bold', activa ? 'text-primary' : 'text-on-surface')}>
-                        {label}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-on-surface-variant/60">{descripcion}</span>
-                    </span>
-                    <span className={cn('material-symbols-outlined text-sm transition-transform duration-200',
-                      activa ? 'translate-x-0 text-primary' : '-translate-x-1 text-transparent group-hover:translate-x-0 group-hover:text-on-surface-variant/40')}>
-                      chevron_right
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </aside>
+      {/* Tabs tipo chips, mismo estilo que el centro de alertas */}
+      <div className="space-y-6">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 hide-scrollbar sm:mx-0 sm:flex-wrap sm:px-0" role="tablist" aria-label="Secciones de configuración">
+          {TABS.map(({ id, icono, label }) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+              className={cn('inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-xs font-bold transition-colors',
+                tab === id
+                  ? 'border-primary bg-primary text-inverse-on-surface'
+                  : 'border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant hover:border-primary/40 hover:text-on-surface')}>
+              <span className="material-symbols-outlined text-base">{icono}</span>
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* Content area */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0">
 
       {/* ══ Mi Negocio ══ */}
       {tab === 'negocio' && (
