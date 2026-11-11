@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useERP } from '../../1.-ERP/context/ERPContext';
@@ -793,108 +794,6 @@ export default function ERPConfiguracion() {
                 </Link>
               </div>
             )}
-
-            {/* Pestaña emergente: credenciales del miembro (se muestran una sola vez) */}
-            {credencialModal ? (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-                onClick={() => setCredencialModal(null)}
-              >
-                <div
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label="Credenciales de acceso"
-                  className="w-full max-w-md rounded-3xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-2xl"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
-                        <span className="material-symbols-outlined text-primary">key</span>
-                      </span>
-                      <div>
-                        <p className="font-bold text-on-surface">Credenciales de acceso</p>
-                        <p className="text-xs text-on-surface-variant">{credencialModal.nombre}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setCredencialModal(null)}
-                      aria-label="Cerrar"
-                      className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container"
-                    >
-                      <span className="material-symbols-outlined">close</span>
-                    </button>
-                  </div>
-
-                  <p className="mt-4 text-xs text-on-surface-variant">
-                    Copia estas credenciales y entrégalas al nuevo miembro. Se muestran una sola vez:
-                    la contraseña no se puede recuperar después.
-                  </p>
-
-                  <div className="mt-4 space-y-2">
-                    {([
-                      { campo: 'pagina', etiqueta: 'Página de acceso', valor: credencialModal.pagina },
-                      { campo: 'correo', etiqueta: 'Correo', valor: credencialModal.email },
-                      ...(credencialModal.password ? [{ campo: 'contrasena', etiqueta: 'Contraseña', valor: credencialModal.password }] : []),
-                    ] as const).map(({ campo, etiqueta, valor }) => (
-                      <div
-                        key={campo}
-                        className="flex items-center justify-between gap-3 rounded-xl bg-surface-container-low border border-outline-variant/30 px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">{etiqueta}</p>
-                          <p className="font-mono text-sm font-bold text-on-surface break-all">{valor}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => copiarCredencial(campo, valor)}
-                          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
-                            copiado === campo
-                              ? 'bg-success-container text-on-success-container'
-                              : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-base">
-                            {copiado === campo ? 'check' : 'content_copy'}
-                          </span>
-                          {copiado === campo ? 'Copiado' : 'Copiar'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {!credencialModal.password ? (
-                    <div className="mt-3 rounded-xl border border-outline-variant/30 bg-surface-container-low/60 p-3">
-                      <p className="text-xs text-on-surface-variant">
-                        La contraseña no se puede volver a mostrar por seguridad.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const m = (equipo ?? []).find(x => String(x.id) === credencialModal.id);
-                          if (m) restablecerPassword(m);
-                        }}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-on-primary hover:opacity-90"
-                      >
-                        <span className="material-symbols-outlined text-base">lock_reset</span>
-                        Restablecer contraseña
-                      </button>
-                    </div>
-                  ) : null}
-
-                  <div className="mt-5 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setCredencialModal(null)}
-                      className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-primary hover:opacity-90"
-                    >
-                      Listo
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       )}
@@ -1276,6 +1175,112 @@ export default function ERPConfiguracion() {
           </div>
         </div>
       )}
+
+      {/* Pestaña emergente: credenciales del miembro (se muestran una sola vez).
+          Se monta en document.body para quedar sobre toda la pantalla de configuración. */}
+      {credencialModal
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+              onClick={() => setCredencialModal(null)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Credenciales de acceso"
+                className="w-full max-w-md rounded-3xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
+                      <span className="material-symbols-outlined text-primary">key</span>
+                    </span>
+                    <div>
+                      <p className="font-bold text-on-surface">Credenciales de acceso</p>
+                      <p className="text-xs text-on-surface-variant">{credencialModal.nombre}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCredencialModal(null)}
+                    aria-label="Cerrar"
+                    className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                <p className="mt-4 text-xs text-on-surface-variant">
+                  Copia estas credenciales y entrégalas al nuevo miembro. Se muestran una sola vez:
+                  la contraseña no se puede recuperar después.
+                </p>
+
+                <div className="mt-4 space-y-2">
+                  {([
+                    { campo: 'pagina', etiqueta: 'Página de acceso', valor: credencialModal.pagina },
+                    { campo: 'correo', etiqueta: 'Correo', valor: credencialModal.email },
+                    ...(credencialModal.password ? [{ campo: 'contrasena', etiqueta: 'Contraseña', valor: credencialModal.password }] : []),
+                  ] as const).map(({ campo, etiqueta, valor }) => (
+                    <div
+                      key={campo}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-surface-container-low border border-outline-variant/30 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">{etiqueta}</p>
+                        <p className="font-mono text-sm font-bold text-on-surface break-all">{valor}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copiarCredencial(campo, valor)}
+                        className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                          copiado === campo
+                            ? 'bg-success-container text-on-success-container'
+                            : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          {copiado === campo ? 'check' : 'content_copy'}
+                        </span>
+                        {copiado === campo ? 'Copiado' : 'Copiar'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {!credencialModal.password ? (
+                  <div className="mt-3 rounded-xl border border-outline-variant/30 bg-surface-container-low/60 p-3">
+                    <p className="text-xs text-on-surface-variant">
+                      La contraseña no se puede volver a mostrar por seguridad.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const m = (equipo ?? []).find(x => String(x.id) === credencialModal.id);
+                        if (m) restablecerPassword(m);
+                      }}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-on-primary hover:opacity-90"
+                    >
+                      <span className="material-symbols-outlined text-base">lock_reset</span>
+                      Restablecer contraseña
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setCredencialModal(null)}
+                    className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-primary hover:opacity-90"
+                  >
+                    Listo
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
