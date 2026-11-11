@@ -142,8 +142,10 @@ export default function ERPConfiguracion() {
   });
   const [mostrarFormNuevoUsuario, setMostrarFormNuevoUsuario] = useState(false);
   const [guardandoUsuario, setGuardandoUsuario] = useState(false);
-  /** Credenciales del último miembro creado (se muestran una sola vez). */
-  const [credencialTemporal, setCredencialTemporal] = useState<{ email: string; password: string; pagina: string } | null>(null);
+  /** Credenciales conocidas en esta sesión (recién creadas o restablecidas). */
+  const [credenciales, setCredenciales] = useState<Record<string, { nombre: string; email: string; password: string; pagina: string }>>({});
+  /** Pestaña emergente con las credenciales de un miembro (se muestran una sola vez). */
+  const [credencialModal, setCredencialModal] = useState<{ id: string; nombre: string; email: string; password?: string; pagina: string } | null>(null);
   /** Campo de credenciales recién copiado ('correo' | 'contrasena' | 'pagina' | null). */
   const [copiado, setCopiado] = useState<string | null>(null);
 
@@ -154,6 +156,52 @@ export default function ERPConfiguracion() {
       setTimeout(() => setCopiado(null), 1500);
     } catch {
       notificar('error', 'No se pudo copiar; selecciónalo manualmente');
+    }
+  };
+
+  const abrirCredenciales = (m: { id: unknown; nombre_completo?: unknown; email: unknown }) => {
+    const cred = credenciales[String(m.id)];
+    setCredencialModal({
+      id: String(m.id),
+      nombre: cred?.nombre ?? String(m.nombre_completo || m.email),
+      email: cred?.email ?? String(m.email),
+      pagina: cred?.pagina ?? 'https://www.pymedu.cl/login',
+      password: cred?.password,
+    });
+  };
+
+  const restablecerPassword = async (m: { id: unknown; nombre_completo?: unknown; email: unknown }) => {
+    if (!window.confirm(`¿Restablecer la contraseña de ${String(m.nombre_completo || m.email)}? La anterior dejará de funcionar.`)) return;
+    try {
+      const r = await api.restablecerPasswordPyme(String(m.id));
+      if (r.ok) {
+        setCredenciales(prev => ({
+          ...prev,
+          [r.usuario.id]: { nombre: r.usuario.nombre_completo, email: r.usuario.email, password: r.password_temporal, pagina: r.pagina_acceso },
+        }));
+        setCredencialModal({ id: r.usuario.id, nombre: r.usuario.nombre_completo, email: r.usuario.email, password: r.password_temporal, pagina: r.pagina_acceso });
+        notificar('ok', 'Contraseña restablecida. Copia las nuevas credenciales.');
+      }
+    } catch (e) {
+      notificar('error', e instanceof Error ? e.message : 'No se pudo restablecer la contraseña');
+    }
+  };
+
+  const eliminarUsuario = async (m: { id: unknown; nombre_completo?: unknown; email: unknown }) => {
+    if (!window.confirm(`¿Eliminar la cuenta de ${String(m.nombre_completo || m.email)}? Esta acción no se puede deshacer.`)) return;
+    try {
+      const r = await api.eliminarUsuarioPyme(String(m.id));
+      if (r.ok) {
+        setCredenciales(prev => {
+          const copia = { ...prev };
+          delete copia[String(m.id)];
+          return copia;
+        });
+        notificar('ok', `Usuario ${String(m.email)} eliminado`);
+        await cargarEquipo();
+      }
+    } catch (e) {
+      notificar('error', e instanceof Error ? e.message : 'No se pudo eliminar el usuario');
     }
   };
 
@@ -187,14 +235,18 @@ export default function ERPConfiguracion() {
         rol: formNuevoUsuario.rol,
       });
       if (ok && usuario) {
-        setCredencialTemporal({ email: usuario.email, password: password_temporal, pagina: pagina_acceso });
+        setCredenciales(prev => ({
+          ...prev,
+          [usuario.id]: { nombre: usuario.nombre_completo, email: usuario.email, password: password_temporal, pagina: pagina_acceso },
+        }));
+        setCredencialModal({ id: usuario.id, nombre: usuario.nombre_completo, email: usuario.email, password: password_temporal, pagina: pagina_acceso });
         setFormNuevoUsuario({ nombre: '', apellido: '', email: '', rol: 'vendedor' });
         setMostrarFormNuevoUsuario(false);
         // Regla de estructura de roles: al crear usuarios dentro de su cuenta, el
         // emprendedor pasa a ser PYME / Pequeña Empresa (rol dueño).
         if (promocion_pyme) {
           await recargarPerfil();
-          notificar('ok', `Usuario creado. Copia sus credenciales. ¡Tu cuenta ahora es una PYME / Pequeña Empresa!`);
+          notificar('ok', 'Usuario creado. Copia sus credenciales. ¡Tu cuenta ahora es una PYME / Pequeña Empresa!');
         } else {
           notificar('ok', 'Usuario creado. Copia sus credenciales antes de cerrar');
         }
@@ -645,62 +697,6 @@ export default function ERPConfiguracion() {
               </div>
             ) : null}
 
-            {/* Credenciales del último miembro creado: se muestran una sola vez */}
-            {credencialTemporal ? (
-              <div className="p-5 rounded-2xl border border-success/40 bg-success/10">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex gap-3 min-w-0 flex-1">
-                    <span className="material-symbols-outlined text-success">key</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-on-surface text-sm">Copia estas credenciales y entrégalas al nuevo miembro</p>
-                      <p className="mt-1 text-xs text-on-surface-variant">
-                        Se muestran una sola vez: la contraseña no se puede recuperar después.
-                      </p>
-                      <div className="mt-3 space-y-2">
-                        {([
-                          { campo: 'pagina', etiqueta: 'Página de acceso', valor: credencialTemporal.pagina },
-                          { campo: 'correo', etiqueta: 'Correo', valor: credencialTemporal.email },
-                          { campo: 'contrasena', etiqueta: 'Contraseña', valor: credencialTemporal.password },
-                        ] as const).map(({ campo, etiqueta, valor }) => (
-                          <div
-                            key={campo}
-                            className="flex items-center justify-between gap-3 rounded-xl bg-surface-container-lowest border border-outline-variant/30 px-3 py-2"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">{etiqueta}</p>
-                              <p className="font-mono text-sm font-bold text-on-surface break-all">{valor}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => copiarCredencial(campo, valor)}
-                              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
-                                copiado === campo
-                                  ? 'bg-success-container text-on-success-container'
-                                  : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
-                              }`}
-                            >
-                              <span className="material-symbols-outlined text-base">
-                                {copiado === campo ? 'check' : 'content_copy'}
-                              </span>
-                              {copiado === campo ? 'Copiado' : 'Copiar'}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCredencialTemporal(null)}
-                    aria-label="Cerrar"
-                    className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container"
-                  >
-                    <span className="material-symbols-outlined">close</span>
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
             {puedeGestionarEquipo ? (
               equipo === null ? (
                 <div className="p-8 text-center text-on-surface-variant text-sm">
@@ -716,7 +712,7 @@ export default function ERPConfiguracion() {
                         <th className="px-8 py-4 font-bold uppercase text-[10px]">Email</th>
                         <th className="px-8 py-4 font-bold uppercase text-[10px]">Rol</th>
                         <th className="px-8 py-4 font-bold uppercase text-[10px]">Estado</th>
-                        <th className="px-8 py-4 font-bold uppercase text-[10px] text-right">Suscripción</th>
+                        <th className="px-8 py-4 font-bold uppercase text-[10px] text-right">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/10">
@@ -737,8 +733,36 @@ export default function ERPConfiguracion() {
                               {m.activo ? 'Activo' : 'Inactivo'}
                             </span>
                           </td>
-                          <td className="px-8 py-4 text-right text-xs font-bold text-on-surface-variant capitalize">
-                            {planPorId(String(m.membresia_nivel ?? 'free')).nombre}
+                          <td className="px-8 py-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => abrirCredenciales(m)}
+                                title="Ver credenciales"
+                                aria-label="Ver credenciales"
+                                className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-lg">key</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => restablecerPassword(m)}
+                                title="Restablecer contraseña"
+                                aria-label="Restablecer contraseña"
+                                className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-lg">lock_reset</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => eliminarUsuario(m)}
+                                title="Eliminar usuario"
+                                aria-label="Eliminar usuario"
+                                className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-lg">delete</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -769,6 +793,108 @@ export default function ERPConfiguracion() {
                 </Link>
               </div>
             )}
+
+            {/* Pestaña emergente: credenciales del miembro (se muestran una sola vez) */}
+            {credencialModal ? (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                onClick={() => setCredencialModal(null)}
+              >
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Credenciales de acceso"
+                  className="w-full max-w-md rounded-3xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-2xl"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
+                        <span className="material-symbols-outlined text-primary">key</span>
+                      </span>
+                      <div>
+                        <p className="font-bold text-on-surface">Credenciales de acceso</p>
+                        <p className="text-xs text-on-surface-variant">{credencialModal.nombre}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCredencialModal(null)}
+                      aria-label="Cerrar"
+                      className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container"
+                    >
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+
+                  <p className="mt-4 text-xs text-on-surface-variant">
+                    Copia estas credenciales y entrégalas al nuevo miembro. Se muestran una sola vez:
+                    la contraseña no se puede recuperar después.
+                  </p>
+
+                  <div className="mt-4 space-y-2">
+                    {([
+                      { campo: 'pagina', etiqueta: 'Página de acceso', valor: credencialModal.pagina },
+                      { campo: 'correo', etiqueta: 'Correo', valor: credencialModal.email },
+                      ...(credencialModal.password ? [{ campo: 'contrasena', etiqueta: 'Contraseña', valor: credencialModal.password }] : []),
+                    ] as const).map(({ campo, etiqueta, valor }) => (
+                      <div
+                        key={campo}
+                        className="flex items-center justify-between gap-3 rounded-xl bg-surface-container-low border border-outline-variant/30 px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">{etiqueta}</p>
+                          <p className="font-mono text-sm font-bold text-on-surface break-all">{valor}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => copiarCredencial(campo, valor)}
+                          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                            copiado === campo
+                              ? 'bg-success-container text-on-success-container'
+                              : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-base">
+                            {copiado === campo ? 'check' : 'content_copy'}
+                          </span>
+                          {copiado === campo ? 'Copiado' : 'Copiar'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {!credencialModal.password ? (
+                    <div className="mt-3 rounded-xl border border-outline-variant/30 bg-surface-container-low/60 p-3">
+                      <p className="text-xs text-on-surface-variant">
+                        La contraseña no se puede volver a mostrar por seguridad.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const m = (equipo ?? []).find(x => String(x.id) === credencialModal.id);
+                          if (m) restablecerPassword(m);
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-on-primary hover:opacity-90"
+                      >
+                        <span className="material-symbols-outlined text-base">lock_reset</span>
+                        Restablecer contraseña
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-5 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setCredencialModal(null)}
+                      className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-primary hover:opacity-90"
+                    >
+                      Listo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

@@ -141,8 +141,11 @@ con los permisos que defina el titular. La transición se audita en `cuentas.aud
 
 Cada miembro se crea con su **correo personal** (es su usuario de acceso). La contraseña se genera
 automáticamente y, junto con el correo y la página de acceso (`www.pymedu.cl`, la misma que el resto
-de la plataforma; el rol define lo que se ve), se muestra **una sola vez en pantalla** con botones
-de copiar para que el titular los entregue al miembro.
+de la plataforma; el rol define lo que se ve), se muestra **una sola vez en pantalla**, en una
+pestaña emergente con botones de copiar, para que el titular los entregue al miembro. En la tabla
+del equipo cada miembro tiene tres acciones: **ver credenciales** (`key`), **restablecer contraseña**
+(genera una nueva y la muestra en la misma pestaña emergente) y **eliminar usuario** (borra la
+cuenta local y su asignación de rol; el titular permanece como PYME).
 
 Para el superadmin, las cuentas locales **no aparecen como usuarios independientes** en
 *Usuarios Globales* ni en los conteos por rol (`GET /api/perfiles` las excluye por defecto); se

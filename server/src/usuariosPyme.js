@@ -42,6 +42,18 @@ function generarPasswordTemporal() {
   return `Pyme-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
 }
 
+/** Miembro del equipo del titular actual (o null). */
+function miembroDelTitular(titularId, id) {
+  return db.prepare(
+    'SELECT id, email, nombre_completo, rol FROM perfiles WHERE id = ? AND reporta_a = ?'
+  ).get(id, titularId);
+}
+
+/** Página de acceso: la misma para todos los roles. */
+function paginaAcceso() {
+  return `${process.env.FRONT_URL || 'https://www.pymedu.cl'}/login`;
+}
+
 /** Miembros creados dentro de la cuenta del titular (perfiles.reporta_a). */
 router.get('/pyme', soloTitular, async (req, res) => {
   try {
@@ -148,7 +160,7 @@ router.post('/pyme', soloTitular, async (req, res) => {
       usuario,
       // Contraseña generada: se muestra una sola vez en pantalla para copiarla.
       password_temporal: contrasena,
-      pagina_acceso: `${process.env.FRONT_URL || 'https://www.pymedu.cl'}/login`,
+      pagina_acceso: paginaAcceso(),
       ...(promocionPyme ? { promocion_pyme: true, perfil: sanitizarPerfil(perfil) } : {}),
     });
   } catch (error) {
@@ -156,6 +168,50 @@ router.post('/pyme', soloTitular, async (req, res) => {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'El email ya está registrado.' });
     }
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/** Restablece la contraseña de un miembro: genera una nueva y la entrega una sola vez. */
+router.post('/pyme/:id/restablecer-password', soloTitular, async (req, res) => {
+  try {
+    const miembro = await miembroDelTitular(req.perfil.id, req.params.id);
+    if (!miembro) {
+      return res.status(404).json({ error: 'Usuario no encontrado en tu equipo.' });
+    }
+    const contrasena = generarPasswordTemporal();
+    await db.prepare(`
+      UPDATE perfiles SET password_hash = ?, acceso_revocado_at = NULL,
+        updated_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+      WHERE id = ?
+    `).run(bcrypt.hashSync(contrasena, 10), miembro.id);
+
+    res.json({
+      ok: true,
+      usuario: miembro,
+      password_temporal: contrasena,
+      pagina_acceso: paginaAcceso(),
+    });
+  } catch (error) {
+    console.error('[pyme] Error restableciendo contraseña:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/** Elimina una cuenta local del equipo del titular. */
+router.delete('/pyme/:id', soloTitular, async (req, res) => {
+  try {
+    const miembro = await miembroDelTitular(req.perfil.id, req.params.id);
+    if (!miembro) {
+      return res.status(404).json({ error: 'Usuario no encontrado en tu equipo.' });
+    }
+    // asignacion_rol no tiene FK a perfiles: se limpia a mano (el resto cascada).
+    await db.prepare('DELETE FROM cuentas.asignacion_rol WHERE usuario_id = ?').run(miembro.id);
+    await db.prepare('DELETE FROM perfiles WHERE id = ? AND reporta_a = ?').run(miembro.id, req.perfil.id);
+
+    res.json({ ok: true, usuario: miembro });
+  } catch (error) {
+    console.error('[pyme] Error eliminando usuario del equipo:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

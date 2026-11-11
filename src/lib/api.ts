@@ -216,6 +216,25 @@ export const api = {
       '/api/usuarios/pyme'
     ),
 
+  /** Genera una nueva contraseña temporal para un miembro (se muestra una sola vez). */
+  restablecerPasswordPyme: (id: string) =>
+    request<{
+      ok: boolean;
+      usuario: { id: string; email: string; nombre_completo: string; rol: string };
+      password_temporal: string;
+      pagina_acceso: string;
+    }>(
+      `/api/usuarios/pyme/${encodeURIComponent(id)}/restablecer-password`,
+      { method: 'POST', ...json({}) }
+    ),
+
+  /** Elimina una cuenta local del equipo del titular. */
+  eliminarUsuarioPyme: (id: string) =>
+    request<{ ok: boolean; usuario: { id: string; email: string; nombre_completo: string; rol: string } }>(
+      `/api/usuarios/pyme/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    ),
+
   // ── Pagos Webpay ──────────────────────────────────────
   crearPagoWebpay: (plan: string, usuario_id: string, email: string) =>
     request<{ token_ws: string; url: string; monto: number; plan: string; buy_order: string }>(
