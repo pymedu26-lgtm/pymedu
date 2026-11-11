@@ -6,10 +6,11 @@ import { CATEGORIAS, CONFIG_ALERTAS_DEFECTO } from '../../1.-ERP/services/alerta
 import { api } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import SelectorDesplegable from '../../components/SelectorDesplegable';
+import GestorRoles from '../../components/GestorRoles';
 import { formatCLP, formatFecha } from '../../lib/fechas';
 import { PLANES, planPorId, WEBPAY_MODO_PRUEBA } from '../../lib/planes';
 
-type Tab = 'negocio' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion' | 'inventario' | 'alertas';
+type Tab = 'negocio' | 'roles' | 'cuenta' | 'equipo' | 'integraciones' | 'facturacion' | 'inventario' | 'alertas';
 
 const RUBROS = [
   'Alimentación y Bebidas', 'Comercio Minorista', 'Servicios Profesionales',
@@ -58,6 +59,7 @@ const MODO_SII: Record<string, string> = {
 
 const TABS: { id: Tab; icono: string; label: string }[] = [
   { id: 'negocio', icono: 'storefront', label: 'Mi Negocio' },
+  { id: 'roles', icono: 'admin_panel_settings', label: 'Roles' },
   { id: 'cuenta', icono: 'manage_accounts', label: 'Mi Cuenta' },
   { id: 'equipo', icono: 'group', label: 'Equipo' },
   { id: 'inventario', icono: 'inventory_2', label: 'Inventario' },
@@ -67,7 +69,7 @@ const TABS: { id: Tab; icono: string; label: string }[] = [
 ];
 
 export default function ERPConfiguracion() {
-  const { perfil, actualizarPerfil, puedeHacer } = useAuth();
+  const { perfil, actualizarPerfil, puedeHacer, tienePermiso } = useAuth();
   const {
     configuracionCumplimiento, updatePpmTasa, metodoCosteo, setMetodoCosteo, politicaEnvaseAbierto, permitirMezclarEnvases, setPoliticaInventario,
     plantillasSubcategoria, actualizarPlantilla, eliminarPlantilla, margenObjetivo, setMargenObjetivo, configAlertas, setConfigAlertas,
@@ -257,6 +259,9 @@ export default function ERPConfiguracion() {
     }
   };
 
+  // ══ Roles: crear roles y permisos del equipo ═════════════════════════════════════════════════════════════════════════════
+  const puedeGestionarRoles = tienePermiso('roles.gestionar');
+
   // ══ Equipo ════════════════════════════════════════
   const puedeGestionarEquipo = !!perfil && (
     ['superadmin', 'admin_institucional', 'emprendedor', 'dueño'].includes(perfil.rol)
@@ -336,7 +341,7 @@ export default function ERPConfiguracion() {
       {/* Tabs tipo chips, mismo estilo que el centro de alertas */}
       <div className="space-y-6">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 hide-scrollbar sm:mx-0 sm:flex-wrap sm:px-0" role="tablist" aria-label="Secciones de configuración">
-          {TABS.map(({ id, icono, label }) => (
+          {TABS.filter(({ id }) => id !== 'roles' || puedeGestionarRoles).map(({ id, icono, label }) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
               className={cn('inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-xs font-bold transition-colors',
                 tab === id
@@ -465,6 +470,29 @@ export default function ERPConfiguracion() {
             {guardando ? <span className="material-symbols-outlined animate-spin">autorenew</span> : <span className="material-symbols-outlined">save</span>}
             Guardar cambios
           </button>
+        </div>
+      )}
+
+      {/* ══ Roles: crear roles y permisos de lo que cada uno puede hacer y revisar ══ */}
+      {tab === 'roles' && (
+        <div className="bg-surface-container-lowest dark-card rounded-3xl border border-outline-variant/20 shadow-sm">
+          {puedeGestionarRoles ? (
+            <GestorRoles ambitoInicial="negocio" titulo="Roles y permisos del equipo" compacto />
+          ) : (
+            <div className="p-8 space-y-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
+                </div>
+                <div>
+                  <p className="font-bold text-on-surface">No puedes gestionar roles</p>
+                  <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
+                    Solo el administrador del negocio puede crear roles y definir los permisos del equipo.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -14,7 +14,7 @@ const APPS_POR_AMBITO: Record<Ambito, string[] | null> = { plataforma: null, ins
  * un subrol solo puede quitar permisos de su padre y los roles de sistema no se editan.
  * Se usa en Superadmin → Roles y en ERP → Equipo (ámbito negocio).
  */
-export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Roles y permisos' }: { ambitoInicial?: Ambito; titulo?: string }) {
+export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Roles y permisos', compacto = false }: { ambitoInicial?: Ambito; titulo?: string; compacto?: boolean }) {
   const [catalogo, setCatalogo] = useState<{ permisos: PermisoApi[]; modulos: Record<string, { label: string; icon: string }>; mios: Set<string> } | null>(null);
   const [roles, setRoles] = useState<RolApi[]>([]);
   const [seleccion, setSeleccion] = useState<string | null>(null);
@@ -84,14 +84,24 @@ export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Ro
   ].filter(g => g.lista.length);
 
   return (
-    <div className="space-y-6 p-4 sm:p-8">
+    <div className={cn('space-y-6', !compacto && 'p-4 sm:p-8')}>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-3 text-3xl font-extrabold text-primary">
-            <span className="material-symbols-outlined text-4xl">admin_panel_settings</span>{titulo}
-          </h2>
-          <p className="mt-1 text-sm text-on-surface-variant">Crea roles y subroles combinando permisos del catálogo. Nadie puede dar un permiso que no tiene.</p>
-        </div>
+        {compacto ? (
+          <div>
+            <h3 className="flex items-center gap-2 text-lg font-bold text-on-surface">
+              <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
+              {titulo}
+            </h3>
+            <p className="mt-1 text-sm text-on-surface-variant">Crea roles y subroles combinando permisos del catálogo. Nadie puede dar un permiso que no tiene.</p>
+          </div>
+        ) : (
+          <div>
+            <h2 className="flex items-center gap-3 text-3xl font-extrabold text-primary">
+              <span className="material-symbols-outlined text-4xl">admin_panel_settings</span>{titulo}
+            </h2>
+            <p className="mt-1 text-sm text-on-surface-variant">Crea roles y subroles combinando permisos del catálogo. Nadie puede dar un permiso que no tiene.</p>
+          </div>
+        )}
         <button onClick={() => setNuevo({ nombre: '', ambito: ambitoInicial, padre: '' })}
           className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-inverse-on-surface shadow-sm">
           <span className="material-symbols-outlined text-lg">add</span>Nuevo rol
