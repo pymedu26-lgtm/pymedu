@@ -32,9 +32,26 @@ function soloTitular(req, res, next) {
   return next();
 }
 
-/** Email del nuevo miembro: su correo personal (con ese entra a PymEdu). */
-function emailValido(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email ?? '').trim().toLowerCase());
+/** Email del miembro: se genera como inicial.apellido@pymedu.cl (con número si ya existe). */
+function normalizarTexto(texto) {
+  return String(texto ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+async function generarEmailMiembro(nombre, apellido) {
+  const inicial = normalizarTexto(nombre).charAt(0) || 'u';
+  const ap = normalizarTexto(apellido) || 'equipo';
+  const base = `${inicial}.${ap}`;
+  let email = `${base}@pymedu.cl`;
+  let n = 2;
+  while (await db.prepare('SELECT 1 FROM perfiles WHERE email = ?').get(email)) {
+    email = `${base}${n}@pymedu.cl`;
+    n += 1;
+  }
+  return email;
 }
 
 /** Contraseña temporal entregable al titular cuando no define una para el nuevo miembro. */
@@ -70,20 +87,12 @@ router.get('/pyme', soloTitular, async (req, res) => {
 
 router.post('/pyme', soloTitular, async (req, res) => {
   try {
-    const { nombre, apellido, rol, email } = req.body ?? {};
+    const { nombre, apellido, rol } = req.body ?? {};
     const nombreLimpio = String(nombre ?? '').trim();
     const apellidoLimpio = String(apellido ?? '').trim();
-    const emailLimpio = String(email ?? '').trim().toLowerCase();
 
     if (!nombreLimpio || !apellidoLimpio) {
       return res.status(400).json({ error: 'Nombre y apellido son obligatorios.' });
-    }
-    if (!emailValido(emailLimpio)) {
-      return res.status(400).json({ error: 'Ingresa un correo personal válido para el nuevo miembro.' });
-    }
-    const ocupado = await db.prepare('SELECT id FROM perfiles WHERE email = ?').get(emailLimpio);
-    if (ocupado) {
-      return res.status(409).json({ error: 'Ese correo ya tiene una cuenta en PymEdu.' });
     }
     if (!ROLES_EQUIPO.includes(rol)) {
       return res.status(400).json({ error: `Rol de equipo inválido: ${rol}. Puede crear vendedor, gestor (bodeguero) o empleado (asistente).` });
@@ -92,6 +101,8 @@ router.post('/pyme', soloTitular, async (req, res) => {
     if (!req.perfil.negocio_nombre || !req.perfil.negocio_rut || !req.perfil.negocio_rubro) {
       return res.status(400).json({ error: 'Completa primero los datos del negocio (nombre, RUT y rubro) en Mi Negocio.' });
     }
+    // Correo de acceso generado: inicial.apellido@pymedu.cl (con número si ya existe).
+    const emailLimpio = await generarEmailMiembro(nombreLimpio, apellidoLimpio);
     // La contraseña siempre se genera automáticamente: se muestra una sola vez
     // en pantalla (con el correo y la página de acceso) para copiarla y entregarla.
     const contrasena = generarPasswordTemporal();
