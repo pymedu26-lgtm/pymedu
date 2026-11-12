@@ -191,11 +191,16 @@ export const api = {
   crearUsuarioPyme: (datos: {
     nombre: string;
     apellido: string;
-    rol: 'vendedor' | 'gestor' | 'empleado';
+    /** Rol local del negocio (id). Es la vía nueva: permite roles de ejemplo editables. */
+    rol_id?: string;
+    /** Código base del rol (compatibilidad). */
+    rol?: 'vendedor' | 'gestor' | 'empleado' | 'contador_externo';
   }) =>
     request<{
       ok: boolean;
       usuario: { id: string; email: string; nombre_completo: string; rol: string };
+      rol_id?: string | null;
+      rol_nombre?: string | null;
       /** Clave generada automáticamente: se muestra una sola vez para copiarla. */
       password_temporal: string;
       /** Página de acceso del nuevo miembro (misma que el resto de la plataforma). */
@@ -210,7 +215,7 @@ export const api = {
 
   /** Miembros creados dentro de la cuenta del titular (perfiles.reporta_a). */
   getUsuariosPyme: () =>
-    request<{ data: { id: string; email: string; nombre_completo: string; rol: string; activo: number; membresia_nivel: string }[] }>(
+    request<{ data: { id: string; email: string; nombre_completo: string; rol: string; rol_id?: string | null; rol_nombre?: string | null; activo: number; membresia_nivel: string }[] }>(
       '/api/usuarios/pyme'
     ),
 

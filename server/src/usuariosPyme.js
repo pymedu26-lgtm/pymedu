@@ -9,20 +9,20 @@ import bcrypt from 'bcrypt';
 import db from './db.js';
 import { requireAuth, sanitizarPerfil } from './auth.js';
 import { auditarRol } from './cuentas/servicio.js';
+import { asegurarNegocioPyme, ROLES_TITULAR } from './cuentas/negocio.js';
 
 const router = Router();
 router.use(requireAuth);
 
-/** Roles de equipo que el titular puede crear (guía VAR1/VAR2/VAR3). */
-const ROLES_EQUIPO = ['vendedor', 'gestor', 'empleado'];
-/** Titular del negocio: emprendedor individual o dueño de PYME ('dueno' tolerado por migraciones). */
-const ROLES_TITULAR = ['emprendedor', 'dueño', 'dueno'];
+/** Códigos base de los roles de equipo (guía VAR1/VAR2/VAR3 + contador). */
+const ROLES_EQUIPO = ['vendedor', 'gestor', 'empleado', 'contador_externo'];
 
 /** Flags del plan por defecto según el rol del nuevo miembro (espejo de permisosApp en src/lib/roles.ts). */
 const FLAGS_POR_ROL = {
   vendedor: { puede_ver_remuneraciones: 0, puede_ver_caja: 1, puede_ver_reportes: 0, puede_crear_ventas: 1, puede_crear_gastos: 0 },
   gestor: { puede_ver_remuneraciones: 0, puede_ver_caja: 1, puede_ver_reportes: 1, puede_crear_ventas: 1, puede_crear_gastos: 1 },
   empleado: { puede_ver_remuneraciones: 1, puede_ver_caja: 0, puede_ver_reportes: 0, puede_crear_ventas: 0, puede_crear_gastos: 0 },
+  contador_externo: { puede_ver_remuneraciones: 0, puede_ver_caja: 1, puede_ver_reportes: 1, puede_crear_ventas: 0, puede_crear_gastos: 0 },
 };
 
 function soloTitular(req, res, next) {
@@ -75,8 +75,15 @@ function paginaAcceso() {
 router.get('/pyme', soloTitular, async (req, res) => {
   try {
     const filas = await db.prepare(`
-      SELECT id, email, nombre_completo, rol, activo, membresia_nivel, created_at
-      FROM perfiles WHERE reporta_a = ? ORDER BY created_at
+      SELECT p.id, p.email, p.nombre_completo, p.rol, p.activo, p.membresia_nivel, p.created_at,
+        (SELECT a.rol_id FROM cuentas.asignacion_rol a
+          WHERE a.usuario_id = p.id
+          ORDER BY (a.organizacion_id IS NOT NULL) DESC, a.otorgado_en LIMIT 1) AS rol_id,
+        (SELECT r.nombre FROM cuentas.asignacion_rol a
+          JOIN cuentas.rol r ON r.id = a.rol_id
+          WHERE a.usuario_id = p.id
+          ORDER BY (a.organizacion_id IS NOT NULL) DESC, a.otorgado_en LIMIT 1) AS rol_nombre
+      FROM perfiles p WHERE p.reporta_a = ? ORDER BY p.created_at
     `).all(req.perfil.id);
     res.json({ data: filas });
   } catch (error) {
@@ -87,20 +94,42 @@ router.get('/pyme', soloTitular, async (req, res) => {
 
 router.post('/pyme', soloTitular, async (req, res) => {
   try {
-    const { nombre, apellido, rol } = req.body ?? {};
+    const { nombre, apellido, rol, rol_id } = req.body ?? {};
     const nombreLimpio = String(nombre ?? '').trim();
     const apellidoLimpio = String(apellido ?? '').trim();
 
     if (!nombreLimpio || !apellidoLimpio) {
       return res.status(400).json({ error: 'Nombre y apellido son obligatorios.' });
     }
-    if (!ROLES_EQUIPO.includes(rol)) {
-      return res.status(400).json({ error: `Rol de equipo inválido: ${rol}. Puede crear vendedor, gestor (bodeguero) o empleado (asistente).` });
-    }
     // El negocio debe estar configurado (mismo requisito que el tab Equipo del ERP).
     if (!req.perfil.negocio_nombre || !req.perfil.negocio_rut || !req.perfil.negocio_rubro) {
       return res.status(400).json({ error: 'Completa primero los datos del negocio (nombre, RUT y rubro) en Mi Negocio.' });
     }
+
+    // Organización del negocio + roles de ejemplo editables (idempotente).
+    const org = await asegurarNegocioPyme(req.perfil);
+
+    // Rol local del negocio: por id (roles de ejemplo o creados por el admin) o por código.
+    let rolLocal = null;
+    if (rol_id) {
+      rolLocal = await db.prepare(
+        'SELECT id, codigo, nombre FROM cuentas.rol WHERE id = ? AND organizacion_id = ? AND activo'
+      ).get(String(rol_id), org.id);
+      if (!rolLocal) {
+        return res.status(400).json({ error: 'El rol seleccionado no pertenece a tu negocio.' });
+      }
+    } else {
+      if (!ROLES_EQUIPO.includes(rol)) {
+        return res.status(400).json({ error: `Rol de equipo inválido: ${rol}. Puede crear vendedor, bodeguero, contador o asistente.` });
+      }
+      rolLocal = await db.prepare(
+        'SELECT id, codigo, nombre FROM cuentas.rol WHERE organizacion_id = ? AND codigo = ? AND activo'
+      ).get(org.id, rol);
+    }
+    // perfiles.rol conserva un código base conocido por el resto de la app.
+    const codigoPerfil = ROLES_EQUIPO.includes(rolLocal?.codigo) ? rolLocal.codigo : 'empleado';
+    const flags = FLAGS_POR_ROL[codigoPerfil];
+
     // Correo de acceso generado: inicial.apellido@pymedu.cl (con número si ya existe).
     const emailLimpio = await generarEmailMiembro(nombreLimpio, apellidoLimpio);
     // La contraseña siempre se genera automáticamente: se muestra una sola vez
@@ -108,7 +137,6 @@ router.post('/pyme', soloTitular, async (req, res) => {
     const contrasena = generarPasswordTemporal();
 
     const id = randomUUID();
-    const flags = FLAGS_POR_ROL[rol];
 
     await db.prepare(`
       INSERT INTO perfiles
@@ -119,19 +147,26 @@ router.post('/pyme', soloTitular, async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, 1, 'free', 'C', ?, ?, ?, ?, ?)
     `).run(
       id, emailLimpio, bcrypt.hashSync(contrasena, 10), `${nombreLimpio} ${apellidoLimpio}`,
-      rol, req.perfil.id,
+      codigoPerfil, req.perfil.id,
       flags.puede_ver_remuneraciones, flags.puede_ver_caja, flags.puede_ver_reportes,
       flags.puede_crear_ventas, flags.puede_crear_gastos
     );
 
-    // Rol dinámico del nuevo miembro: plantilla de sistema equivalente a su rol
-    // (mismo patrón que la siembra del núcleo en server/src/seeds/nucleo.js).
-    await db.prepare(`
-      INSERT INTO cuentas.asignacion_rol (usuario_id, rol_id, organizacion_id, otorgado_por)
-      SELECT ?, r.id, NULL, ?
-      FROM cuentas.rol r WHERE r.organizacion_id IS NULL AND r.codigo = ?
-      ON CONFLICT DO NOTHING
-    `).run(id, req.perfil.id, rol);
+    // Rol dinámico del nuevo miembro: el rol local del negocio (editable por el
+    // administrador). Respaldo: plantilla global equivalente si no existiera.
+    if (rolLocal) {
+      await db.prepare(`
+        INSERT INTO cuentas.asignacion_rol (usuario_id, rol_id, organizacion_id, otorgado_por)
+        VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING
+      `).run(id, rolLocal.id, org.id, req.perfil.id);
+    } else {
+      await db.prepare(`
+        INSERT INTO cuentas.asignacion_rol (usuario_id, rol_id, organizacion_id, otorgado_por)
+        SELECT ?, r.id, NULL, ?
+        FROM cuentas.rol r WHERE r.organizacion_id IS NULL AND r.codigo = ?
+        ON CONFLICT DO NOTHING
+      `).run(id, req.perfil.id, codigoPerfil);
+    }
 
     // ── REGLA DE ESTRUCTURA DE ROLES ──
     // Al crear usuarios dentro de su misma cuenta, el EMPRENDEDOR pasa a ser
@@ -169,6 +204,8 @@ router.post('/pyme', soloTitular, async (req, res) => {
     res.status(201).json({
       ok: true,
       usuario,
+      rol_id: rolLocal?.id ?? null,
+      rol_nombre: rolLocal?.nombre ?? null,
       // Contraseña generada: se muestra una sola vez en pantalla para copiarla.
       password_temporal: contrasena,
       pagina_acceso: paginaAcceso(),

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type PermisoApi, type RolApi } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
 import { formatFecha } from '../lib/fechas';
 
@@ -15,6 +16,11 @@ const APPS_POR_AMBITO: Record<Ambito, string[] | null> = { plataforma: null, ins
  * Se usa en Superadmin → Roles y en ERP → Equipo (ámbito negocio).
  */
 export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Roles y permisos', compacto = false }: { ambitoInicial?: Ambito; titulo?: string; compacto?: boolean }) {
+  const { tienePermiso, perfil } = useAuth();
+  // Los administradores conocidos pueden ver la pantalla mientras cargan los permisos;
+  // el servidor sigue siendo la autoridad final para guardar cambios.
+  const esAdministrador = ['superadmin', 'admin_institucional', 'emprendedor', 'dueño', 'dueno'].includes(String(perfil?.rol));
+  const puedeGestionar = tienePermiso('roles.gestionar') || esAdministrador;
   const [catalogo, setCatalogo] = useState<{ permisos: PermisoApi[]; modulos: Record<string, { label: string; icon: string }>; mios: Set<string> } | null>(null);
   const [roles, setRoles] = useState<RolApi[]>([]);
   const [seleccion, setSeleccion] = useState<string | null>(null);
@@ -29,7 +35,11 @@ export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Ro
     try {
       const [c, r] = await Promise.all([api.rolesCatalogo(), api.roles()]);
       setCatalogo({ permisos: c.data, modulos: c.modulos, mios: new Set(c.mios) });
-      const visibles = ambitoInicial === 'plataforma' ? r.data : r.data.filter(x => x.ambito === ambitoInicial);
+      // En una PYME solo se administran los roles de su negocio: las plantillas
+      // globales (Emprendedor, PYME, etc.) no aplican a las cuentas del equipo.
+      const visibles = ambitoInicial === 'plataforma'
+        ? r.data
+        : r.data.filter(x => x.ambito === ambitoInicial && (ambitoInicial !== 'negocio' || !!x.organizacion_id));
       setRoles(visibles);
       const elegido = visibles.find(x => x.id === (mantener ?? seleccion)) ?? visibles[0];
       if (elegido) { setSeleccion(elegido.id); setBorrador(new Set(elegido.permisos)); }
@@ -39,7 +49,7 @@ export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Ro
     }
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { if (puedeGestionar) cargar(); }, [puedeGestionar]);
 
   const rol = roles.find(r => r.id === seleccion) ?? null;
   const padre = rol?.rol_padre_id ? roles.find(r => r.id === rol.rol_padre_id) : null;
@@ -74,14 +84,21 @@ export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Ro
     } finally { setGuardando(false); }
   };
 
+  if (!puedeGestionar) {
+    return <div className="p-8 text-sm text-on-surface-variant">Solo el administrador del negocio puede gestionar los roles del equipo.</div>;
+  }
+
   if (!catalogo) {
     return <div className="p-8 text-sm text-on-surface-variant">{error || 'Cargando roles…'}</div>;
   }
 
-  const grupos = [
-    { titulo: 'Plantillas de plataforma', lista: roles.filter(r => !r.organizacion_id) },
-    { titulo: 'De tu organización', lista: roles.filter(r => r.organizacion_id) },
-  ].filter(g => g.lista.length);
+  const grupos = (ambitoInicial === 'negocio'
+    ? [{ titulo: 'Roles de tu negocio', lista: roles }]
+    : [
+      { titulo: 'Plantillas de plataforma', lista: roles.filter(r => !r.organizacion_id) },
+      { titulo: 'De tu organización', lista: roles.filter(r => r.organizacion_id) },
+    ]
+  ).filter(g => g.lista.length);
 
   return (
     <div className={cn('space-y-6', !compacto && 'p-4 sm:p-8')}>
@@ -92,14 +109,22 @@ export default function GestorRoles({ ambitoInicial = 'plataforma', titulo = 'Ro
               <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
               {titulo}
             </h3>
-            <p className="mt-1 text-sm text-on-surface-variant">Crea roles y subroles combinando permisos del catálogo. Nadie puede dar un permiso que no tiene.</p>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              {ambitoInicial === 'negocio'
+                ? 'Roles de ejemplo para tu equipo (Vendedor, Bodeguero, Contador, Asistente). Edita sus permisos y se aplican a las cuentas de tu negocio.'
+                : 'Crea roles y subroles combinando permisos del catálogo. Nadie puede dar un permiso que no tiene.'}
+            </p>
           </div>
         ) : (
           <div>
             <h2 className="flex items-center gap-3 text-3xl font-extrabold text-primary">
               <span className="material-symbols-outlined text-4xl">admin_panel_settings</span>{titulo}
             </h2>
-            <p className="mt-1 text-sm text-on-surface-variant">Crea roles y subroles combinando permisos del catálogo. Nadie puede dar un permiso que no tiene.</p>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              {ambitoInicial === 'negocio'
+                ? 'Roles de ejemplo para tu equipo (Vendedor, Bodeguero, Contador, Asistente). Edita sus permisos y se aplican a las cuentas de tu negocio.'
+                : 'Crea roles y subroles combinando permisos del catálogo. Nadie puede dar un permiso que no tiene.'}
+            </p>
           </div>
         )}
         <button onClick={() => setNuevo({ nombre: '', ambito: ambitoInicial, padre: '' })}

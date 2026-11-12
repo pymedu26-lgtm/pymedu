@@ -6,9 +6,20 @@ import db from '../db.js';
 import { requireAuth } from '../auth.js';
 import { MODULOS, PERMISOS } from './permisos.js';
 import { permisosDe, requierePermiso, organizacionActiva, auditarRol } from './servicio.js';
+import { asegurarNegocioPyme, ROLES_TITULAR } from './negocio.js';
 
 const router = Router();
 router.use(requireAuth);
+
+/**
+ * Organización sobre la que se gestionan roles. Para el titular de una PYME es la
+ * organización de su negocio (roles de ejemplo editables); para el resto, la de
+ * siempre (institución, proveedor o plataforma).
+ */
+async function organizacionDeRoles(perfil) {
+  if (ROLES_TITULAR.includes(perfil.rol)) return asegurarNegocioPyme(perfil);
+  return organizacionActiva(perfil);
+}
 
 const APP_DE = Object.fromEntries(PERMISOS.map((p) => [p.codigo, p.app]));
 /** Módulos que el plan del negocio no incluye (los permisos aparecen bloqueados al crear roles). */
@@ -58,7 +69,7 @@ async function rolEditable(req, id) {
   if (!rol) throw falla(404, 'rol_no_encontrado');
   if (rol.es_sistema) throw falla(403, 'rol_de_sistema');
   if (req.perfil.rol !== 'superadmin') {
-    const org = await organizacionActiva(req.perfil);
+    const org = await organizacionDeRoles(req.perfil);
     if (!rol.organizacion_id || rol.organizacion_id !== org?.id) throw falla(403, 'sin_permiso');
   }
   return rol;
@@ -81,8 +92,14 @@ router.get('/permisos', manejar(async (req, res) => {
 }));
 
 router.get('/', manejar(async (req, res) => {
-  const org = await organizacionActiva(req.perfil);
-  const filtro = req.perfil.rol === 'superadmin' ? '' : 'WHERE r.organizacion_id IS NULL OR r.organizacion_id = ?';
+  const org = await organizacionDeRoles(req.perfil);
+  // La PYME administra solo los roles de su negocio: las plantillas globales
+  // (Emprendedor, PYME, etc.) no aplican a las cuentas locales del equipo.
+  const filtro = req.perfil.rol === 'superadmin'
+    ? ''
+    : org?.tipo === 'negocio'
+      ? 'WHERE r.organizacion_id = ?'
+      : 'WHERE r.organizacion_id IS NULL OR r.organizacion_id = ?';
   const filas = await db.prepare(`
     SELECT r.*, o.nombre AS organizacion_nombre,
       (SELECT count(*)::int FROM cuentas.asignacion_rol a WHERE a.rol_id = r.id) AS usuarios,
@@ -99,8 +116,10 @@ router.post('/', requierePermiso('roles.gestionar'), manejar(async (req, res) =>
   if (!['plataforma', 'institucion', 'negocio', 'proveedor'].includes(ambito)) throw falla(400, 'ambito_invalido');
   const esSuper = req.perfil.rol === 'superadmin';
   if (ambito === 'plataforma' && !esSuper) throw falla(403, 'solo_superadmin');
+  const org = esSuper && plantilla ? null : await organizacionDeRoles(req.perfil);
+  // El administrador de una PYME solo crea roles de negocio.
+  if (org?.tipo === 'negocio' && ambito !== 'negocio') throw falla(400, 'ambito_invalido');
   await validarPermisos(req, ambito, permisos, rol_padre_id);
-  const org = esSuper && plantilla ? null : await organizacionActiva(req.perfil);
   const nuevo = await db.prepare(`
     INSERT INTO cuentas.rol (nombre, descripcion, ambito, organizacion_id, rol_padre_id, es_plantilla, creado_por)
     VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`).get(String(nombre).trim(), descripcion, ambito,
@@ -115,7 +134,11 @@ router.put('/:id', requierePermiso('roles.gestionar'), manejar(async (req, res) 
   const antes = { ...rol, permisos: await permisosDeRol(rol.id) };
   const { nombre, descripcion, permisos, activo } = req.body ?? {};
   if (Array.isArray(permisos)) {
-    await validarPermisos(req, rol.ambito, permisos, rol.rol_padre_id);
+    // Al editar solo se validan los permisos NUEVOS: los que ya tenía el rol
+    // (por ejemplo, accesos base copiados de una plantilla) pueden conservarse.
+    const actuales = await permisosDeRol(rol.id);
+    const agregados = permisos.filter((c) => !actuales.includes(c));
+    await validarPermisos(req, rol.ambito, agregados, rol.rol_padre_id);
     await guardarPermisos(rol.id, permisos);
   }
   await db.prepare(`UPDATE cuentas.rol SET nombre = COALESCE(?, nombre), descripcion = COALESCE(?, descripcion),

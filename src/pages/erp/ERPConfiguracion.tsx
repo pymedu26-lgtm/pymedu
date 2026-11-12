@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useERP } from '../../1.-ERP/context/ERPContext';
 import { CATEGORIAS, CONFIG_ALERTAS_DEFECTO } from '../../1.-ERP/services/alertas';
-import { api } from '../../lib/api';
+import { api, type RolApi } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import SelectorDesplegable from '../../components/SelectorDesplegable';
 import GestorRoles from '../../components/GestorRoles';
@@ -128,20 +128,29 @@ export default function ERPConfiguracion() {
   };
 
   // ══ Equipo: crear usuarios PYME ══════════════════════════════════════════════════════════════════════════
-  const ROLES_PYME: { valor: 'vendedor' | 'gestor' | 'empleado'; label: string; icono: string }[] = [
-    { valor: 'vendedor', label: 'Vendedor (VAR1)', icono: 'point_of_sale' },
-    { valor: 'gestor', label: 'Bodeguero (VAR2)', icono: 'inventory_2' },
-    { valor: 'empleado', label: 'Asistente (VAR3)', icono: 'person' },
-  ];
-  const opcionesRolUsuario = ROLES_PYME.map(r => ({ valor: r.valor, etiqueta: r.label }));
+  // Roles del negocio (Vendedor, Bodeguero, Contador, Asistente...). Son roles locales
+  // editables por el administrador en la pestaña Roles, no las plantillas globales.
+  const [rolesEquipo, setRolesEquipo] = useState<RolApi[]>([]);
+  const opcionesRolUsuario = rolesEquipo.map(r => ({ valor: r.id, etiqueta: r.nombre }));
 
   const [formNuevoUsuario, setFormNuevoUsuario] = useState({
     nombre: '',
     apellido: '',
-    rol: 'vendedor' as 'vendedor' | 'gestor' | 'empleado',
+    rol_id: '',
   });
   const [mostrarFormNuevoUsuario, setMostrarFormNuevoUsuario] = useState(false);
   const [guardandoUsuario, setGuardandoUsuario] = useState(false);
+
+  const cargarRolesEquipo = async () => {
+    try {
+      const { data } = await api.roles();
+      const locales = data.filter(r => r.ambito === 'negocio' && !!r.organizacion_id && r.activo);
+      setRolesEquipo(locales);
+      setFormNuevoUsuario(p => ({ ...p, rol_id: p.rol_id || locales[0]?.id || '' }));
+    } catch {
+      setRolesEquipo([]);
+    }
+  };
 
   /** Correo de acceso generado: inicial.apellido@pymedu.cl (lo confirma el servidor). */
   const generarEmail = (nombre: string, apellido: string): string => {
@@ -235,18 +244,22 @@ export default function ERPConfiguracion() {
     }
     setGuardandoUsuario(true);
     try {
-      const { ok, usuario, password_temporal, pagina_acceso, promocion_pyme } = await api.crearUsuarioPyme({
+      const datosBase = {
         nombre: formNuevoUsuario.nombre.trim(),
         apellido: formNuevoUsuario.apellido.trim(),
-        rol: formNuevoUsuario.rol,
-      });
+      };
+      const { ok, usuario, password_temporal, pagina_acceso, promocion_pyme } = await api.crearUsuarioPyme(
+        formNuevoUsuario.rol_id
+          ? { ...datosBase, rol_id: formNuevoUsuario.rol_id }
+          : { ...datosBase, rol: 'vendedor' }
+      );
       if (ok && usuario) {
         setCredenciales(prev => ({
           ...prev,
           [usuario.id]: { nombre: usuario.nombre_completo, email: usuario.email, password: password_temporal, pagina: pagina_acceso },
         }));
         setCredencialModal({ id: usuario.id, nombre: usuario.nombre_completo, email: usuario.email, password: password_temporal, pagina: pagina_acceso });
-        setFormNuevoUsuario({ nombre: '', apellido: '', rol: 'vendedor' });
+        setFormNuevoUsuario({ nombre: '', apellido: '', rol_id: rolesEquipo[0]?.id ?? '' });
         setMostrarFormNuevoUsuario(false);
         // Regla de estructura de roles: al crear usuarios dentro de su cuenta, el
         // emprendedor pasa a ser PYME / Pequeña Empresa (rol dueño).
@@ -364,6 +377,8 @@ export default function ERPConfiguracion() {
     }
     // Emprendedor/dueño de PYME: su equipo son los usuarios creados en su cuenta.
     cargarEquipo();
+    // Roles de ejemplo del negocio (editables en la pestaña Roles).
+    cargarRolesEquipo();
   }, [puedeGestionarEquipo, perfil?.institucion_id, perfil?.rol]);
 
   // ══ Integraciones / SII ═══════════════════════════
@@ -696,7 +711,7 @@ export default function ERPConfiguracion() {
                     <p className="font-bold text-on-surface text-sm">Al agregar tu primer usuario, tu cuenta pasa a ser PYME / Pequeña Empresa</p>
                     <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
                       Según la estructura de roles, un emprendedor con equipo deja de ser una cuenta individual: tu cuenta pasará a ser
-                      <strong className="text-on-surface"> PYME / Pequeña Empresa</strong>, de la que serás el administrador, y podrás crear las cuentas locales de tu equipo: Vendedores (VAR1), Bodegueros (VAR2) y Asistentes (VAR3), con los permisos que tú definas.
+                      <strong className="text-on-surface"> PYME / Pequeña Empresa</strong>, de la que serás el administrador, y podrás crear las cuentas locales de tu equipo con roles de ejemplo como Vendedor, Bodeguero, Contador o Asistente, cuyos permisos editas en la pestaña Roles.
                     </p>
                   </div>
                 </div>
@@ -730,7 +745,7 @@ export default function ERPConfiguracion() {
                           </td>
                           <td className="px-8 py-4">
                             <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary capitalize">
-                              {String(m.rol ?? '—').replace(/_/g, ' ')}
+                              {String(m.rol_nombre ?? m.rol ?? '—').replace(/_/g, ' ')}
                             </span>
                           </td>
                           <td className="px-8 py-4">
@@ -1128,10 +1143,15 @@ export default function ERPConfiguracion() {
                   <label className={labelCls}>Rol</label>
                   <SelectorDesplegable
                     variante="campo"
-                    valor={formNuevoUsuario.rol}
-                    opciones={opcionesRolUsuario}
-                    onChange={v => setFormNuevoUsuario(p => ({ ...p, rol: v as 'vendedor' | 'gestor' | 'empleado' }))}
+                    valor={formNuevoUsuario.rol_id}
+                    opciones={opcionesRolUsuario.length > 0
+                      ? opcionesRolUsuario
+                      : [{ valor: '', etiqueta: 'Sin roles disponibles' }]}
+                    onChange={v => setFormNuevoUsuario(p => ({ ...p, rol_id: v }))}
                   />
+                  <p className="mt-1 text-[10px] text-on-surface-variant">
+                    Los permisos de cada rol se editan en la pestaña Roles.
+                  </p>
                 </div>
               </div>
 
