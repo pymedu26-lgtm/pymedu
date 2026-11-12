@@ -191,8 +191,6 @@ export const api = {
   crearUsuarioPyme: (datos: {
     nombre: string;
     apellido: string;
-    /** Correo personal de la persona: será su usuario de acceso. */
-    email: string;
     rol: 'vendedor' | 'gestor' | 'empleado';
   }) =>
     request<{

@@ -138,11 +138,22 @@ export default function ERPConfiguracion() {
   const [formNuevoUsuario, setFormNuevoUsuario] = useState({
     nombre: '',
     apellido: '',
-    email: '',
     rol: 'vendedor' as 'vendedor' | 'gestor' | 'empleado',
   });
   const [mostrarFormNuevoUsuario, setMostrarFormNuevoUsuario] = useState(false);
   const [guardandoUsuario, setGuardandoUsuario] = useState(false);
+
+  /** Correo de acceso generado: inicial.apellido@pymedu.cl (lo confirma el servidor). */
+  const generarEmail = (nombre: string, apellido: string): string => {
+    const normalizar = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const inicial = normalizar(nombre).charAt(0) || 'u';
+    const ap = normalizar(apellido) || 'equipo';
+    return `${inicial}.${ap}@pymedu.cl`;
+  };
+  const emailPreview = useMemo(
+    () => generarEmail(formNuevoUsuario.nombre, formNuevoUsuario.apellido),
+    [formNuevoUsuario.nombre, formNuevoUsuario.apellido]
+  );
   /** Credenciales conocidas en esta sesión (recién creadas o restablecidas). */
   const [credenciales, setCredenciales] = useState<Record<string, { nombre: string; email: string; password: string; pagina: string }>>({});
   /** Pestaña emergente con las credenciales de un miembro (se muestran una sola vez). */
@@ -222,17 +233,11 @@ export default function ERPConfiguracion() {
       notificar('error', 'Nombre y apellido son requeridos');
       return;
     }
-    const emailNuevo = formNuevoUsuario.email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNuevo)) {
-      notificar('error', 'Ingresa el correo personal de la persona');
-      return;
-    }
     setGuardandoUsuario(true);
     try {
       const { ok, usuario, password_temporal, pagina_acceso, promocion_pyme } = await api.crearUsuarioPyme({
         nombre: formNuevoUsuario.nombre.trim(),
         apellido: formNuevoUsuario.apellido.trim(),
-        email: emailNuevo,
         rol: formNuevoUsuario.rol,
       });
       if (ok && usuario) {
@@ -241,7 +246,7 @@ export default function ERPConfiguracion() {
           [usuario.id]: { nombre: usuario.nombre_completo, email: usuario.email, password: password_temporal, pagina: pagina_acceso },
         }));
         setCredencialModal({ id: usuario.id, nombre: usuario.nombre_completo, email: usuario.email, password: password_temporal, pagina: pagina_acceso });
-        setFormNuevoUsuario({ nombre: '', apellido: '', email: '', rol: 'vendedor' });
+        setFormNuevoUsuario({ nombre: '', apellido: '', rol: 'vendedor' });
         setMostrarFormNuevoUsuario(false);
         // Regla de estructura de roles: al crear usuarios dentro de su cuenta, el
         // emprendedor pasa a ser PYME / Pequeña Empresa (rol dueño).
@@ -1128,19 +1133,15 @@ export default function ERPConfiguracion() {
                     onChange={v => setFormNuevoUsuario(p => ({ ...p, rol: v as 'vendedor' | 'gestor' | 'empleado' }))}
                   />
                 </div>
-                <div>
-                  <label className={labelCls}>Correo personal</label>
-                  <input
-                    type="email"
-                    value={formNuevoUsuario.email}
-                    onChange={e => setFormNuevoUsuario(p => ({ ...p, email: e.target.value }))}
-                    placeholder="persona@correo.cl"
-                    className={inputCls}
-                  />
-                  <p className="mt-1.5 text-[10px] text-on-surface-variant">
-                    Será su usuario de acceso a PymEdu
-                  </p>
-                </div>
+              </div>
+
+              <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-low/60 p-3">
+                <p className="text-xs text-on-surface-variant">
+                  Correo de acceso: <span className="font-mono font-bold text-primary">{emailPreview || '-'}</span>
+                </p>
+                <p className="mt-1 text-[10px] text-on-surface-variant">
+                  Se genera como inicial del nombre + apellido + @pymedu.cl
+                </p>
               </div>
 
               <div className="rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-low/50 p-3">
@@ -1220,8 +1221,8 @@ export default function ERPConfiguracion() {
                   {([
                     { campo: 'pagina', etiqueta: 'Página de acceso', valor: credencialModal.pagina },
                     { campo: 'correo', etiqueta: 'Correo', valor: credencialModal.email },
-                    {/* Password no se muestra por seguridad - se entrega temporalmente al crear el usuario */}
-                  {} as const).map(({ campo, etiqueta, valor }) => (
+                    ...(credencialModal.password ? [{ campo: 'contrasena', etiqueta: 'Contraseña', valor: credencialModal.password }] : []),
+                  ] as const).map(({ campo, etiqueta, valor }) => (
                     <div
                       key={campo}
                       className="flex items-center justify-between gap-3 rounded-xl bg-surface-container-low border border-outline-variant/30 px-3 py-2"
@@ -1259,7 +1260,7 @@ export default function ERPConfiguracion() {
                         const m = (equipo ?? []).find(x => String(x.id) === credencialModal.id);
                         if (m) restablecerPassword(m);
                       }}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-on-primary hover:opacity-90"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-inverse-on-surface hover:opacity-90"
                     >
                       <span className="material-symbols-outlined text-base">lock_reset</span>
                       Restablecer contraseña
@@ -1271,7 +1272,7 @@ export default function ERPConfiguracion() {
                   <button
                     type="button"
                     onClick={() => setCredencialModal(null)}
-                    className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-primary hover:opacity-90"
+                    className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-inverse-on-surface hover:opacity-90"
                   >
                     Listo
                   </button>
