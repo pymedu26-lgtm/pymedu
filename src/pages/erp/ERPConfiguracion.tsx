@@ -628,17 +628,17 @@ export default function ERPConfiguracion() {
             <div>
               <label className={labelCls}>Contraseña actual</label>
               <input type="password" autoComplete="current-password" value={formCuenta.contrasena_actual} onChange={e => setFormCuenta(p => ({ ...p, contrasena_actual: e.target.value }))}
-                placeholder="Tu contraseña de hoy" className={inputCls} />
+                placeholder="Tu contraseña de hoy" className={cn('bg-surface-container/50 text-on-surface min-h-10 rounded-md px-3 py-2 w-full', inputCls)} />
             </div>
             <div>
               <label className={labelCls}>Nueva contraseña</label>
               <input type="password" autoComplete="new-password" minLength={8} value={formCuenta.nueva_contrasena} onChange={e => setFormCuenta(p => ({ ...p, nueva_contrasena: e.target.value }))}
-                placeholder="Mínimo 8 caracteres" className={inputCls} />
+                placeholder="Mínimo 8 caracteres" className={cn('bg-surface-container/50 text-on-surface min-h-10 rounded-md px-3 py-2 w-full', inputCls)} />
             </div>
             <div>
               <label className={labelCls}>Confirmar contraseña</label>
               <input type="password" value={formCuenta.confirmar_contrasena} onChange={e => setFormCuenta(p => ({ ...p, confirmar_contrasena: e.target.value }))}
-                placeholder="Repite la nueva contraseña" className={inputCls} />
+                placeholder="Repite la nueva contraseña" className={cn('bg-surface-container/50 text-on-surface min-h-10 rounded-md px-3 py-2 w-full', inputCls)} />
             </div>
           </div>
 
@@ -1220,8 +1220,8 @@ export default function ERPConfiguracion() {
                   {([
                     { campo: 'pagina', etiqueta: 'Página de acceso', valor: credencialModal.pagina },
                     { campo: 'correo', etiqueta: 'Correo', valor: credencialModal.email },
-                    ...(credencialModal.password ? [{ campo: 'contrasena', etiqueta: 'Contraseña', valor: credencialModal.password }] : []),
-                  ] as const).map(({ campo, etiqueta, valor }) => (
+                    {/* Password no se muestra por seguridad - se entrega temporalmente al crear el usuario */}
+                  {} as const).map(({ campo, etiqueta, valor }) => (
                     <div
                       key={campo}
                       className="flex items-center justify-between gap-3 rounded-xl bg-surface-container-low border border-outline-variant/30 px-3 py-2"
